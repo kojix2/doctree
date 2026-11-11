@@ -1,0 +1,63 @@
+---
+library: _builtin
+since: "2.2.0"
+---
+# class UncaughtThrowError < ArgumentError
+
+[m:Kernel?.throw] に指定した tag に対して一致する
+[m:Kernel?.catch] が存在しない場合に発生します。
+
+```ruby
+throw "foo", "bar"
+# ~> UncaughtThrowError: uncaught throw "foo"
+```
+
+## Instance Methods
+
+### def tag -> object
+
+[m:Kernel?.throw] に指定した tag を返します。
+
+```ruby title="例:"
+def do_complicated_things
+  throw :uncaught_label
+end
+
+begin
+  do_complicated_things
+rescue UncaughtThrowError => ex
+  p ex.tag # => ":uncaught_label"
+end
+```
+
+### def value -> object
+
+[m:Kernel?.throw] に指定した value を返します。
+
+```ruby title="例"
+def do_complicated_things
+  throw :uncaught_label, "uncaught_value"
+end
+
+begin
+  do_complicated_things
+rescue UncaughtThrowError => ex
+  p ex.value # => "uncaught_value"
+end
+```
+
+### def to_s -> String
+
+self を tag を含む文字列表現にして返します。
+
+```ruby title="例"
+def do_complicated_things
+  throw :uncaught_label
+end
+
+begin
+  do_complicated_things
+rescue UncaughtThrowError => ex
+  p ex.to_s # => "uncaught throw :uncaught_label"
+end
+```

@@ -1,0 +1,83 @@
+---
+library: rexml/parsers/pullparser
+include:
+  - REXML::XMLTokens
+extend:
+  - Forwardable
+---
+# class REXML::Parsers::PullParser < Object
+
+プル方式の XML パーサクラス。
+
+## Class Methods
+
+### def REXML::Parsers::PullParser.new(stream) -> REXML::Parsers::PullParser
+
+新たな PullParser オブジェクトを生成して返します。
+
+- **param** `stream` -- 入力(文字列、IO、IO互換オブジェクト(StringIOなど))
+
+## Instance Methods
+
+### def has_next? -> bool
+
+未処理のイベントが残っている場合に真を返します。
+
+- **SEE** [m:REXML::Parsers::PullParser#empty?]
+
+#%# --- entity
+#%# #@todo
+
+### def empty? -> bool
+
+未処理のイベントが残っていない場合に真を返します。
+
+- **SEE** [m:REXML::Parsers::PullParser#has_next?]
+
+#%# --- source
+#%# #@todo
+
+### def add_listener(listener) -> ()
+{: since=""}
+
+`listener` を登録しますが、登録した `listener` が呼び出されることはありません。
+
+[m:REXML::Parsers::UltraLightParser#add_listener] などと違い、このメソッドで登録した `listener` にはイベントが通知されません。イベントを順に処理するには [m:REXML::Parsers::PullParser#pull] や [m:REXML::Parsers::PullParser#each] を使ってください。
+
+- **param** `listener` -- 登録するオブジェクト
+
+### def each {|event| ... } -> ()
+
+XMLをパースし、得られたイベント列を引数として順にブロックを呼び出します。
+
+- **raise** `REXML::ParseException` -- XML文書のパースに失敗した場合に発生します
+- **raise** `REXML::UndefinedNamespaceException` -- XML文書のパース中に、定義されていない名前空間が現れた場合に発生します
+
+### def peek(depth = 0) -> REXML::Parsers::PullEvent | nil
+
+イベントキューの先頭から depth 番目のイベントを取り出します。
+
+一番先頭のイベントは 0 で表します。
+
+このメソッドでは列そのものの状態は変化しません。
+
+先頭から depth 番目のイベントが存在しない(XML文書の末尾のさらに先を見ようとした場合)は nil を返します。
+
+- **param** `depth` -- 先頭から depth 番目のイベントを取り出します
+
+- **raise** `REXML::ParseException` -- XML文書のパースに失敗した場合に発生します
+- **raise** `REXML::UndefinedNamespaceException` -- XML文書のパース中に、定義されていない名前空間が現れた場合に発生します
+
+### def pull -> REXML::Parsers::PullEvent
+
+イベントキューの先頭のイベントを取り出し、キューからそれを取り除きます。
+
+- **raise** `REXML::ParseException` -- XML文書のパースに失敗した場合に発生します
+- **raise** `REXML::UndefinedNamespaceException` -- XML文書のパース中に、定義されていない名前空間が現れた場合に発生します
+
+### def unshift(token) -> ()
+
+イベントキューの先頭に token を追加します。
+
+- **param** `token` -- 先頭に追加するイベント([c:REXML::Parsers::PullEvent] オブジェクト)
+

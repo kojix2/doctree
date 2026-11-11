@@ -9,7 +9,7 @@ GC は Ruby インタプリタの「ゴミ集め(Garbage Collection)」を制御
 
 Ruby 2.1ではRGenGCと呼ばれる新たなGCメカニズムが導入されました。
 それにともない、以下の環境変数が導入され、これらを
-設定することでGCの動作をチューニングすることができます。
+設定することでGCの動作をチューニングできます。
 これらの環境変数の効果はRubyの起動時のみ有効です(つまりrubyを動かしている
 途中で変更することはできません)。
 
@@ -182,7 +182,7 @@ oldmalloc_increase_bytes と呼ばれる。この2つの性質は以下のよう
 
 == Singleton Methods
 
-#@since 3.0.0
+#@since 3.0
 --- auto_compact -> bool
 
 auto compaction が有効化どうかを返します。

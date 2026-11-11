@@ -1,4 +1,3 @@
-
 = reopen Object
 
 == Class Methods
@@ -7,7 +6,7 @@
 クラスと tag の間を関連付けます。
 
 これによって tag 付けされた YAML ドキュメントを Ruby のオブジェクトに
-変換したりその逆をしたりすることができます。
+変換したりその逆をしたりできます。
 
 @param tag 対象のクラスに関連付けるタグの文字列
 
@@ -72,7 +71,7 @@ syck が廃止された場合  psych_to_yaml は廃止
 クラスと tag の間を関連付けます。
 
 これによって tag 付けされた YAML ドキュメントを Ruby のオブジェクトに
-変換したりその逆をしたりすることができます。
+変換したりその逆をしたりできます。
 
 この method は deprecated です。 [[m:Object.yaml_tag]] を
 かわりに使ってください。
@@ -84,15 +83,9 @@ syck が廃止された場合  psych_to_yaml は廃止
 
 == Instance Methods
 
---- y(*objects) -> String
---- psych_y(*objects) -> String
-objects を YAML document に変換します。
+--- y(*objects) -> nil
+objects を YAML document として標準出力に出力します。
 
 このメソッドは irb 上でのみ定義されます。
-
-[[lib:syck]] に y メソッドがあるため、
-psych_y が別名として定義されています。将来的に
-syck が廃止された場合  psych_y は廃止
-される予定であるため、特別の事情がない限り y を用いてください。
 
 @param objects YAML document に変換する Ruby のオブジェクト

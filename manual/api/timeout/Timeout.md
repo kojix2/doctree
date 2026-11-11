@@ -1,0 +1,228 @@
+---
+library: timeout
+---
+# module Timeout
+
+タイムアウトを行うためのモジュールです。
+
+## Module Functions
+
+### module_function def timeout(sec, exception_class = nil)    {|i| ... }  -> object
+### module_function def timeout(sec, exception_class, message) {|i| ... }  -> object
+
+ブロックを sec 秒の期限付きで実行します。
+ブロックの実行時間が制限を過ぎたときは例外
+[c:Timeout::Error] が発生します。
+
+exception_class を指定した場合には [c:Timeout::Error] の代わりにその例外が発生します。
+ブロックパラメータ i は sec がはいります。
+
+また sec が 0 もしくは nil のときは制限時間なしでブロックを実行します。
+
+- **param** `sec` -- タイムアウトする時間を秒数で指定します.
+- **param** `exception_class` -- タイムアウトした時、発生させる例外を指定します.
+- **param** `message` -- エラーメッセージを指定します.省略した場合は
+               "execution expired" になります.
+
+```ruby title="例 長い計算のタイムアウト"
+require 'timeout'
+
+def calc_pi(min)
+  loop do
+    x = rand
+    y = rand
+    x**2 + y**2 < 1.0 ?  min[0] += 1 : min[1] += 1
+  end
+end
+ 
+t = 5
+min = [ 0, 0]
+begin
+  Timeout.timeout(t){
+    calc_pi(min)
+  }
+rescue Timeout::Error
+  puts "timeout"
+end
+
+printf "%d: pi = %f\n", min[0] + min[1], min[0]*4.0/(min[0]+min[1])
+#例
+# => 417519: pi = 3.141443
+```
+
+```ruby title="例 独自の例外を発生させるタイムアウト"
+#!/usr/bin/env ruby
+
+require 'timeout'
+
+class MYError < Exception;end
+begin
+  Timeout.timeout(5, MYError) {
+    sleep(30)
+  }
+rescue MYError => err
+  puts "MYError"
+  puts err
+end
+```
+
+### 注意
+
+timeout による割り込みは Thread によって実現されています。
+C 言語レベルで実装され、
+Ruby のスレッドが割り込めない処理に対して timeout は無力です。
+そのようなものは実用レベルでは少ないのですが、
+Socket などは DNSの名前解決に時間がかかった場合割り込めません
+([lib:resolv-replace] を使用する必要があります)。
+その処理を Ruby で実装しなおすか C 側で Ruby
+のスレッドを意識してあげる必要があります。
+
+以下の例では、Fiddle 経由で libc の sleep(3) を直接呼び出しています。
+Ruby の sleep と異なり GVL を解放しないため Timeout からの割り込みを受け付けず、この呼び出し(1秒かかっている)が終了した直後((A)の箇所)で Timeout::Error 例外があがっています。
+
+```text title="例 timeout が割り込めない"
+require 'timeout'
+require 'fiddle'
+
+libc = Fiddle.dlopen(nil)
+c_sleep = Fiddle::Function.new(libc['sleep'], [Fiddle::TYPE_INT], Fiddle::TYPE_INT)
+
+t = 0.1
+start = Time.now
+begin
+  Timeout.timeout(t) {
+    p c_sleep.call(1)
+    # (A)
+  }
+ensure
+  p Time.now - start
+end
+# 実行例
+=> 1.000757509
+#%since 3.4
+   /path/to/gems/timeout-0.6.0/lib/timeout.rb:40:in 'Timeout::Error.handle_timeout': execution expired (Timeout::Error)
+        from /path/to/gems/timeout-0.6.0/lib/timeout.rb:304:in 'Timeout.timeout'
+        from -:10:in '<main>'
+   -:11:in 'Fiddle::Function#call': execution expired (Timeout::ExitException)
+        from -:11:in 'block in <main>'
+        from /path/to/gems/timeout-0.6.0/lib/timeout.rb:295:in 'block in Timeout.timeout'
+        from /path/to/gems/timeout-0.6.0/lib/timeout.rb:38:in 'Timeout::Error.handle_timeout'
+        from /path/to/gems/timeout-0.6.0/lib/timeout.rb:304:in 'Timeout.timeout'
+        from -:10:in '<main>'
+#%else
+   /path/to/gems/timeout-0.4.1/lib/timeout.rb:43:in `rescue in handle_timeout': execution expired (Timeout::Error)
+        from /path/to/gems/timeout-0.4.1/lib/timeout.rb:40:in `handle_timeout'
+        from /path/to/gems/timeout-0.4.1/lib/timeout.rb:195:in `timeout'
+        from -:10:in `<main>'
+   -:11:in `call': execution expired (Timeout::ExitException)
+        from -:11:in `block in <main>'
+        from /path/to/gems/timeout-0.4.1/lib/timeout.rb:186:in `block in timeout'
+        from /path/to/gems/timeout-0.4.1/lib/timeout.rb:41:in `handle_timeout'
+        from /path/to/gems/timeout-0.4.1/lib/timeout.rb:195:in `timeout'
+        from -:10:in `<main>'
+#%end
+# c_sleep.call の秒数が t より短い場合は例外が発生しないので
+# その場合は、t に小さい数値(0.000001のような)に変える。
+```
+
+#%#[[unknown:timeoutの落し穴|trap::timeout]]も参照
+#%# unknown なので、ここに少し変えてコピペした。
+
+timeout による割り込みは [m:Kernel?.system] によって呼び出された外部プログラムをタイムアウトさせる事はできないので、[m:IO.popen]、[m:Kernel?.open]を使用するなどの工夫が必要です。
+
+```ruby title="例 外部コマンドのタイムアウト"
+require 'timeout'
+
+# テスト用のシェルをつくる。
+File.open("loop.sh", "w"){|fp|
+  fp.print <<SHELL_EOT
+#!/bin/bash
+
+S="scale=10"
+M=32767
+
+trap 'echo "$S; $m1/($m1+$m2)*4" | bc ; echo "count = $((m1+m2))" ; exit 0' INT
+m1=0
+m2=0
+
+while true
+do
+  x="($RANDOM/$M)"
+  y="($RANDOM/$M)"
+  c=$(echo "$S;$x^2+$y^2 < 1.0" | bc)
+  echo $x $y $c
+  if [ $c -eq 1 ]
+  then
+    let m1++
+  else
+    let m2++
+  fi
+done
+SHELL_EOT
+}
+
+File.chmod(0755, "loop.sh")
+t = 10 # 10 秒でタイムアウト
+begin
+  pid = nil
+  com = nil
+  Timeout.timeout(t) {
+    # system だととまらない
+    # system("./loop.sh")
+    com = IO.popen("./loop.sh")
+    pid = com.pid
+    while line = com.gets
+      print line
+    end
+  }
+rescue Timeout::Error => err
+  puts "timeout: shell execution."
+  Process.kill('SIGINT', pid)
+  printf "[result]\t%s", com.read
+  com.close unless com.nil?
+end
+#%# もっといい止め方があるかもしれない。
+
+#止まっているか確認する。
+#system("ps au")
+```
+
+#%# 内部用なのでコメントアウト
+#%# == Constants
+#%# --- THIS_FILE
+#%# --- CALLER_OFFSET
+
+# class Timeout::Error < RuntimeError
+#%until 3.1
+alias TimeoutError
+#%end
+
+[lib:timeout] で定義される例外クラスです。
+関数 timeout がタイムアウトすると発生します。
+
+[lib:timeout] を使うライブラリを作成する場合は、ユーザが指定した
+timeout を捕捉しないようにライブラリ内で Timeout::Error のサブクラスを定義して使用した方が無難です。
+#%#((-注: version 1.6 では、[[unknown:ruby-list:33352]] のパッチが必要です。
+#%#このパッチは 1.7 に取り込まれました[[unknown:ruby-list:33391]]-))
+
+```text
+==> foo.rb <==
+require 'timeout.rb'
+class Foo
+  FooTimeoutError = Class.new(Timeout::Error)
+  def longlongtime_method
+    Timeout.timeout(100, FooTimeoutError) {
+       ...
+    }
+  end
+end
+
+==> main.rb <==
+require 'foo'
+Timeout.timeout(5) {
+  Foo.new.longlongtime_method
+}
+```
+
+#%# nodoc
+#%# = class Timeout::ExitException < Exception

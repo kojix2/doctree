@@ -322,9 +322,9 @@ LABEL
         This line is a here document.
         EOS
 
-開始ラベルを `<<-識別子' のように `-' を付けて書くことで終端
-行をインデントすることができます。これ以外では、終端行に、余
-分な空白やコメントさえも書くことはできません。
+開始ラベルを `<<-識別子' または `<<~識別子` のように
+`-' または `~' を付けて書くことで、終端行をインデントできます。
+このケースを除き、終端行には余分な空白やコメントさえも書くことはできません。
 
 #@samplecode
 if need_define_foo
@@ -337,22 +337,44 @@ if need_define_foo
 end
 #@end
 
-#@since 2.3.0
-開始ラベルを `<<~識別子` のように `~` を付けて書くことで、以下のような
-ヒアドキュメントを書くことができます。
+`<<-識別子` の場合は、終端行をインデントしたとしてもヒアドキュメント中の
+先頭の空白はそのまま文字列に現れます。
+
+一方で `<<~識別子` の場合は、最もインデントが少ない行を基準にして、全ての行の先頭から空白を取り除きます。
+（「最もインデントが少ない行」には、終端行は含まれません。）
 
 #@samplecode
-expected_result = <<~SQUIGGLY_HEREDOC
-  This would contain specially formatted text.
+begin
+  str_hyphen = <<-EOS
+      aaa
+        bbb
+    ccc
+  EOS
 
-  That might span many lines
-SQUIGGLY_HEREDOC
-# => "This would contain specially formatted text.\n" + "\n" + "That might span many lines\n"
+  str_tilde = <<~EOS
+      aaa
+        bbb
+    ccc
+  EOS
+
+  p str_hyphen # => "      aaa\n        bbb\n    ccc\n"
+  p str_tilde  # => "  aaa\n    bbb\nccc\n"
+end
 #@end
 
-最もインデントが少ない行を基準にして、全ての行の先頭から空白を取り除きます。
 インデントの深さを決定するために主にタブやスペースで構成された行は無視されるので、注意してください。
 しかし、エスケープされたタブやスペースは、通常の文字と同じように扱われます。
+
+#@samplecode
+s = <<~EOS
+    空白4つ
+        空白8つ
+  
+EOS
+# ↑EOSの上の行には空白2つがある
+
+# 「最もインデントが少ない行」は、空白2つの行ではなく空白4つの行になる。
+p s # => "空白4つ\n    空白8つ\n\n"
 #@end
 
 一行に複数のヒアドキュメントを書くこともできます。
@@ -519,7 +541,7 @@ o オプションを指定すれば、同一の正規表現オブジェクトを
 つ配列で、[[c:Hash]]クラスのインスタンスです。
 
 メソッドの引数、もしくは[[ref:array]]の末尾に要素が1つ以上の
-ハッシュを渡す場合は、{, }を省略することができます。
+ハッシュを渡す場合は、{, }を省略できます。
 
 #@samplecode 例
 method(1,2,3=>4)      # method(1,2,{3=>4})
@@ -571,7 +593,7 @@ p :"foo-bar" #=> :"foo-bar"
 p %s{foo-bar} #=> :"foo-bar"
 #@end
 
-この記法では、任意のシンボルを定義することができます。
+この記法では、任意のシンボルを定義できます。
 
 :"..." の形式は、[[ref:backslash]]や
 [[ref:exp]]が有効です。

@@ -105,7 +105,7 @@ SMTP ではメールを送る側のホストの名前 (HELO ドメインと呼�
 
 === SMTP認証
 
-[[c:Net::SMTP]] は PLAIN, LOGIN, CRAM MD5 の3つの方法で認証をすることができます。
+[[c:Net::SMTP]] は PLAIN, LOGIN, CRAM MD5 の3つの方法で認証できます。
 (認証については [[RFC:2554]], [[RFC:2195]] を参照してください)
 
 認証するためには、[[m:Net::SMTP.start]] もしくは [[m:Net::SMTP#start]]
@@ -120,7 +120,7 @@ SMTP ではメールを送る側のホストの名前 (HELO ドメインと呼�
   # 例
   require 'net/smtp'
   Net::SMTP.start('smtp.example.com', 25,
-                  'user: your_account', password: 'your_password', authtype: :cram_md5)
+                   user: 'your_account', password: 'your_password', authtype: :cram_md5)
 #@end
 
 === TLSを用いたSMTP通信
@@ -161,7 +161,7 @@ TLS を使用したい場合は enable_tls を使用します。
     # send messages ...
   end
 
-#@since 3.0.0
+#@since 3.0
 サーバーが STARTTLS をサポートしている場合は自動的に STARTTLS を使用します。
 サーバーが STARTTLS をサポートしているのに STARTTLS を使用したくない場合は [[m:Net::SMTP#disable_starttls]] を使用します。
 
@@ -219,7 +219,7 @@ port は接続するポート番号です。
 --- start(address, port = Net::SMTP.default_port, helo = 'localhost.localdomain', user = nil, password = nil, authtype = DEFAULT_AUTH_TYPE) -> Net::SMTP
 --- start(address, port = Net::SMTP.default_port, helo = 'localhost.localdomain', user = nil, password = nil, authtype = DEFAULT_AUTH_TYPE) {|smtp| .... } -> object
 #@else
-#@since 3.0.0
+#@since 3.0
 --- start(address, port = Net::SMTP.default_port, tls_verify: true, tls_hostname: nil, helo: 'localhost', user: nil, password: nil, authtype: DEFAULT_AUTH_TYPE) -> Net::SMTP
 --- start(address, port = Net::SMTP.default_port, tls_verify: true, tls_hostname: nil, helo: 'localhost', user: nil, password: nil, authtype: DEFAULT_AUTH_TYPE) {|smtp| ... } -> object
 #@end
@@ -421,7 +421,7 @@ ESMTPモードで [[m:Net::SMTP#start]] を呼び、うまくいかなかった
 --- start(helo = 'localhost.localdomain', user = nil, password = nil, authtype = DEFAULT_AUTH_TYPE) -> Net::SMTP
 --- start(helo = 'localhost.localdomain', user = nil, password = nil, authtype = DEFAULT_AUTH_TYPE) {|smtp| .... } -> object
 #@else
-#@since 3.0.0
+#@since 3.0
 --- start(helo: 'localhost', user: nil, password: nil, authtype: DEFAULT_AUTH_TYPE) -> Net::SMTP
 --- start(helo: 'localhost', user: nil, password: nil, authtype: DEFAULT_AUTH_TYPE) {|smtp| ... } -> object
 #@end

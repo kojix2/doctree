@@ -1,0 +1,97 @@
+---
+type: library
+category: Development
+---
+Ruby インタプリタ作成時に設定された情報を格納したライブラリです。
+
+# module RbConfig
+
+Ruby インタプリタ作成時に設定された情報を格納したライブラリです。
+RbConfig モジュールを定義します。
+
+## Singleton Methods
+
+### def RbConfig.expand(val, config = CONFIG) -> String
+
+与えられたパスを展開します。
+
+```ruby
+p RbConfig.expand("$(bindir)") # => /home/foobar/all-ruby/ruby19x/bin
+```
+
+- **param** `val` -- 展開したい変数名を Makefile に書く形式で指定します。
+
+- **param** `config` -- 変数展開に使用する設定を [c:Hash] で指定します。
+  
+- **SEE** [m:RbConfig::MAKEFILE_CONFIG]
+
+### def RbConfig.ruby -> String
+
+ruby コマンドのフルパスを返します。
+
+## Constants
+
+### const DESTDIR -> String
+
+make install するときに指定した DESTDIR を返します。
+クロスコンパイルしたときなどは値がセットされています。
+
+### const TOPDIR -> String
+
+Ruby がインストールされているディレクトリです。
+
+```text
+TOPDIR
+├── bin
+│   ├── ...
+│   └── ruby
+├── include
+├── lib
+└── share
+```
+  
+### const CONFIG -> Hash
+
+設定値を格納したハッシュです。
+
+格納されている要素のキーと値は Ruby のバージョンや使用しているプラットフォームによって変わります。
+
+- **SEE** [man:autoconf(1)], [man:make(1)]
+
+### const MAKEFILE_CONFIG -> Hash
+
+[m:RbConfig::CONFIG]
+と同じですが、その値は以下のような形で他の変数への参照を含みます。
+
+```text
+MAKEFILE_CONFIG["bindir"] = "$(exec_prefix)/bin"
+```
+
+これは、Makefile の変数参照の形式で MAKEFILE_CONFIG は、
+Makefile 作成の際に利用されることを想定しています。
+
+```text
+require 'rbconfig'
+  
+print <<-END_OF_MAKEFILE
+prefix = #{RbConfig::MAKEFILE_CONFIG['prefix']}
+exec_prefix = #{RbConfig::MAKEFILE_CONFIG['exec_prefix']}
+bindir = #{RbConfig::MAKEFILE_CONFIG['bindir']}
+END_OF_MAKEFILE
+  
+=> prefix = /usr/local
+   exec_prefix = $(prefix)
+   bindir = $(exec_prefix)/bin
+```
+
+[m:RbConfig.expand]
+は、このような参照を解決するメソッドとして rbconfig 内部で利用されています。
+(CONFIG 変数は、MAKEFILE_CONFIG の内容から
+[m:RbConfig.expand]
+を使って生成されています)
+
+```ruby
+require 'rbconfig'
+p Config.expand(RbConfig::MAKEFILE_CONFIG["bindir"])
+# => "/usr/local/bin"
+```

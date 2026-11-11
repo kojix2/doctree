@@ -40,6 +40,12 @@ p Set[].all? {|v| v > 0 }              # => true
 #@since 2.5.0
 
 p Set['ant', 'bear', 'cat'].all?(/t/)  # => false
+p (1..4).all?(Integer)                 # => true
+p [1, 2, 3].all?(Integer)              # => true
+p [1, 2, 3.0].all?(Integer)            # => false
+# Hashは[k, v]のペアなのでArray/Hash === [k, v]で評価
+p({foo: 0, bar: 1}.all?(Array))        # => true
+p({foo: 0, bar: 1}.all?(Hash))         # => false
 #@end
 #@end
 
@@ -231,7 +237,7 @@ pattern === item が成立する要素を全て含んだ配列を返します。
 #@samplecode 例
 ['aa', 'bb', 'cc', 'dd', 'ee'].grep(/[bc]/)  # => ["bb", "cc"]
 
-  Array.instance_methods.grep(/gr/) # => [:grep, :group_by]
+  Array.instance_methods.grep(/gr/) # => [:grep, :grep_v, :group_by]
 #@end
 
 @see [[m:Enumerable#select]]
@@ -1112,11 +1118,11 @@ e.take_while {|i| i < 3 }   # => [1, 2]
 [[c:Enumerator]] を返します。
 
 #@samplecode 例
-(1..3).reverse_each # => #<Enumerator: 1..3:reverse_each>
-(1..3).reverse_each { |v| p v }
-# => 3
-#    2
-#    1
+{a: 1, b: 2, c: 3}.reverse_each # => #<Enumerator: ...>
+{a: 1, b: 2, c: 3}.reverse_each { |v| p v }
+# => [:c, 3]
+#    [:b, 2]
+#    [:a, 1]
 #@end
 
 --- each_with_object(obj) -> Enumerator
@@ -1391,8 +1397,7 @@ IO.popen([{"LC_ALL"=>"C"}, "svn", "proplist", "-R"]) {|f|
 #   ...
 #@end
 
-複数要素にわたる状態遷移が必要な場合は、ローカル変数でこれを実現する
-ことができます。例えば、連続に増える数値が3つ以上ある場合、これを
+複数要素にわたる状態遷移が必要な場合は、ローカル変数でこれを実現できます。例えば、連続に増える数値が3つ以上ある場合、これを
 まとめる処理をするためには以下のようにします
 ([[m:Enumerable#chunk_while]] のより簡単な例も参照)。
 
@@ -1650,4 +1655,39 @@ to_enum(:with_nils).compact # => [1, 2, 3]
 #@end
 
 @see [[m:Array#compact]]
+#@end
+
+#@since 3.2
+--- to_set(klass = Set, *args) -> Set
+--- to_set(klass = Set, *args) {|o| ... } -> Set
+
+Enumerable オブジェクトの要素から、新しい集合オブジェクトを作ります。
+
+引数 klass を与えた場合、Set クラスの代わりに、指定した集合クラスの
+インスタンスを作ります。
+
+この引数を指定することで、ユーザ定義の集合クラスのインスタンスを作ることができます
+(ここでいう集合クラスとは、Setとメソッド/クラスメソッドで互換性のあるクラスです。
+Ruby 2.7 以前は SortedSet が定義されていました)。
+
+引数 args およびブロックは、集合オブジェクトを生成するための new
+メソッドに渡されます。
+
+
+@param klass 生成する集合クラスを指定します。
+@param args 集合クラスのオブジェクト初期化メソッドに渡す引数を指定します。
+@param block 集合クラスのオブジェクト初期化メソッドに渡すブロックを指定します。
+@return 生成された集合オブジェクトを返します。
+
+#@samplecode
+p [30, 10, 20].to_set
+#=> #<Set: {30, 10, 20}>
+MySet = Class.new(Set)
+p [30, 10, 20].to_set(MySet)
+#=> #<MySet: {10, 20, 30}>
+p [30, 10, 20].to_set {|num| num / 10}
+#=> #<Set: {3, 1, 2}>
+#@end
+
+@see [[m:Set.new]]
 #@end

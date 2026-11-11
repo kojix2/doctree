@@ -1,0 +1,420 @@
+---
+library: _builtin
+since: "3.0"
+---
+# class Ractor < Object
+
+並列プログラミングの仕組みを提供するクラスです。
+
+#%since 4.1
+Ruby 4.1 から、クラスやモジュールを変更できるのは、それを作成した Ractor（owner）だけになりました。
+メソッドの定義・削除、`alias`、可視性の変更、`include` / `prepend`、定数の定義・削除、クラス自身のインスタンス変数・クラス変数への書き込みなどを他の Ractor から行うと、[c:Ractor::IsolationError] が発生します。読み取りは従来どおりできます。
+起動時や main Ractor で定義されたクラス（require したライブラリのものを含む）の owner は main Ractor なので、main 以外の Ractor からは変更できません。
+一方、Ractor が自分で作成したクラスは、shareable でない定数・インスタンス変数・クラス変数も含めて自由に使えます。[feature:22226]
+
+また、Ruby 4.1 から、デフォルトの GC は Ractor ごとに動作します。各 Ractor は自分のヒープを自分のスレッドで、他の Ractor を止めずに回収します。
+全 Ractor を止めるグローバル GC は、明示的な [m:GC.start]、共有可能オブジェクトの増加、終了した Ractor のヒープの回収のときだけ行われます。詳しくは [c:GC] を参照してください。
+#%end
+
+## Class Methods
+
+### def Ractor.new(*args, name: nil) {|*args| ... } -> Ractor
+
+Ractor を生成して、ブロックの評価を開始します。
+生成した Ractor を返します。
+
+- **param** `args` -- ブロックの引数として渡されます。
+            値が shareable である場合はそのインスタンスが、そうでない場合はコピーが試みられた値が渡されます。
+            コピーできない値であった場合は例外が発生します。
+- **param** `name` -- Ractor の名前を指定します。
+
+#%since 3.4
+### def Ractor.[](sym) -> object | nil
+
+このメソッドを呼び出した Ractor の Ractor-local storage の sym に対応するデータを取り出します。
+sym に対応するデータがなければ nil を返します。
+
+- **param**  `sym` -- Ractor-local storage のキーを指定します。
+- **return** --     Ractor-local storage に格納されている値を返します。
+
+### def Ractor.[]=(sym, val)
+
+- **param** `sym` -- Ractor-local storage のキーを指定します。
+- **param** `val` -- 格納するデータを指定します。
+#%end
+
+### def Ractor.count -> Integer
+
+実行中の Ractor の数を返します。
+
+### def Ractor.current -> Ractor
+
+このメソッドを呼び出された Ractor を返します。
+
+### def Ractor.main -> Ractor
+
+main Ractor（プログラムの実行が開始された Ractor）を返します。
+
+#%since 3.4
+### def Ractor.main? -> bool
+
+このメソッドを呼び出した Ractor が main Ractor であるとき、true を返します。
+#%end
+
+### def Ractor.make_shareable(obj, copy: false) -> object
+
+obj が shareable になるよう変換します。
+
+obj が shareable でない場合、obj と obj が参照する shareable でないオブジェクトをすべて freeze します。
+
+- **param** `obj` -- Shareable にしたいオブジェクトを指定します。
+- **param** `copy` -- true の場合、obj を変更する代わりに obj のコピーを作成し shareable にします。
+#%since 4.1
+- **raise** `Ractor::Error` -- obj が [c:IO] のインスタンスである場合に発生します。
+#%end
+
+#%since 4.1
+### def Ractor.receive(timeout: nil) -> object | nil
+### def Ractor.recv(timeout: nil) -> object | nil
+#%else
+### def Ractor.receive -> object
+### def Ractor.recv -> object
+#%end
+
+#%since 4.0
+このメソッドを呼び出した Ractor の default port からメッセージを受信します。
+
+#%since 4.1
+- **param** `timeout` -- メッセージを待つ秒数を数値で指定します。nil の場合は、メッセージが届くまで待ち続けます。指定した秒数が経過しても届かなかった場合は nil を返します。0 を指定した場合はブロックしません。
+- **raise** `ArgumentError` -- `timeout` が負の場合に発生します。
+
+```ruby title="例: timeout を指定"
+p Ractor.receive(timeout: 0.2) # => nil
+```
+
+#%end
+- **SEE** [m:Ractor::Port#receive]
+#%else
+このメソッドを呼び出した Ractor が受信したメッセージを取り出して返します。
+メッセージが届くまでブロックします。
+
+他の Ractor から [m:Ractor#send] で送られたメッセージを受信します。
+#%end
+
+#%until 4.0
+### def Ractor.receive_if {|msg| ... } -> object
+
+このメソッドを呼び出した Ractor が受信したメッセージのうち、ブロックの評価結果が真になる最初のメッセージを受信して返します。
+#%end
+
+#%since 4.0
+#%since 4.1
+### def Ractor.select(*ports, timeout: nil) -> [object, object] | nil
+#%else
+### def Ractor.select(*ports) -> [object, object]
+#%end
+
+引数で指定した Ractor または [c:Ractor::Port] のいずれかが受信可能になるまで待ち、受信可能になったものと受信した値の配列を返します。
+#%since 4.1
+
+`timeout` を指定した場合、その秒数が経過しても受信可能になったものが無ければ nil を返します。
+
+- **param** `ports` -- 待つ対象の [c:Ractor] または [c:Ractor::Port] を指定します。
+- **param** `timeout` -- 待つ秒数を数値で指定します。nil の場合は、受信可能になるまで待ち続けます。
+- **raise** `ArgumentError` -- `timeout` が負の場合や、待つ対象を 1 つも指定しなかった場合に発生します。
+
+```ruby title="例: timeout を指定"
+port = Ractor::Port.new
+p Ractor.select(port, timeout: 0.1) # => nil
+```
+
+#%end
+#%else
+### def Ractor.select(*ractors, yield_value: nil, move: false) -> [object, object]
+
+引数で指定した Ractor のいずれかが [m:Ractor.yield] などで送信可能になるまで待ち、その Ractor と受信したオブジェクトの配列 [Ractor, obj] を返します。
+受信したのが現在の Ractor 自身であった場合は、Ractor の代わりに :receive シンボルが返ります。
+yield_value を指定すると、他の Ractor が [m:Ractor#take] を呼んだときにその値が yield され、
+[:yield, nil] が返ります。move が真のとき yield_value は移動されます。
+#%end
+
+### def Ractor.shareable?(obj) -> bool
+
+obj が shareable である場合、true を返します。
+
+- **param** `obj` -- Shareable であるか判定したいオブジェクトを指定します。
+
+#%since 4.1
+Ruby 4.1 から、[c:IO] のインスタンスは freeze されていても shareable ではなく、false を返します。Ruby 4.0 までは、freeze された [c:IO] は shareable でした。
+
+#%end
+#%since 4.0
+### def Ractor.shareable_proc(self: nil) { ... } -> Proc
+
+与えられたブロックから shareable な [c:Proc] を作成して返します。
+
+通常の [c:Proc] は shareable ではないため、他の Ractor に渡せません。
+このメソッドで作成した [c:Proc] は shareable になるため、複数の Ractor から利用できます。
+
+作成される [c:Proc] の `self` は、キーワード引数 `self` で指定したオブジェクトになります。
+ブロックが外側のローカル変数を参照している場合、その値も shareable でなければなりません。
+
+- **param** `self` -- 作成する [c:Proc] の `self` にするオブジェクトを指定します。shareable でなければなりません。デフォルトは nil です。
+- **raise** `Ractor::IsolationError` -- `self` が shareable でない場合や、ブロックが shareable でないオブジェクトを参照している場合に発生します。
+
+```ruby
+pr = Ractor.shareable_proc { 42 }
+p Ractor.shareable?(pr) # => true
+p pr.lambda?            # => false
+
+p Ractor.shareable?(proc { 42 }) # => false （通常の Proc は shareable ではない）
+
+# 他の Ractor に渡して呼び出せる
+p Ractor.new(pr) {|p| p.call }.value # => 42
+```
+
+```ruby title="例: self を指定"
+p Ractor.shareable_proc { self }.call               # => nil
+p Ractor.shareable_proc(self: 42) { self + 1 }.call # => 43
+
+x = 1
+p Ractor.shareable_proc { x }.call # => 1
+
+Ractor.shareable_proc(self: Object.new) { self } # ~> Ractor::IsolationError
+```
+
+- **SEE** [m:Ractor.shareable_lambda], [m:Ractor.make_shareable]
+
+### def Ractor.shareable_lambda(self: nil) { ... } -> Proc
+
+[m:Ractor.shareable_proc] と同じですが、lambda である [c:Proc] を返します。
+
+- **param** `self` -- 作成する [c:Proc] の `self` にするオブジェクトを指定します。shareable でなければなりません。デフォルトは nil です。
+- **raise** `Ractor::IsolationError` -- `self` が shareable でない場合や、ブロックが shareable でないオブジェクトを参照している場合に発生します。
+
+```ruby
+l = Ractor.shareable_lambda { 42 }
+p Ractor.shareable?(l) # => true
+p l.lambda?            # => true
+```
+
+- **SEE** [m:Ractor.shareable_proc]
+#%end
+
+#%since 3.4
+### def Ractor.store_if_absent(key) { ... } -> object
+
+このメソッドを呼び出した Ractor の Ractor-local storage の key データがない場合、ブロックを評価した結果を格納します。
+格納した値を返します。
+
+- **param** `key` -- Ractor-local storage のキーを指定します。
+#%end
+
+#%until 4.0
+### def Ractor.yield(obj, move: false) -> object
+
+現在の Ractor の outgoing port に obj を送信します。
+別の Ractor が [m:Ractor#take] でこのメッセージを受信するまでブロックします。
+
+- **param** `obj` -- 送信するオブジェクトを指定します。
+- **param** `move` -- obj を「移動」する場合は true を指定します。
+#%end
+
+## Instance Methods
+
+### def [](sym) -> object | nil
+
+カレント Ractor(このメソッドを呼び出した Ractor)の Ractor-local storage の sym に対応するデータを取り出します。
+sym に対応するデータがなければ nil を返します。
+
+#%since 4.0
+self がカレント Ractor でない場合は例外が発生します。
+#%else
+self がカレント Ractor でなくても例外にはならず、常にカレント Ractor の Ractor-local storage を参照します(self は使われません)。
+#%end
+
+- **param** `sym` -- Ractor-local storage のキーを指定します。
+#%since 4.0
+- **raise** `RuntimeError` -- self がカレント Ractor でない場合に発生します。
+#%end
+
+```ruby title="例"
+Ractor.current[:user] = "me"
+p Ractor.current[:user] # => "me"
+p Ractor.current[:none] # => nil
+```
+
+#%since 3.4
+- **SEE** [m:Ractor.\[\]], [m:Ractor.store_if_absent]
+#%end
+
+### def []=(sym, val)
+
+カレント Ractor(このメソッドを呼び出した Ractor)の Ractor-local storage の sym に val を格納します。
+
+#%since 4.0
+self がカレント Ractor でない場合は例外が発生します。
+#%else
+self がカレント Ractor でなくても例外にはならず、常にカレント Ractor の Ractor-local storage に格納します(self は使われません)。
+#%end
+
+- **param** `sym` -- Ractor-local storage のキーを指定します。
+- **param** `val` -- 格納するデータを指定します。
+#%since 4.0
+- **raise** `RuntimeError` -- self がカレント Ractor でない場合に発生します。
+#%end
+
+#%since 3.4
+- **SEE** [m:Ractor.\[\]=], [m:Ractor.store_if_absent]
+#%end
+
+#%since 4.1
+### def alive? -> bool
+
+self がまだ終了していなければ true を返します。
+
+正常に終了した場合も、捕捉されなかった例外で終了した場合も、実行を終えた後は false を返します。
+
+```ruby title="例"
+r = Ractor.new { Ractor.receive }
+p r.alive? # => true
+r << :done
+r.join
+p r.alive? # => false
+```
+
+- **SEE** [m:Ractor#join], [m:Ractor#value]
+
+#%end
+
+#%since 4.0
+### def close -> bool
+
+Default port を閉じます。
+
+self がこのメソッドを呼び出した Ractor ではない場合、Ractor::Error が発生します。
+
+#%end
+
+#%until 4.0
+### def close_incoming -> bool
+
+self の incoming port を閉じます。すでに閉じられていた場合は true を、そうでなければ false を返します。
+
+閉じると、self への [m:Ractor#send] と self 内での [m:Ractor.receive] は
+[c:Ractor::ClosedError] を発生させるようになります(受信待ちでブロックしていた場合も同様です)。
+
+Ractor の実行が終了すると、incoming port と outgoing port は自動的に閉じられます。
+
+```ruby title="例"
+r = Ractor.new { Ractor.receive }
+p r.close_incoming # => false
+r.send(1)          # ~> Ractor::ClosedError
+```
+
+- **SEE** [m:Ractor#close_outgoing], [m:Ractor#send], [m:Ractor.receive]
+
+### def close_outgoing -> bool
+
+self の outgoing port を閉じます。すでに閉じられていた場合は true を、そうでなければ false を返します。
+
+閉じると、self への [m:Ractor#take] と self 内での [m:Ractor.yield] は
+[c:Ractor::ClosedError] を発生させるようになります(送信待ち・受信待ちでブロックしていた場合も同様です)。
+
+```ruby title="例"
+r = Ractor.new { Ractor.receive }
+p r.close_outgoing # => false
+r.take             # ~> Ractor::ClosedError
+```
+
+- **SEE** [m:Ractor#close_incoming], [m:Ractor#take], [m:Ractor.yield]
+#%end
+
+#%since 4.0
+### def default_port -> Ractor::Port
+
+self の default port を返します。
+
+#%end
+
+#%since 4.0
+### def join -> Ractor
+
+self が終了するまで待ちます。
+Ractor の実行が例外で終了した場合には、 [m:Ractor#value]を呼び出し、その例外を再発生させます。
+
+#%end
+
+#%since 4.0
+### def monitor(port) -> bool
+
+port を self の監視ポートとして登録します。
+#%since 4.1
+self が終了すると、port は `[self, :exited]`（例外なく終了した場合）または
+`[self, :aborted]`（未処理の例外で終了した場合）という配列を受信します。
+複数の Ractor を 1 つの port で監視しても、どの Ractor が終了したかを判別できます。
+#%else
+self が終了すると、port は :exited（例外なく終了した場合）または
+:aborted（未処理の例外で終了した場合）というシンボルを受信します。
+#%end
+
+監視を登録できた（self がまだ終了していない）場合は true を返します。
+#%since 4.1
+self が既に終了していた場合は false を返し、port は直ちに終了を表す配列を受信します。
+#%else
+self が既に終了していた場合は false を返し、port は直ちに終了を表すシンボルを受信します。
+#%end
+
+#%end
+
+### def name -> String
+
+self の名前を返します。
+
+- **SEE** [m:Ractor.new]
+
+### def <<(msg, move: false) -> self
+### def send(msg, move: false) -> self
+
+#%since 4.0
+Ractor の default port に対してメッセージを送信します。
+#%else
+self にメッセージを送信します。
+送られたメッセージは self が [m:Ractor.receive] で受信できます。
+#%end
+
+- **param** `msg` -- 送信するメッセージを指定します。
+- **param** `move` -- msg を「移動」する場合は true を指定します。
+
+#%since 4.0
+- **SEE** [m:Ractor::Port#send]
+#%end
+
+#%until 4.0
+### def take -> object
+
+self の outgoing port からメッセージを受信します。
+self が [m:Ractor.yield] で送ったメッセージ、または self のブロックが返した値を受け取ります。
+メッセージが届くまでブロックします。
+#%end
+
+#%since 4.0
+### def unmonitor(port) -> self
+
+[m:Ractor#monitor] で登録した port の監視を解除します。
+
+#%end
+
+#%since 4.0
+### def value -> object
+
+self が終了するまで待ち、その Ractor のブロックが返した値を返します。
+Ractor の実行が例外で終了した場合には、その例外を再発生させます。
+
+#%since 4.1
+値を取り出せるのは 1 回だけです。2 回目以降の呼び出しでは [c:Ractor::Error] が発生します。
+
+- **raise** `Ractor::Error` -- 既に値を取り出している場合に発生します。
+
+#%end
+#%end

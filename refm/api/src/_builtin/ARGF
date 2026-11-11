@@ -63,7 +63,6 @@ ARGF.gets などこのオブジェクトをレシーバとしたメソッドの�
 実行例は [[ref:d:spec/rubycmd#cmd_option]] や [[m:ARGF.class#inplace_mode=]] を参照してください。
 
 = class ARGF.class
-
 include Enumerable
 
 [[c:ARGF]] を表すクラスです。
@@ -342,7 +341,7 @@ ARGF の現在位置から 1 バイトずつ読み込み、それを整数とし
   #    "2"
   #    "\n"
 
-@see [[m:IO#each_char]], [[m:IO#chars]]
+@see [[m:IO#each_char]]
 
 #@until 3.0
 --- chars { |c| ... } -> self

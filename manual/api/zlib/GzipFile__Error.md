@@ -1,0 +1,28 @@
+---
+library: zlib
+---
+# class Zlib::GzipFile::Error < Zlib::Error
+
+gzip ファイルを処理している間にエラーが生じた時に発生する全ての例外のスーパークラスです。
+
+## Instance Methods
+
+### def input -> String | nil
+
+読み込んだ文字列(gzip 形式で圧縮されたもの)を返します。
+
+### def inspect -> String
+
+self の情報を人間に読みやすい文字列にして返します。
+
+# class Zlib::GzipFile::NoFooter < Zlib::GzipFile::Error
+
+gzip ファイルにフッターが無い時に発生します。
+
+# class Zlib::GzipFile::CRCError < Zlib::GzipFile::Error
+
+フッターに記録されている CRC 値と実際に展開したデータの CRC 値が異なる時に発生します。
+
+# class Zlib::GzipFile::LengthError < Zlib::GzipFile::Error
+
+フッターに記録されているデータ長と実際に展開したデータの長さが異なる時に発生します。

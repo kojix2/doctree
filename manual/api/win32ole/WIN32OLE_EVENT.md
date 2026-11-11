@@ -1,0 +1,232 @@
+---
+library: win32ole
+---
+# class WIN32OLE_EVENT < Object
+
+OLEオートメーションサーバからのイベント通知を制御するクラスです。
+
+OLEオートメーションサーバによっては、サーバの処理の過程でクライアントがあらかじめ登録したメソッドを呼び出すものがあります。このサーバが登録したメソッドを呼び出す動作を「イベント」と呼びます。WIN32OLE_EVENTを利用すると、ブロックの形式でイベントを受け取るメソッドをサーバへ登録できます。
+
+Ruby 3.2 から、このクラスは WIN32OLE の名前空間下に移動し、`WIN32OLE::Event`
+として定義されるようになりました。トップレベル定数 `WIN32OLE_EVENT` は後方互換のためのエイリアスとして残っていますが、Ruby 3.4 以降は非推奨
+(deprecated)です(`Warning[:deprecated]` が有効なら参照時に警告が表示されます)。
+
+### サンプルコード
+
+```ruby
+ie = WIN32OLE.new('InternetExplorer.Application.1')
+event = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+b = false
+event.on_event('DocumentComplete') do |disp, uri|
+  disp.document.getElementsByTagName('a').each do |e|
+    puts "#{e.innerHTML}=#{e.href}"   # => ダウンロード=http://www.ruby-lang.org/ja/downloads/ など
+  end
+  disp.quit
+  b = true
+end
+ie.Navigate2 'http://www.ruby-lang.org/ja/'
+loop do
+  break if b
+  WIN32OLE_EVENT.message_loop
+end
+```
+
+## Class Methods
+
+### def WIN32OLE_EVENT.message_loop -> ()
+
+Windowsのメッセージポンプを実行します。
+
+message_loopメソッドは、Windowsメッセージがキューイングされている限りメッセージの読み出しとディスパッチを実行します。
+
+COMのスレッド間/プロセス間通信はスレッド内で呼び出しをシリアライズするためにWindowsメッセージを利用します。このため、ほとんどのイベント処理は
+Windowsメッセージを読み取ってディスパッチすることで通知されます。
+
+```ruby
+ie = WIN32OLE.new('InternetExplorer.Application.1')
+event = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+b = false
+event.on_event('DocumentComplete') do |disp, uri|
+  disp.document.getElementsByTagName('a').each do |e|
+    puts "#{e.innerHTML}=#{e.href}"   # => ダウンロード=http://www.ruby-lang.org/ja/downloads/ など
+  end
+  disp.quit
+  b = true
+end
+ie.Navigate2 'http://www.ruby-lang.org/ja/'
+loop do
+  break if b
+  WIN32OLE_EVENT.message_loop
+end
+```
+
+なお、メソッド名はloopですが、呼び出し時および既にキューイングされたメッセージの処理中にキューされたメッセージの処理が終わると呼び出し元に制御が戻ります。このため、イベント通知までに長い時間がかかる場合はすべてのイベントを受信するまでループを実行する必要があります。このとき他のスレッドに制御を与える必要があれば、[m:Kernel?.sleep]などを呼び出してください。message_loopメソッドの呼び出し中はRubyのスレッドの切り替えは行われません。
+
+### def WIN32OLE_EVENT.new(ole, event = nil) -> WIN32OLE_EVENT
+
+OLEオートメーションサーバのイベント受信機構をオブジェクト化して返します。
+
+newメソッドは、OLEオートメーションサーバがイベント通知に利用するインターフェイスを取得し、オブジェクトとして返します。
+
+- **param** `ole` -- イベントの通知元のWIN32OLEオブジェクトを指定します。
+
+- **param** `event` -- イベントのインターフェイスを示すインターフェイス名または
+             IIDを文字列で指定します。省略時にはoleパラメータで指定したオブジェクトの既定のイベントインターフェイスを利用します。
+
+- **return** -- 指定したオブジェクトのイベントを管理するWIN32OLE_EVENTオブジェクト。
+
+- **raise** `RuntimeError` -- eventパラメータで指定したIIDが見つかりません。またはオブジェクトがイベントをサポートしていません。
+
+以下の3例はいずれも同等です。
+
+```ruby title="デフォルトイベントインターフェイスを指定した例"
+ie = WIN32OLE.new('InternetExplorer.Application')
+ev = WIN32OLE_EVENT.new(ie)
+```
+
+```ruby title="インターフェイス名を指定した例"
+ie = WIN32OLE.new('InternetExplorer.Application')
+ev = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+```
+
+```ruby title="IIDを指定した例"
+ie = WIN32OLE.new('InternetExplorer.Application')
+ev = WIN32OLE_EVENT.new(ie, '{34A715A0-6587-11D0-924A-0020AFC7AC4D}')
+```
+
+## Instance Methods
+
+### def on_event(event = nil) {|*args| ... } -> ()
+
+イベント通知を受けるブロックを登録します。
+
+引数にはイベントのメソッド名を指定します。引数を省略した場合は、すべてのイベントを対象とするブロックの登録となります。
+
+ブロックには、サーバがイベント通知時に指定した引数が渡されます。
+`event` パラメータを省略した場合、第1引数にはイベントのメソッド名が文字列で与えられます。引数の変更が必要な場合は、
+[m:WIN32OLE_EVENT#on_event_with_outargs]を利用してください。
+
+- **param** `event` -- イベント名を文字列かシンボルで指定します。イベント名は大文字小文字を区別します。省略時にはすべてのイベントが対象となります。
+
+- **raise** `WIN32OLERuntimeError` -- [m:WIN32OLE_EVENT#unadvise]によってイベントソースと切断済みです。
+
+```ruby
+ie = WIN32OLE.new('InternetExplorer.Application')
+ev = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+ev.on_event("NavigateComplete2") do |browser, url| 
+  puts url
+end
+```
+
+同じオブジェクトに対してeventパラメータを指定したブロックと指定しないブロックが混在している場合、通知されたイベントに対応するブロックがあればそちらだけが呼び出されます。
+
+```ruby
+ie = WIN32OLE.new('InternetExplorer.Application')
+ev = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+ev.on_event("NavigateComplete2") do |browser, url| 
+  puts url
+end
+ev.on_event do |*args|   # <- NavigateComplete2イベント時は実行されない
+  puts args[0]
+end
+# ...
+```
+
+当メソッドはイベント名の大文字小文字を区別するほか、イベント名の存在確認を行いません。このため、誤ったイベント名を記述してもエラーとはならず、単にイベントを受け取れなくなります。
+
+### def on_event_with_outargs(event = nil) {|*args| ... } -> ()
+
+イベント通知を受けて結果を呼び出し元へ返すブロックを登録します。
+
+引数にはイベントのメソッド名を指定します。引数を省略した場合は、すべてのイベントを対象とするブロックの登録となります。
+
+[m:WIN32OLE_EVENT#on_event]と異なり、イベントのブロック変数に戻り値を設定できます。
+
+ブロックには、サーバがイベント通知時に指定した引数の配列が渡されます。
+`event` パラメータを省略した場合、第1要素にはイベントのメソッド名が文字列で与えられます。なお、引数に値を設定するには、ブロック変数を分割せずに配列の形式で受けてください。
+
+- **param** `event` -- イベント名を文字列かシンボルで指定します。イベント名は大文字小文字を区別します。省略時にはすべてのイベントが対象となります。
+
+- **raise** `WIN32OLERuntimeError` -- [m:WIN32OLE_EVENT#unadvise]によってイベントソースと切断済みです。
+
+```ruby
+ie = WIN32OLE.new('InternetExplorer.Application')
+ev = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+ev.on_event('BeforeNavigate2') do |*args|
+  args[6] = true unless args[4]  # Cancel = true unless PostData
+end
+```
+
+当メソッドはイベント名の大文字小文字を区別するほか、イベント名の存在確認を行いません。このため、誤ったイベント名を記述してもエラーとはならず、単にイベントを受け取れなくなります。
+
+### def off_event(event = nil) -> ()
+
+[m:WIN32OLE_EVENT#on_event]で登録したブロックを解除します。
+
+- **param** `event` -- 文字列またはシンボルで登録時に指定したイベント名を指定しま
+す。nilの場合、[m:WIN32OLE_EVENT#on_event]に対してnilを指定したブロックを解除します。
+
+```ruby
+ev = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents')
+ev.on_event(:NavigateComplete) {|url| puts url }
+# ...
+ev.off_event(:NavigateComplete)
+```
+
+### def handler=(obj)
+
+イベント処理を実行するオブジェクトを登録します。
+
+イベントハンドラをメソッドとして持つオブジェクトをイベントハンドラとして登録します。
+
+イベントハンドラはイベント名に「on」を前置します。もし、イベントに対応するonメソッドが実装されていなければmethod_missingが呼ばれます。イベント名は大文字小文字を区別するため、正確な記述が必要です。
+
+- **param** `obj` -- イベントに対応するメソッドを持つオブジェクト。イベント受信を解除するにはnilを指定します。
+
+```ruby
+class IeHandler
+  def initialize
+    @completed = false
+  end
+  attr_reader :completed
+  def onDocumentComplete(disp, uri)
+    disp.document.getElementsByTagName('a').each do |e|
+      puts "#{e.innerHTML}=#{e.href}"
+    end
+    @completed = true
+  end
+  def method_missing(id, *args)
+    puts "event=#{id.to_s}, args=#{args.inspect}"
+  end
+end
+
+ie = WIN32OLE.new('InternetExplorer.Application.1')
+event = WIN32OLE_EVENT.new(ie, 'DWebBrowserEvents2')
+event.handler = IeHandler.new
+ie.Navigate2 'http://www.ruby-lang.org/ja/'
+loop do
+  break if event.handler.completed
+  WIN32OLE_EVENT.message_loop
+end
+ie.Quit
+```
+
+[m:WIN32OLE_EVENT#on_event]などの呼び出しでブロックが登録されている場合、そちらが優先されます。
+
+### def handler -> object
+
+[m:WIN32OLE_EVENT#handler=]メソッドで登録したイベントハンドラオブジェクトを返します。
+
+- **return** -- イベントハンドラオブジェクト。未登録ならばnil。
+
+### def unadvise -> ()
+
+イベント通知元をオブジェクトから切断します。
+
+当メソッド実行後は、イベント通知を受けられなくなります。また、このオブジェクトを利用した[m:WIN32OLE_EVENT#on_event]などの呼び出しはエラー（[c:WIN32OLERuntimeError]の通知）となります。
+
+WIN32OLE_EVENTオブジェクトは一度生成すると、イベントハンドラが登録されている限りオブジェクトを解放しません。というのは、イベントの通知元のオブジェクトと相互参照されるため、自動的に解放できないからです。
+結果として、OLEオートメーションサーバの解放もスクリプトが終了するまで行われません。
+
+この状態が望ましくないアプリケーション（サーバがリソースを消費する、あるいはスクリプトの寿命が非常に長いなど）で、積極的にサーバを解放したい場合に限り、当メソッドを呼び出してください。
+

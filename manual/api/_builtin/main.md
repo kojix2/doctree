@@ -1,0 +1,176 @@
+---
+library: _builtin
+---
+# object main
+
+トップレベルでの self を表すオブジェクトです。
+
+main では参照できない事に注意してください。トップレベルで self から参照してください。
+
+トップレベルで定義したメソッドは [c:Object] の private インスタンスメソッドとして定義されます。
+
+```ruby title="例: トップレベルで定義したメソッドの確認"
+basic_private_methods = private_methods(false)
+basic_public_methods = public_methods(false)
+private def explicit_private_method
+end
+
+# トップレベルで定義したメソッドは main オブジェクトの private メソッドと して定義される
+def implicit_private_method
+end
+
+public def explicit_public_method
+end
+
+# main オブジェクトで独自定義した private method のみを取得する
+p private_methods(false) - basic_private_methods
+# => [:explicit_private_method, :implicit_private_method]
+
+# main オブジェクトで独自定義した public method のみを取得する
+p public_methods(false) - basic_public_methods
+# => [:explicit_public_method]
+```
+
+### def main.public -> nil
+### def main.public(name) -> String | Symbol
+### def main.public(*name) -> Array
+### def main.public(names) -> Array
+
+メソッドを public に設定します。
+
+引数なしのときは今後このクラスまたはモジュール定義内で新規に定義されるメソッドをどんな形式でも呼び出せるように(public)設定します。
+
+引数が与えられた時には引数によって指定されたメソッドを public に設定します。
+
+- **param** `name` --  0 個以上の [c:String] または [c:Symbol] を指定します。
+- **param** `names` -- 0 個以上の [c:String] または [c:Symbol] を [c:Array] で指定します。
+
+- **raise** `NameError` -- 存在しないメソッド名を指定した場合に発生します。
+
+#%#noexample Module#public を参照
+
+- **SEE** [m:Module#public]
+
+### def main.private -> nil
+### def main.private(name) -> String | Symbol
+### def main.private(*name) -> Array
+### def main.private(names) -> Array
+
+メソッドを private に設定します。
+
+引数が与えられた時には引数によって指定されたメソッドを private に設定します。
+
+引数なしのときは今後このクラスまたはモジュール定義内で新規に定義されるメソッドを関数形式でだけ呼び出せるように(private)設定します。
+
+- **param** `name` --  0 個以上の [c:String] または [c:Symbol] を指定します。
+- **param** `names` -- 0 個以上の [c:String] または [c:Symbol] を [c:Array] で指定します。
+
+- **raise** `NameError` -- 存在しないメソッド名を指定した場合に発生します。
+
+#%#noexample 明示的に呼び出される機会がないため
+
+- **SEE** [m:Module#private]
+
+### def main.to_s    -> "main"
+### def main.inspect -> "main"
+{: since=""}
+
+"main" を返します。
+
+#%#noexample
+
+### def main.include(*modules) -> self
+
+引数 modules で指定したモジュールを後ろから順番に [c:Object] にインクルードします。
+
+- **param** `modules` -- [c:Module] のインスタンス( [c:Enumerable] など)を指定します。
+
+- **raise** `ArgumentError` -- 継承関係が循環してしまうような include を行った場合に発生します。
+
+```ruby title="例:"
+include Math
+
+p hypot(3, 4)  # => 5.0
+```
+
+- **SEE** [m:Module#include]
+
+### def main.define_method(name, method) -> Symbol
+### def main.define_method(name) { ... } -> Symbol
+{: since="2.0.0"}
+
+インスタンスメソッド name を [c:Object] に定義します。
+
+ブロックを与えた場合、定義したメソッドの実行時にブロックが
+[c:Object] インスタンスの上で [m:BasicObject#instance_eval] されます。
+
+- **param** `name` -- [c:String] または [c:Symbol] を指定します。
+
+- **param** `method` -- [c:Proc]、[c:Method] あるいは [c:UnboundMethod] のいずれかのインスタンスを指定します。
+
+- **return** -- メソッド名を表す [c:Symbol] を返します。
+
+- **raise** `TypeError` -- method に同じクラス、サブクラス以外のメソッドを指定した場合に発生します。
+
+#%#noexample Module#define_method を参照
+
+- **SEE** [m:Module#define_method]
+
+### def main.using(module) -> self
+{: since="2.0.0"}
+
+引数で指定したモジュールで定義された拡張を有効にします。
+
+有効にした拡張の有効範囲については以下を参照してください。
+
+- <https://docs.ruby-lang.org/en/master/syntax/refinements_rdoc.html#label-Scope>
+
+- **param** `module` -- 有効にするモジュールを指定します。
+
+```ruby title="例"
+module Sloth
+  refine String do
+    def downcase
+      self
+    end
+  end
+end
+
+p "ABC".downcase # => "abc"
+
+using Sloth
+
+p "ABC".downcase # => "ABC"
+```
+
+- **SEE** [m:Module#refine], [m:Module#using]
+
+### def main.ruby2_keywords(method_name, ...) -> nil
+{: since="2.7.0"}
+
+トップレベルで定義したメソッドに、可変長引数(`*args`)で受けたキーワード引数を別のメソッド呼び出しへそのまま渡すためのフラグを設定します。
+
+Ruby 2.7 より前との後方互換性のために用意されているメソッドです。
+詳細は [m:Module#ruby2_keywords] を参照してください。
+
+#%since 4.1
+Ruby 4.1 でこのメソッドは deprecated になり、Ruby 4.4 で削除される予定です。[feature:22205]
+#%end
+
+- **param** `method_name` -- メソッド名を [c:String] か [c:Symbol] で指定します。複数指定できます。
+
+```ruby title="例"
+def target(a, k: 0)
+  [a, k]
+end
+
+def pass(*args)
+  target(*args)
+end
+ruby2_keywords :pass
+
+p pass(1, k: 2) # => [1, 2]
+```
+
+- **SEE** [m:Module#ruby2_keywords], [m:Proc#ruby2_keywords], [m:Hash.ruby2_keywords_hash]
+

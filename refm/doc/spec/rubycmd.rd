@@ -54,7 +54,7 @@ Rubyインタプリタは以下のコマンドラインオプションを受け�
   が実行されます。`-n'か`-p'オプションが同時に指定されない限り,
   このオプションは意味を持ちません。
 
-#@since 3.0.0
+#@since 3.0
 : --backtrace-limit=num
 
   バックトレースの最大行数を指定します。
@@ -115,7 +115,7 @@ test.rb:1:in `f6': unhandled exception
 : -d
 : --debug
 
-  デバッグモードでスクリプトを実行します。[[m:$DEBUG]] を
+  デバッグモードでスクリプトを実行します。[[m:$DEBUG]] と [[m:$VERBOSE]] を
   true にします。
 
 : -E ex[:in]
@@ -149,8 +149,8 @@ nil
 # 内部エンコーディングをWindows-31Jにする場合
 
 $ ruby -E :Windows-31J -e 'p Encoding.default_external; p Encoding.default_internal'
-#<Encoding:Windows-31J>
 #<Encoding:UTF-8>
+#<Encoding:Windows-31J>
 
 $ ruby --encoding :Windows-31J -e 'p Encoding.default_external; p Encoding.default_internal'
 #<Encoding:UTF-8>
@@ -402,7 +402,7 @@ $ ruby --internal-encoding EUC-JP -e 'p Encoding.default_external; p Encoding.de
      * -W:experimental : 実験的な機能を使用した際に警告を出力する(デフォルト)
      * -W:no-experimental : 実験的な機能を使用した際に警告を出力しない
 //}
-    ここで設定された値は [[m:Warning.[] ]] で参照することができます。
+    ここで設定された値は [[m:Warning.[] ]] で参照できます。
 
     NOTE: Ruby 2.7.2 からは `-W:no-deprecated' がデフォルトになります。警告を出力したい場合は `-W:deprecated' を使ってください。
 #@else
@@ -569,7 +569,7 @@ $ ruby --internal-encoding EUC-JP -e 'p Encoding.default_external; p Encoding.de
 文字列が `ruby` という文字列を含む行を見つけたらその行以下を Ruby スク
 リプトとして実行します。
 
-例えば、以下のようなスクリプトを sh で実行すると sh から Ruby を起動することができます。
+例えば、以下のようなスクリプトを sh で実行すると sh から Ruby を起動できます。
 
   #!/bin/sh
   exec ruby -x "$0" "$@"

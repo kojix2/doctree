@@ -1,0 +1,34 @@
+---
+library: psych
+---
+# class Psych::TreeBuilder < Psych::Handler
+
+YAML AST を構築するためのクラスです。
+
+[m:Psych::Parser.new] に渡して YAML ドキュメントを YAML AST に変換できます。
+
+また、[m:Psych::Visitors::YAMLTree.new] に渡して Ruby オブジェクトを YAML AST に変換することもできます。
+
+### Example
+
+```ruby
+require 'psych'
+
+parser = Psych::Parser.new Psych::TreeBuilder.new
+parser.parse('--- foo')
+parser.handler.root # => #<Psych::Nodes::Stream:0x00000001400000 ... >
+```
+  
+## Class Methods
+
+### def Psych::TreeBuilder.new -> Psych::TreeBuilder
+
+TreeBuilder オブジェクトを生成します。
+
+## Instance Methods
+
+### def root -> Psych::Nodes::Stream
+
+AST の root を返します。
+
+- **SEE** [c:Psych::Nodes::Stream]

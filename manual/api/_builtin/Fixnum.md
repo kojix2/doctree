@@ -1,0 +1,317 @@
+---
+library: _builtin
+until: "2.4.0"
+---
+# class Fixnum < Integer
+
+[c:Bignum] 同様、整数のクラスです。
+演算の結果が Fixnum の範囲を越えた時には自動的に [c:Bignum] に拡張されます。
+
+マシンのポインタのサイズに収まる長さの固定長整数で、ほとんどのマシンでは 31 ビット幅です。
+
+Ruby 2.4 から Fixnum, [c:Bignum] は [c:Integer] に統合されました。
+Ruby 2.4 からはどちらも [c:Integer] クラスのエイリアスとなっています。
+
+### 破壊的な変更
+
+Ruby の Fixnum クラスは immutable です。
+つまり、オブジェクト自体を破壊的に変更することはできません。
+[c:Bignum] も同様です。
+
+```ruby title="例"
+p 100000.class           # => Fixnum
+p 100000 * 100000        # => 100000000
+p (100000 * 100000).class  # => Bignum
+```
+
+## Instance Methods
+
+### def [](nth) -> Fixnum
+
+nth 番目のビット(最下位ビット(LSB)が 0 番目)が立っている時 1
+を、そうでなければ 0 を返します。
+
+- **param** `nth` --  何ビット目を指すかの数値
+- **return** --     1 か 0
+
+self[nth]=bit (つまりビットの修正) がないのは、Numeric 関連クラスが
+immutable であるためです。
+
+### def +(other) -> Fixnum | Bignum | Float
+
+算術演算子。和を計算します。
+
+- **param** `other` -- 二項演算の右側の引数(対象)
+- **return** -- 計算結果
+
+### def -(other) -> Fixnum | Bignum | Float
+
+算術演算子。差を計算します。
+
+- **param** `other` -- 二項演算の右側の引数(対象)
+- **return** -- 計算結果
+
+### def -@    -> Integer
+
+単項演算子の - です。
+self の符号を反転させたものを返します。
+
+### def *(other) -> Fixnum | Bignum | Float
+
+算術演算子。積を計算します。
+
+- **param** `other` -- 二項演算の右側の引数(対象)
+- **return** -- 計算結果
+
+### def /(other) -> Fixnum | Bignum | Float
+### def div(other) -> Fixnum | Bignum | Float
+
+算術演算子。商を計算します。
+
+- **param** `other` -- 二項演算の右側の引数(対象)
+- **return** -- 計算結果
+
+### def %(other) -> Fixnum | Bignum | Float
+### def modulo(other) -> Fixnum | Bignum | Float
+
+算術演算子。剰余を計算します。
+
+- **param** `other` -- 二項演算の右側の引数(対象)
+- **return** -- 計算結果
+
+### def divmod(other) -> [Integer, Numeric]
+
+self を other で割った商 q と余り r を、 [q, r] という 2 要素の配列にして返します。 商 q は常に整数ですが、余り r は整数であるとは限りません。
+
+- **param** `other` -- self を割る数。
+
+- **SEE** [m:Numeric#divmod]
+
+### def fdiv(other) -> Float | Complex
+
+self を other で割った商を [c:Float] で返します。
+ただし [c:Complex] が関わる場合は例外です。
+その場合も成分は Float になります。
+
+- **param** `other` -- self を割る数を指定します。
+
+- **SEE** [m:Numeric#quo]
+
+### def **(other) -> Fixnum | Bignum | Float
+
+算術演算子。冪(べき乗)を計算します。
+
+- **param** `other` -- 二項演算の右側の引数(対象)
+- **return** -- 計算結果
+
+```ruby
+p 2 ** 3 # => 8
+p 2 ** 0 # => 1
+p 0 ** 0 # => 1
+```
+
+### def <=>(other) -> Fixnum
+
+self と other を比較して、self が大きい時に正、等しい時に 0、小さい時に負の整数を返します。
+
+- **param** `other` -- 比較対象の数値
+- **return** --      -1 か 0 か 1 のいずれか
+
+```ruby
+p 1 <=> 2 # => -1
+p 1 <=> 1 # => 0
+p 2 <=> 1 # => 1
+```
+
+### def ==(other) -> bool
+
+比較演算子。数値として等しいか判定します。
+
+- **param** `other` -- 比較対象の数値
+- **return** --      self と other が等しい場合 true を返します。
+             そうでなければ false を返します。
+
+### def <(other)  -> bool
+
+比較演算子。数値として小さいか判定します。
+
+- **param** `other` -- 比較対象の数値
+- **return** --      self よりも other が大きい場合 true を返します。
+             そうでなければ false を返します。
+
+### def <=(other) -> bool
+
+比較演算子。数値として等しいまたは小さいか判定します。
+
+- **param** `other` -- 比較対象の数値
+- **return** --      self よりも other の方が大きい場合か、両者が等しい場合 true を返します。
+             そうでなければ false を返します。
+
+### def >(other)  -> bool
+
+比較演算子。数値として大きいか判定します。
+
+- **param** `other` -- 比較対象の数値
+- **return** --      self よりも other の方が小さい場合 true を返します。
+             そうでなければ false を返します。
+
+### def >=(other) -> bool
+
+比較演算子。数値として等しいまたは大きいか判定します。
+
+- **param** `other` -- 比較対象の数値
+- **return** --      self よりも other の方が小さい場合か、両者が等しい場合 true を返します。
+             そうでなければ false を返します。
+
+### def ~        -> Fixnum | Bignum
+
+ビット演算子。否定を計算します。
+
+```ruby
+p ~1  # => -2
+p ~3  # => -4
+p ~-4 # => 3
+```
+
+### def |(other) -> Fixnum | Bignum
+
+ビット二項演算子。論理和を計算します。
+
+- **param** `other` -- 数値
+
+```ruby
+p 1 | 1 # => 1
+p 2 | 3 # => 3
+```
+
+### def &(other) -> Fixnum | Bignum
+
+ビット二項演算子。論理積を計算します。
+
+- **param** `other` -- 数値
+
+```ruby
+p 1 & 1 # => 1
+p 2 & 3 # => 2
+```
+
+### def ^(other) -> Fixnum | Bignum
+
+ビット二項演算子。排他的論理和を計算します。
+
+- **param** `other` -- 数値
+
+```ruby
+p 1 ^ 1 # => 0
+p 2 ^ 3 # => 1
+```
+
+### def <<(bits) -> Fixnum | Bignum
+
+シフト演算子。bits だけビットを左にシフトします。
+
+- **param** `bits` -- シフトさせるビット数
+
+```ruby
+printf("%#b\n", 0b0101 << 1) # => 0b1010
+p -1 << 1 # => -2
+```
+
+### def >>(bits) -> Fixnum | Bignum
+
+シフト演算子。bits だけビットを右にシフトします。
+
+右シフトは、符号ビット(最上位ビット(MSB))が保持されます。
+bitsが実数の場合、小数点以下を切り捨てた値でシフトします。
+
+- **param** `bits` -- シフトさせるビット数
+
+```ruby
+printf("%#b\n", 0b0101 >> 1) # => 0b10
+p -1 >> 1 # => -1
+```
+
+### def size -> Fixnum
+
+整数の実装上のサイズをバイト数で返します。
+
+現在の実装では [c:Fixnum] は、sizeof(long) 固定(多くの 32
+bit マシンで 4 バイト)、[c:Bignum]は、システム依存です。
+
+```ruby
+p 1.size
+p 0x1_0000_0000.size
+# => 4
+     8
+```
+
+### def to_f -> Float
+
+値を浮動小数点数([c:Float])に変換します。
+
+### def to_s(base = 10)    -> String
+### def inspect(base = 10) -> String
+{: since=""}
+
+self を引数で指定した基数の文字列表現に変換します。
+
+- **param** `base` -- 基数を 2 から 36 の整数で指定します。
+
+```ruby
+p 12345.to_s     # => "12345"
+p 12345.to_s(2)  # => "11000000111001"
+p 12345.to_s(8)  # => "30071"
+p 12345.to_s(10) # => "12345"
+p 12345.to_s(16) # => "3039"
+p 12345.to_s(36) # => "9ix"
+```
+
+### def zero? -> bool
+
+self が 0 の場合に true を返します。そうでない場合に false を返します。
+
+### def odd? -> bool
+
+self が奇数の場合に true を返します。そうでない場合に false を返します。
+
+### def even? -> bool
+
+self が偶数の場合に true を返します。そうでない場合に false を返します。
+
+### def abs -> Fixnum | Bignum
+### def magnitude -> Fixnum | Bignum
+
+self の絶対値を返します。
+
+### def succ -> Fixnum | Bignum
+
+self の次の整数を返します。
+
+### def bit_length -> Integer
+
+self を表すのに必要なビット数を返します。
+
+「必要なビット数」とは符号ビットを除く最上位ビットの位置の事を意味します。2**n の場合は n+1 になります。self にそのようなビットがない(0 や
+-1 である)場合は 0 を返します。
+
+例: ceil(log2(int < 0 ? -int : int+1)) と同じ結果
+
+```ruby
+p (-2**12-1).bit_length   # => 13
+p (-2**12).bit_length     # => 12
+p (-2**12+1).bit_length   # => 12
+p -0x101.bit_length       # => 9
+p -0x100.bit_length       # => 8
+p -0xff.bit_length        # => 8
+p -2.bit_length           # => 1
+p -1.bit_length           # => 0
+p 0.bit_length            # => 0
+p 1.bit_length            # => 1
+p 0xff.bit_length         # => 8
+p 0x100.bit_length        # => 9
+p (2**12-1).bit_length    # => 12
+p (2**12).bit_length      # => 13
+p (2**12+1).bit_length    # => 13
+```
+
+- **SEE** [m:Bignum#bit_length]

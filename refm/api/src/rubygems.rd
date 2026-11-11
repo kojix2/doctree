@@ -8,8 +8,6 @@ require rubygems/gem_path_searcher
 require rubygems/source_index
 require rubygems/platform
 require rubygems/builder
-#@# 確かに require されているが、ファイルが存在しないためコメントアウト。
-#@# require rubygems/defaults/operating_system
 
 sublibrary rubygems/gem_runner
 
@@ -105,7 +103,7 @@ Proxy サーバ経由で Gem パッケージをインストールするには以
 
 ==== Gem パッケージを作成する
 
-作成した gemspec ファイルを元にして Gem パッケージを簡単に作成することができます。
+作成した gemspec ファイルを元にして Gem パッケージを簡単に作成できます。
 
   $ gem build <gemspec filename>
 
@@ -206,9 +204,9 @@ end
   * GEM_PATH Gem のサーチパス
   * $HOME/.gemrc
 
-環境変数 GEM_HOME, GEM_PATH を設定する事によって Gem コマンドの動作を変更することができます。
+環境変数 GEM_HOME, GEM_PATH を設定する事によって Gem コマンドの動作を変更できます。
 また、ホームディレクトリに .gemrc という YAML フォーマットで書かれたファイルを置くことでも
-動作を変更することができます。
+動作を変更できます。
 
 例:
 
@@ -252,7 +250,7 @@ gem メソッドは全ての require メソッドよりも前に実行されま�
 
 === 環境変数 GEM_SKIP
 
-特定の Gem をロードしないようにするために環境変数 GEM_SKIP を定義することができます。
+特定の Gem をロードしないようにするために環境変数 GEM_SKIP を定義できます。
 特定の Gem がまだインストールされていないという状況を試すために使用できます。
 
 例:

@@ -1,0 +1,84 @@
+---
+library: socket
+---
+# class TCPSocket < IPSocket
+
+インターネットドメインのストリーム型ソケットのクラスです。
+
+通常の[c:IO] クラスのサブクラスと同様の入出力ができます。このクラスによってソケットを用いたクライアントを簡単に記述できるようになります。
+
+ユーザの入力をそのままサーバに転送するプログラムは以下のようになります。
+
+```ruby
+require "socket"
+  
+port = if ARGV.size > 0 then ARGV.shift else 4444 end
+print port, "\n"
+  
+s = TCPSocket.open("localhost", port)
+  
+while gets
+  s.write($_)
+  print(s.gets)
+end
+s.close
+```
+
+## Class Methods
+
+#%version 4.0...
+### def TCPSocket.open(host, service, local_host=nil, local_service=nil, resolv_timeout: nil, connect_timeout: nil, open_timeout: nil, fast_fallback: true) -> TCPSocket
+### def TCPSocket.new(host, service, local_host=nil, local_service=nil, resolv_timeout: nil, connect_timeout: nil, open_timeout: nil, fast_fallback: true) -> TCPSocket
+#%end
+#%version 3.4
+### def TCPSocket.open(host, service, local_host=nil, local_service=nil, resolv_timeout: nil, connect_timeout: nil, fast_fallback: true) -> TCPSocket
+### def TCPSocket.new(host, service, local_host=nil, local_service=nil, resolv_timeout: nil, connect_timeout: nil, fast_fallback: true) -> TCPSocket
+#%end
+#%until 3.4
+### def TCPSocket.open(host, service, local_host=nil, local_service=nil, resolv_timeout: nil, connect_timeout: nil) -> TCPSocket
+### def TCPSocket.new(host, service, local_host=nil, local_service=nil, resolv_timeout: nil, connect_timeout: nil) -> TCPSocket
+#%end
+
+host で指定したホストの service で指定したポートと接続したソケットを返します。host はホスト名、またはインターネットアドレスを示す文字列、service は /etc/services (または NIS) に登録されているサービス名かポート番号です。
+
+引数 local_host, local_service を指定した場合、そのアドレスに対して [man:bind(2)] します。
+
+- **param** `host` --           ホスト名、またはインターネットアドレスを示す文字列を指定します。
+- **param** `service` --        /etc/services (または NIS) に登録されているサービス名かポート番号を指定します。
+- **param** `local_host` --     ホスト名、またはインターネットアドレスを示す文字列を指定します。
+- **param** `local_service` --  /etc/services (または NIS) に登録されているサービス名かポート番号を指定します。
+#%since 3.4
+- **param** `resolv_timeout` -- 名前解決のタイムアウトを秒数で指定します。
+#%else
+- **param** `resolv_timeout` -- 指定してもエラーにはなりませんが、無視されます。名前解決のタイムアウトとして追加されました([feature:17134])が、対応する実装は Ruby 3.0 のリリース前に取り消され([bug:17220])、Ruby 3.4 で改めて有効になりました。
+#%end
+- **param** `connect_timeout` -- 接続確立のタイムアウトを秒数で指定します。
+#%version 4.0...
+- **param** `open_timeout` -- 名前解決から接続確立までのタイムアウトを秒数で指定します。
+#%end
+#%version 3.4...
+- **param** `fast_fallback` -- Happy Eyeballs Version 2 ([RFC 8305](https://datatracker.ietf.org/doc/html/rfc8305)) を有効にします。
+#%end
+
+#%until 4.1
+### def TCPSocket.gethostbyname(host) -> Array
+
+このメソッドは deprecated です。[m:Addrinfo.getaddrinfo] を使用してください。
+
+ホスト名または IP アドレス (整数または"127.0.0.1"
+のような文字列)からホストの情報を返します。ホスト情報は、ホスト名、ホストの別名の配列、ホストのアドレスタイプ、ホストのアドレスを各要素とする配列です。ホストのアドレスは octet
+decimal の文字列 ("127.0.0.1"のような文字列) や IPv6
+アドレス ("::1" のような文字列) です。
+
+- **param** `host` -- ホスト名または IP アドレス (整数または"127.0.0.1" のような文字列)を指定します。
+
+- **return** -- ホスト名、ホストの別名の配列、ホストのアドレスタイプ、ホストのアドレスを各要素とする配列を返します。
+
+```ruby title="例"
+require 'socket'
+
+p TCPSocket.gethostbyname("www.ruby-lang.org")
+# => ["beryllium.ruby-lang.org", [], 2, "210.163.138.100"]
+```
+
+#%end

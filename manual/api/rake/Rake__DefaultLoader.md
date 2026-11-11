@@ -1,0 +1,21 @@
+---
+library: rake
+---
+# class Rake::DefaultLoader
+
+[m:Rake::DSL#import] で使用するデフォルトのローダーです。
+
+## Public Instance Methods
+
+### def load(filename)
+
+与えられたファイルをロードします。
+
+- **param** `filename` -- ロードするファイル名を指定します。
+
+```ruby
+require 'rake'
+
+loader = Rake::DefaultLoader.new
+p loader.load("path/to/Rakefile") # => true
+```

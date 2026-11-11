@@ -1,0 +1,300 @@
+---
+library: digest
+include:
+  - Digest::Instance
+---
+# class Digest::Base < Digest::Class
+
+すべての Digest::XXX クラスの基底クラスです。
+
+例えば、MD5 値を得るには以下のようにします。
+
+```ruby
+require 'digest/md5'
+
+p Digest::MD5.hexdigest('abc')               # => '900150983cd24fb0d6963f7d28e17f72'
+p Digest::MD5.file('ruby-1.8.5.tar.gz').to_s # => '3fbb02294a8ca33d4684055adba5ed6f'
+```
+
+すべての Digest::XXX クラスは以下の共通インタフェースを持ちます。
+
+## Class Methods
+
+### def Digest::Base.new            -> Digest::Base
+
+新しいダイジェストオブジェクトを生成します。
+
+### def Digest::Base.digest(str) -> String
+
+与えられた文字列に対するハッシュ値を文字列で返します。
+new(str).digest と等価です。
+
+### def Digest::Base.hexdigest(str) -> String
+
+与えられた文字列に対するハッシュ値を、ASCIIコードを使って
+16進数の列を示す文字列にエンコードして返します。
+new(str).hexdigest と等価です。
+
+### def Digest::Base.base64digest(str) -> String
+
+与えられた文字列に対するハッシュ値を、Base64 エンコードした文字列にして返します。
+new(str).base64digest と等価です。
+
+返す文字列は '=' でパディングされ、改行は含まれません。
+
+```ruby title="例"
+require 'digest'
+p Digest::MD5.base64digest('ruby') # => "WOU9EyTu9iZf25ewjtmq3w=="
+```
+
+- **SEE** [m:Digest::Base#base64digest]
+
+### def Digest::Base.file(path) -> object
+
+新しいダイジェストオブジェクトを生成し、ファイル名 file で指定したファイルの内容を読み込み、そのダイジェストオブジェクトを返します。
+
+- **param** `path` -- 読み込み対象のファイル名です。
+- **return** -- ダイジェストオブジェクトを返します。
+
+```ruby title="使用例(SHA256の場合)"
+require 'digest'
+digest = Digest::SHA256.file("X11R6.8.2-src.tar.bz2")
+p digest.hexdigest
+# => "f02e3c85572dc9ad7cb77c2a638e3be24cc1b5bea9fdbb0b0299c9668475c534"
+```
+
+## Instance Methods
+
+### def dup   -> Digest::Base
+### def clone -> Digest::Base
+
+ダイジェストオブジェクトの複製を作ります。
+
+### def digest -> String
+
+updateや<<によって追加した文字列に対するハッシュ値を文字列で返します。
+
+返す文字列は、MD5では16バイト長、SHA1およびRMD160では20バイト長、
+SHA256では32バイト長、SHA384では48バイト長、SHA512では64バイト長です。
+
+```ruby title="例"
+# MD5の場合
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest.digest # => "X\345=\023$\356\366&_\333\227\260\216\331\252\337"
+```
+
+- **SEE** [m:Digest::Base#hexdigest]
+
+### def digest! -> String
+
+updateや<<によって追加した文字列に対するハッシュ値を文字列で返します。
+[m:Digest::Base#digest]と違い、メソッドの処理後、オブジェクトの状態を初期状態(newした直後と同様の状態)に戻します。
+
+返す文字列は、MD5では16バイト長、SHA1およびRMD160では20バイト長、
+SHA256では32バイト長、SHA384では48バイト長、SHA512では64バイト長です。
+
+```ruby title="例"
+# MD5の場合
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest.digest! # => "X\345=\023$\356\366&_\333\227\260\216\331\252\337"
+p digest.digest! # => "\324\035\214\331\217\000\262\004\351\200\t\230\354\370B~"
+```
+
+- **SEE** [m:Digest::Base#digest]、[m:Digest::Base#hexdigest!]
+
+### def hexdigest -> String
+### def to_s -> String
+
+updateや<<によって追加した文字列に対するハッシュ値を、
+ASCIIコードを使って16進数の列を示す文字列にエンコードして返します。
+
+返す文字列は、
+MD5では32バイト長、SHA1およびRMD160では40バイト長、SHA256では64バイト長、
+SHA384では96バイト長、SHA512では128バイト長です。
+
+Rubyで書くと以下と同じです。
+
+```ruby
+def hexdigest
+  digest.unpack("H*")[0]
+end
+```
+
+```ruby title="例"
+# MD5の場合
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest.hexdigest # => "58e53d1324eef6265fdb97b08ed9aadf"
+```
+
+- **SEE** [m:Digest::Base#digest]
+
+### def hexdigest! -> String
+
+updateや<<によって追加した文字列に対するハッシュ値を、
+ASCIIコードを使って16進数の列を示す文字列にエンコードして返します。
+[m:Digest::Base#hexdigest]と違い、メソッドの処理後、オブジェクトの状態を初期状態(newした直後と同様の状態)に戻します。
+
+```ruby title="例"
+# MD5の場合
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest.hexdigest! # => "58e53d1324eef6265fdb97b08ed9aadf"
+p digest.hexdigest! # => "d41d8cd98f00b204e9800998ecf8427e"
+```
+
+- **SEE** [m:Digest::Base#hexdigest]、[m:Digest::Base#digest!]
+
+### def base64digest(str = nil) -> String
+
+updateや<<によって追加した文字列に対するハッシュ値を、Base64 エンコードした文字列にして返します。
+
+引数 str を省略した場合は、オブジェクトの状態はそのまま保持されます。
+引数 str を指定した場合は、指定した文字列に対するハッシュ値を返し、処理の前後でオブジェクトの状態を初期状態(newした直後と同様の状態)に戻します。
+
+返す文字列は '=' でパディングされ、改行は含まれません。
+
+- **param** `str` -- ハッシュ値を計算する対象の文字列です。省略した場合は、updateや<<で追加した内容に対するハッシュ値を返します。
+
+```ruby title="例"
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest.base64digest        # => "WOU9EyTu9iZf25ewjtmq3w=="
+p digest.hexdigest           # => "58e53d1324eef6265fdb97b08ed9aadf" (状態は保持される)
+
+p digest.base64digest("abc") # => "kAFQmDzST7DWlj99KOF/cg=="
+p digest.hexdigest           # => "d41d8cd98f00b204e9800998ecf8427e" (初期状態に戻る)
+```
+
+- **SEE** [m:Digest::Base#digest]、[m:Digest::Base#hexdigest]、[m:Digest::Base.base64digest]
+
+### def base64digest! -> String
+
+updateや<<によって追加した文字列に対するハッシュ値を、Base64 エンコードした文字列にして返します。
+[m:Digest::Base#base64digest]と違い、メソッドの処理後、オブジェクトの状態を初期状態(newした直後と同様の状態)に戻します。
+
+```ruby title="例"
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest.base64digest!  # => "WOU9EyTu9iZf25ewjtmq3w=="
+p digest.hexdigest      # => "d41d8cd98f00b204e9800998ecf8427e"
+```
+
+- **SEE** [m:Digest::Base#base64digest]
+
+### def update(str) -> self
+### def <<(str)     -> self
+
+文字列を追加します。self を返します。
+複数回updateを呼ぶことは文字列を連結してupdateを呼ぶことと同じです。
+すなわち m.update(a); m.update(b) は
+m.update(a + b) と、 m << a << b は m << a + b とそれぞれ等価です。
+
+- **param** `str` -- 追加する文字列
+
+```ruby
+require 'digest/md5'
+
+digest = Digest::MD5.new
+digest.update("r")
+digest.update("u")
+digest.update("b")
+digest.update("y")
+p digest.hexdigest # => "58e53d1324eef6265fdb97b08ed9aadf"
+
+digest = Digest::MD5.new
+digest << "r"
+digest << "u"
+digest << "b"
+digest << "y"
+p digest.hexdigest # => "58e53d1324eef6265fdb97b08ed9aadf"
+```
+
+### def ==(md)  -> bool
+
+与えられたダイジェストオブジェクトと比較します。
+
+- **param** `md` -- 比較対象のダイジェストオブジェクト
+
+```ruby
+require 'digest/md5'
+digest1 = Digest::MD5.new
+digest1.update("ruby")
+digest2 = Digest::MD5.new
+digest2.update("ruby")
+p digest1 == digest2 # => true
+digest2.update("RUBY")
+p digest1 == digest2 # => false
+```
+
+### def ==(str) -> bool
+
+与えられた文字列を hexdigest 値と見て、自身の hexdigest 値と比較します。
+
+- **param** `str` -- 比較対象の hexdigest 文字列
+
+```ruby
+require 'digest/md5'
+digest = Digest::MD5.new
+digest.update("ruby")
+p digest == "58e53d1324eef6265fdb97b08ed9aadf" # => true
+```
+
+### def file(path) -> self
+
+ファイル名 file で指定したファイルの内容を読み込んでダイジェストを更新し、オブジェクト自身を返します。
+
+- **param** `path` -- 読み込み対象のファイル名です。
+- **return** -- ダイジェストオブジェクトを返します。
+
+```ruby title="例(MD5の場合)"
+require 'digest/md5'
+digest = Digest::MD5.new
+p digest.file("/path/to/file") # => Digest::MD5のインスタンス
+p digest.hexdigest # => "/path/to/file"のMD5値
+```
+
+### def block_length -> Integer
+
+ダイジェストのブロック長を取得します。
+例えば、Digest::MD5であれば64、Digest::SHA512であれば128です。
+
+本メソッドは、Digest::MD5などのダイジェストのサブクラスにより、それぞれの実装に適したものにオーバーライドされます。
+
+例: Digest::MD、Digest::SHA1、Digest::SHA512のブロック長を順番に調べる。
+
+```ruby
+require 'digest'
+p ["MD5", "SHA1", "SHA512"].map{|a| Digest(a).new().block_length } # => [64, 128, 128]
+```
+
+### def digest_length -> Integer
+### def length -> Integer
+### def size -> Integer
+
+ダイジェストのハッシュ値のバイト長を取得します。
+例えば、Digest::MD5であれば16、Digest::SHA1であれば20です。
+
+本メソッドは、Digest::MD5などのダイジェストのサブクラスにより、それぞれの実装に適したものにオーバーライドされます。
+
+例: Digest::MD、Digest::SHA1、Digest::SHA512のハッシュ値のバイト長を順番に調べる。
+
+```ruby
+require 'digest'
+p ["MD5", "SHA1", "SHA512"].map{|a| Digest(a).new().digest_length } # => [16, 20, 64]
+```
+
+### def reset -> self
+
+オブジェクトの状態を初期状態(newした直後と同様の状態)に戻し、オブジェクト自身を返します。
+
+本メソッドは、Digest::MD5などのダイジェストのサブクラスにより、それぞれの実装に適したものにオーバーライドされます。
+

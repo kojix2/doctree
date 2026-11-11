@@ -2,7 +2,11 @@ category Text
 
 文字列に [[c:IO]] と同じインタフェースを持たせるためのライブラリです。
 
-= class StringIO < Data
+= class StringIO < Object
+include Enumerable
+
+#@# IO::generic_writable, IO::generic_readable は内部的なもののようなのでここでは省略
+
 
 文字列に [[c:IO]] と同じインタフェースを持たせるためのクラスです。
 
@@ -26,7 +30,11 @@ require "stringio"
 sio = StringIO.new("hoge")
 sio.close
 sio.write("a")
+#@since 3.4
+# => in 'write': not opened for writing (IOError)
+#@else
 # => in `write': not opened for writing (IOError)
+#@end
 #@end
 
 == Class Methods
@@ -257,9 +265,9 @@ a.getc                   # => nil
 #@samplecode 例
 require "stringio"
 a = StringIO.new("ho")
-a.getc                   #=> 104
-a.getc                   #=> 111
-a.getc                   #=> nil
+a.getbyte                #=> 104
+a.getbyte                #=> 111
+a.getbyte                #=> nil
 #@end
 
 --- gets(rs = $/)    -> String | nil
@@ -704,7 +712,7 @@ p s.pos        #=> 7
 書き込まれた文字列の長さを返します。
 
 全ての出力メソッドは、最終的に「write」という名のメソッドを呼び出すので、
-このメソッドを置き換えることで出力関数の挙動を変更することができます。
+このメソッドを置き換えることで出力関数の挙動を変更できます。
 
 @param obj 書き込みたいオブジェクトを指定します。
 

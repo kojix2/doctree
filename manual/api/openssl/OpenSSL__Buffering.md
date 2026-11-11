@@ -1,0 +1,366 @@
+---
+library: openssl
+---
+# module OpenSSL::Buffering
+
+[c:OpenSSL::SSL::SSLSocket] にバッファリング付きIO機能を提供するモジュールです。
+
+[c:IO] クラスと同様のメソッドを提供しています。
+
+内部的には sysread, syswrite, sysread_nonblock, syswrite_nonblock,
+sysclose といった [c:OpenSSL::SSL::SSLSocket] が提供するメソッドを利用し、 [c:OpenSSL::SSL::SSLSocket] がラップしているソケットをバッファ経由でデータを暗号化してやりとりを行います。
+
+### IO との違い
+
+このクラスは IO クラスと同様のメソッドを提供していますが、以下の点で異なります。これらは今後のバージョンで変更(改善)
+される可能性があります。
+  - gets や readlines など行読み込みメソッドの引数(行区切り文字列の指定)
+    の意味が異なります。例えば "" で連続改行を区切りとみなすモードはなく
+    nil を渡すとエラーとなります
+  - read_nonblock が書き込み不可能で例外を発生させたり、
+    write_nonblock が読み込み不可能で例外を発生させたりします。
+    これは暗号化通信でのデータの送信には双方向のメッセージの
+    やりとりが必要な場合があるためです。
+  - Ruby 1.9 では encoding 関連を設定しません
+  - Ruby 1.9 で each_byte が String をブロックに渡します
+
+## Instance Methods
+### def <<(s) -> self
+
+文字列 s を書き込みます。
+
+[m:IO#<<] と同様です。
+
+- **param** `s` -- 出力する文字列
+
+### def close -> nil
+
+接続を閉じます。
+
+[m:OpenSSL::Buffering#flush] を呼んでから閉じます。
+
+#%since 4.1
+### def each(eol = $/, limit = nil, chomp: false){|line| ... } -> ()
+### def each(eol = $/, limit = nil, chomp: false) -> Enumerator
+### def each_line(eol = $/, limit = nil, chomp: false){|line| ... } -> ()
+### def each_line(eol = $/, limit = nil, chomp: false) -> Enumerator
+#%else
+### def each(eol=$/){|line| ... } -> ()
+### def each_line(eol=$/){|line| ... } -> ()
+#%end
+
+現在の読み込み位置から1行ずつ文字列として読み込み、それを引数としてブロックを呼び出します。
+#%since 4.1
+ブロックを省略した場合は [c:Enumerator] を返します。
+#%end
+
+#%since 4.1
+[m:IO#each] と同様に、`eol` に nil を渡すと残りすべてを 1 行として読み込み、`""` を渡すと空行を区切りとして(パラグラフモード)読み込みます。
+`eol` を省略して `limit` だけを渡すこともできます。
+#%else
+[m:IO#each] と同様ですが、区切り文字列に
+"" を渡した場合や、nil を渡したときの意味が異なり、これらの場合は正しく動作しません。
+#%end
+
+- **param** `eol` -- 行区切り文字列/正規表現
+#%since 4.1
+- **param** `limit` -- 1 行の最大の読み込みバイト数
+- **param** `chomp` -- 真を指定すると各行の末尾の行区切り文字列を取り除きます
+#%end
+
+### def each_byte{|ch| ... } -> ()
+
+現在の読み込み位置から 1 バイトずつ読み込み、それを文字列としてブロックの引数として呼び出します。
+#%# これは each_byte とは異なる。each_byteは 1.9 でも整数をブロックに渡す。
+
+[m:IO#each_byte] と同様です。
+
+### def eof? -> bool
+### def eof -> bool
+
+相手からの通信が終端に達したら true を返します。
+
+[m:IO#eof?] と同様です。
+
+### def flush -> ()
+
+内部バッファに残っているデータをすべて出力し、バッファをフラッシュします。
+
+[m:IO#flush] と同様です。
+
+バッファがすべて出力されるまでブロックします。
+
+### def getc -> String | nil
+
+バッファから1文字読み込み、それ返します。
+
+読み込みが終端に到達した場合は nil を返します。
+
+[m:IO#getc] と同様です。
+
+#%since 3.4
+### def gets(eol=$/, limit=nil, chomp: false) -> String | nil
+#%else
+### def gets(eol=$/, limit=nil) -> String | nil
+#%end
+
+通信路から一行読み込んで、それを返します。
+
+行区切りは eol で指定した文字列/正規表現になります。
+
+最大 limit バイトの文字列を返します。1 行がそれより長い場合はそこで切られます。limit が nil の場合は
+eol に到達するまで読み込みます。
+
+読み込みが終端に到達した場合は nil を返します。
+
+#%since 4.1
+[m:IO#gets] と同様に、`eol` に nil を渡すと残りすべてを 1 行として読み込み、`""` を渡すと空行を区切りとして(パラグラフモード)読み込みます。
+`eol` を省略して `limit` だけを渡すこともできます。
+#%else
+[m:IO#gets] と同様ですが、区切り文字列に
+"" を渡した場合や、nil を渡したときの意味が異なり、これらの場合は正しく動作しません。
+#%end
+
+- **param** `eol` -- 行区切り文字列/正規表現
+- **param** `limit` -- 最大の読み込みバイト数
+#%since 3.4
+- **param** `chomp` -- 真を指定すると読み込んだ行の末尾の行区切り文字列を取り除きます
+#%end
+#%since 4.1
+- **raise** `ArgumentError` -- `eol` に正規表現を指定し、`chomp` に真を指定した場合に発生します。
+#%end
+
+### def print(*args) -> nil
+
+args を順に出力します。
+
+args の各要素を to_s で文字列に変換して出力します。
+[m:IO#print] とほぼ同様ですが、引数を省略した場合に $_ を出力する機能はありません。
+
+- **param** `args` -- 出力するオブジェクト
+
+### def printf(format, *args) -> nil
+
+format に従い引数 args を文字列に変換して出力します。
+
+[m:IO#printf] と同様です。
+
+- **param** `format` -- 出力フォーマット文字列
+- **param** `args` -- 出力するオブジェクト
+- **SEE** [m:Kernel?.printf]
+
+### def puts(*objs) -> nil
+
+各オブジェクトを出力し、それぞれの後に改行を出力します。
+
+[m:IO#puts] と同様です。
+
+- **param** `objs` -- 出力したいオブジェクト
+
+### def read(length=nil, buf=nil) -> String | nil
+
+文字列を通信路から読み込み、返します。
+
+読み込みが終端に到達している場合は nil を返します。
+
+length で読み込むバイト数を指定します。
+length に 0 を渡した場合は空文字列を返します。
+length に nil を渡した場合(省略した場合)は最後までのデータを読み込みます。
+
+bufに文字列を渡した場合はその領域が出力用のバッファとして利用されます。
+
+[m:IO#read] と同様です。
+
+- **param** `length` -- 読み込むバイト数
+- **param** `buf` -- 読み込みバッファ
+
+### def readchar -> String
+
+バッファから1文字読み込み、それ返します。
+
+読み込みが終端に到達している場合は例外 EOFError を返します。
+
+[m:IO#readchar] と同様です。
+
+- **raise** `EOFError` -- 読み込みが終端に到達した場合に発生します。
+
+#%since 4.1
+### def readlines(eol = $/, limit = nil, chomp: false) -> [String]
+#%else
+### def readlines(eol=$/) -> [String]
+#%end
+
+データを通信路から末端まで全て読み込んで、各行を要素として持つ配列を返します。
+
+行区切りは eol で指定した文字列/正規表現になります。
+
+#%since 4.1
+[m:IO#readlines] と同様に、`eol` に nil を渡すと残りすべてを 1 つの要素とし、`""` を渡すと空行を区切りとして(パラグラフモード)各行に分けます。
+`eol` を省略して `limit` だけを渡すこともできます。
+#%else
+[m:IO#readlines] と同様ですが、区切り文字列に
+"" を渡した場合や、nil を渡したときの意味が異なり、これらの場合は正しく動作しません。
+#%end
+
+- **param** `eol` -- 行区切り文字列/正規表現
+#%since 4.1
+- **param** `limit` -- 1 行の最大の読み込みバイト数
+- **param** `chomp` -- 真を指定すると各行の末尾の行区切り文字列を取り除きます
+#%end
+
+### def ungetc(char) -> ()
+
+指定した文字 char をバッファに読み戻します。
+
+char には String か Integer を渡します。
+
+[m:IO#ungetc] と同様です。
+
+- **param** `char` -- 読み戻す文字
+
+### def write(str) -> Integer
+
+str を出力します。
+
+書き込んだデータの長さを返します。
+
+[m:IO#write] と同様です。
+
+- **param** `str` -- 出力する文字列
+
+#%since 4.1
+### def readline(eol = $/, limit = nil, chomp: false) -> String
+#%else
+### def readline(eol=$/) -> String
+#%end
+
+通信路から一行読み込んで、それを返します。
+
+行区切りは eol で指定した文字列/正規表現になります。
+
+読み込みが終端に到達した場合は例外 EOFError を発生します。
+
+#%since 4.1
+[m:IO#readline] と同様に、`eol` に nil を渡すと残りすべてを 1 行として読み込み、`""` を渡すと空行を区切りとして(パラグラフモード)読み込みます。
+`eol` を省略して `limit` だけを渡すこともできます。
+#%else
+[m:IO#readline] と同様ですが、区切り文字列に
+"" を渡した場合や、nil を渡したときの意味が異なり、これらの場合は正しく動作しません。
+#%end
+
+- **param** `eol` -- 行区切り文字列/正規表現
+#%since 4.1
+- **param** `limit` -- 最大の読み込みバイト数
+- **param** `chomp` -- 真を指定すると読み込んだ行の末尾の行区切り文字列を取り除きます
+#%end
+- **raise** `EOFError` -- 読み込みが終端に到達した場合に発生します。
+
+### def read_nonblock(maxlen, buf) -> String
+
+通信路から maxlen  バイトを上限としてデータを読み込み、文字列として返します。
+
+即座に得られるデータが 1byte でも存在すればブロックしません。
+内部バッファが空でない場合はバッファのデータを返します。
+即座に得られるデータが存在しないときには例外が発生します。
+例外が発生した場合、内部のソケットが利用可能になってから再びこのメソッドを呼んでください。
+
+基本的には [m:IO#read_nonblock] と同様です。しかし以下のような違いもあります。
+
+このメソッドはソケットが書き込み不可能([c:IO::WaitWritable])という理由で例外を発生させる可能性があります。暗号プロトコルの関係上データの読み込みになんらかのデータの送受信が必要になる場合があるからです。
+
+内部のソケットが読み込み/書き込み可能である場合でも、このメソッドが文字列を得られず、例外が発生する場合があります。
+というのは、暗号プロトコルによっては(とくにブロック暗号では)
+通信データをある程度の大きさのブロック単位で暗号化/復号化するためです。
+
+- **param** `maxlen` -- 読み込む長さの上限(整数)
+- **param** `buf` -- 読み込みバッファ
+- **raise** `EOFError` -- 読み込みが既に終端に到達している場合に発生します
+- **raise** `OpenSSL::SSL::SSLError` -- ソケットが読み込み/書き込み可能状態になるのを待つ必要がある場合に発生します。
+       読み込み可能状態を待つ必要がある場合には [c:IO::WaitReadable] を、書き込み可能状態を待つ必要がある場合には [c:IO::WaitWritable] を、それぞれ extend した例外オブジェクトが生成されます。
+
+### def write_nonblock(s) -> Integer
+
+文字列 s をノンブロッキングモードで書き込みます。
+
+成功した場合、書き込んだバイト数を返します。
+
+1 バイトも書くことができず、ソケットの状態が変化するのを待つ必要がある場合は例外を発生させます。
+例外が発生した場合、内部のソケットが利用可能になってから再びこのメソッドを呼んでください。
+
+ただし内部バッファに書き込んでいないデータが残っている場合は、まずバッファの内容をすべて出力してします。この時点でブロックする可能性があります。
+
+基本的には [m:IO#write_nonblock] と同様です。しかし以下のような違いもあります。
+
+このメソッドはソケットが読み込み不可能([c:IO::WaitReadable])
+という理由で例外を発生させる可能性があります。暗号プロトコルの関係上データの書き込みになんらかのデータの送受信が必要になる場合があるからです。
+
+内部のソケットが読み込み/書き込み可能である場合でも、このメソッドで文字列を書き込めず、例外が発生する場合があります。
+というのは、暗号プロトコルによっては(とくにブロック暗号では)
+通信データをある程度の大きさのブロック単位で暗号化/復号化するためです。
+
+- **param** `s` -- 出力する文字列
+- **raise** `OpenSSL::SSL::SSLError` -- ソケットが読み込み/書き込み可能状態になるのを待つ必要がある場合に発生します。
+       読み込み可能状態を待つ必要がある場合には [c:IO::WaitReadable] を、書き込み可能状態を待つ必要がある場合には [c:IO::WaitWritable] を、それぞれ extend した例外オブジェクトが生成されます。
+
+### def readpartial(maxlen, buf=nil) -> String | nil
+
+通信路から長さ maxlen  バイトを上限としてデータを読み込み、文字列として返します。
+即座に得られるデータが存在しないときにはブロックしてデータの到着を待ちます。
+即座に得られるデータが 1byte でも存在すればブロックしません。
+
+[m:IO#readpartial] と同様です。
+
+- **param** `maxlen` -- 読み込む長さの上限(整数)
+- **param** `buf` -- 読み込みバッファ
+- **raise** `EOFError` -- 読み込みが既に終端に到達している場合に発生します
+
+### def sync -> bool
+
+出力が同期モードなら true を返します。
+
+- **SEE** [m:OpenSSL::Buffering#sync=]
+
+### def sync=(sync)
+
+出力の同期モードを設定します。
+
+true に設定すると同期モードになり、
+[m:OpenSSL::Buffering#write_nonblock] と
+[m:OpenSSL::SSL::SSLSocket#syswrite] を除くすべての書き込み
+([m:OpenSSL::Buffering#write], [m:OpenSSL::Buffering#print] など)
+はバッファリングされずに出力されます。
+
+false に設定すると書き込みはバッファリングされます。
+
+- **param** `sync` -- 設定するモード(真偽値)
+- **SEE** [m:OpenSSL::Buffering#sync]
+
+#%since 3.1
+### def getbyte -> Integer | nil
+
+ストリームから1バイトを読み込み、整数として返します。
+
+既に読み込みが終端に達している場合は nil を返します。
+
+[m:IO#getbyte] と同様です。
+
+#%end
+
+#%since 3.4
+### def readbyte -> Integer
+
+ストリームから1バイトを読み込み、整数として返します。
+
+[m:IO#readbyte] と同様です。
+
+- **raise** `EOFError` -- 既に読み込みが終端に達している場合に発生します
+- **SEE** [m:OpenSSL::Buffering#getbyte]
+
+#%end
+
+## Constants
+
+### const BLOCK_SIZE -> Integer
+
+内部のバッファのサイズを返します。
+

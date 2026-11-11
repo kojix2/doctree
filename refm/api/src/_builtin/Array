@@ -37,7 +37,7 @@ end
 
 引数 item を要素として持つ配列を生成して返します。
 
-[[c:Array]] のサブクラスを作成したしたときに、そのサブクラスのインスタンスを作成
+[[c:Array]] のサブクラスを作成したときに、そのサブクラスのインスタンスを作成
 しやすくするために用意されている。
 
 @param item 配列の要素を指定します。
@@ -93,7 +93,7 @@ p b                        #=> ["A", "B", "C"]   (b は a と要素を共有す�
 長さ size の配列を生成し、各要素のインデックスを引数としてブロックを実行し、
 各要素の値をブロックの評価結果に設定します。
 
-ブロックは要素毎に実行されるので、全要素をあるオブジェクトの複製にすることができます。
+ブロックは要素毎に実行されるので、全要素をあるオブジェクトの複製にできます。
 
 @param size 配列の長さを数値で指定します。
 
@@ -137,11 +137,11 @@ a[10] #=> nil
 --- [](range)    -> Array | nil
 
 [[c:Range]] オブジェクト range の範囲にある要素からなる部分配列を返します。
-range の first の値が配列の範囲に収まらない場合 nil を返します。
-range の first が end より後にある場合には空の配列を返します。
+range の begin が自身の範囲外となる時は nil を返します。ただし、begin が配列の長さに等しいときは空の配列を返します。
+range の begin が end より後にある場合には空の配列を返します。
 
 @param range 生成したい部分配列の範囲を [[c:Range]] オブジェクトで指定します。
-             range の first や end の値が負の時には末尾からのインデックスと見倣します。末尾
+             range の begin や end の値が負の時には末尾からのインデックスと見倣します。末尾
              の要素が -1 番目になります。
              end の値が配列の範囲を越える時には、越えた分は無視されます。
 
@@ -157,16 +157,16 @@ a[10..11] #=> nil
 a[2..1]   #=> []
 a[-1..-2] #=> []
 
-# 特殊なケース。first が自身の長さと同じ場合には以下のようになります。
-a[5]                   #=> nil
-a[5, 1]                #=> []
-a[5..10]               #=> []
+# 特殊なケース。begin が自身の長さと同じ場合には以下のようになります。
+a[5]      #=> nil
+a[5..10]  #=> []
 #@end
 
 --- [](start, length)    ->  Array | nil
 
 start 番目から length 個の要素を含む部分配列を返します。
-length が負の時、start が自身の範囲を越えた時には nil を返します。
+start が自身の範囲外となる時は nil を返します。ただし、start が配列の長さに等しいときは空の配列を返します。
+length が負の時は nil を返します。
 
 @param start 生成したい部分配列の先頭のインデックスを整数で指定します。
              start の値が負の時には末尾からのインデックスと見倣します。
@@ -193,9 +193,8 @@ a[0, -1]   #=> nil
 a[10, 1]   #=> nil
 
 # 特殊なケース。start が自身の長さと同じ場合には以下のようになります。
-a[5]                   #=> nil
-a[5, 1]                #=> []
-a[5..10]               #=> []
+a[5]       #=> nil
+a[5, 1]    #=> []
 #@end
 
 --- []=(nth, val)
@@ -590,6 +589,8 @@ p [5,  6, 7].all? {|v| v > 0 }   # => true
 p [5, -1, 7].all? {|v| v > 0 }   # => false
 p [].all? {|v| v > 0 }           # => true
 p %w[ant bear cat].all?(/t/)     # => false
+p [1, 2, 3].all?(Integer)        # => true
+p [1, 2, 3.0].all?(Integer)      # => false
 #@end
 
 @see [[m:Enumerable#all?]]
@@ -851,8 +852,7 @@ p ary.delete(nil)       #=> nil
 指定された位置 pos にある要素を取り除きそれを返します。
 pos が範囲外であったら nil を返します。
 
-[[m:Array#at]] と同様に負のインデックスで末尾から位置を指定するこ
-とができます。
+[[m:Array#at]] と同様に負のインデックスで末尾から位置を指定できます。
 
 @param pos 削除したい要素のインデックスを整数で指定します。
            整数以外のオブジェクトを指定した場合は to_int メソッドによる
@@ -1083,6 +1083,33 @@ result = a.fetch(10){|nth|
 p result #=> 999
 #@end
 
+#@since 3.4
+--- fetch_values(*indexes)                 -> Array
+--- fetch_values(*indexes) { |index| ... } -> Array
+
+引数で指定されたインデックスに対する値の配列を返します。
+
+指定したインデックスが self の範囲外である場合、ブロックが与えられたかどうかにより挙動が異なります。
+
+ * ブロックが与えられている場合、インデックスを引数としてブロックを呼び出し、その結果の値を使用します。
+ * ブロックが与えられていない場合、[[c:IndexError]] が発生します。
+
+@param indexes 取得したい要素のインデックスを指定します。
+
+@raise IndexError ブロックが与えられてない時に、範囲外のインデックスを引数で指定すると発生します。
+
+#@samplecode 例
+ary = ["a", "b", "c"]
+
+ary.fetch_values(0, 2)  # => ["a", "c"]
+ary.fetch_values(-1, 1) # => ["c", "b"]
+ary.fetch_values(0, 10) # => index 10 outside of array bounds: -3...3 (IndexError)
+ary.fetch_values(0, 10) { |i| i.to_s } # => ["a", "10"]
+#@end
+
+@see [[m:Array#values_at]], [[m:Array#fetch]]
+#@end
+
 --- fill(val)            -> self
 --- fill {|index| ... }  -> self
 
@@ -1124,7 +1151,7 @@ p a #=> [0, 1, 2, nil, nil, "x", "x", "x", "x", "x", "x"]
 
 val の代わりにブロックを指定するとブロックの評価結果を値とし
 ます。ブロックは要素毎に実行されるので、セットする値のそれぞれをあ
-るオブジェクトの複製にすることができます。
+るオブジェクトの複製にできます。
 ブロックのパラメータには start からのインデックスが渡されます。
 
 #@samplecode 例
@@ -1489,13 +1516,9 @@ p [1, nil, 3, nil].nitems{|e| e == 1}  #=> 2
 --- none?{|obj| ... }   -> bool
 --- none?(pattern)      -> bool
 
-ブロックを指定しない場合は、 配列のすべての
-要素が偽であれば真を返します。そうでなければ偽を返します。
+すべての要素が偽である場合に true を返します。真である要素があれば、ただちに false を返します。
 
-ブロックを指定した場合は、配列のすべての要素を
-ブロックで評価した結果が、すべて偽であれば真を返します。
-そうでなければ偽を返します。
-
+ブロックを伴う場合は、各要素に対してブロックを評価し、すべての結果が偽である場合に true を返します。ブロックが真を返した時点で、ただちに false を返します。
 要素の数が 0 である配列に対しては true を返します。
 
 @param pattern ブロックの代わりに各要素に対して pattern === item を評価します。
@@ -1874,7 +1897,10 @@ a                  #=> [ "a", "b", "c" ]
 --- sort {|a, b| ... }  -> Array
 --- sort! {|a, b| ... } -> self
 
-配列の内容をソートします。要素同士の比較は <=> 演算子を使って行います。sort はソートされた配列を生成して返します。
+全ての要素を昇順にソートします。
+要素同士の比較は <=> 演算子を使って行います。
+
+sort は self を変更せず、ソートされた配列を生成して返します。
 sort! は self を破壊的にソートし、self を返します。
 
 ブロックとともに呼び出された時には、要素同士の比較をブロックを用いて行います。
@@ -2057,13 +2083,21 @@ p [].transpose
 
 p [1,2,3].transpose
 
+#@since 3.4
+# => -:1:in 'transpose': cannot convert Fixnum into Array (TypeError)
+#@else
 # => -:1:in `transpose': cannot convert Fixnum into Array (TypeError)
+#@end
 #       from -:1
 
 p [[1,2],
    [3,4,5],
    [6,7]].transpose
+#@since 3.4
+# => -:3:in 'transpose': element size differ (3 should be 2) (IndexError)
+#@else
 # => -:3:in `transpose': element size differ (3 should be 2) (IndexError)
+#@end
 #@end
 
 --- uniq     -> Array
@@ -2257,6 +2291,14 @@ p a.sample        #=>  9
 p a.sample        #=> 10
 p a.sample(3)     #=> [1, 9, 3]
 p a               #=> [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+#@end
+
+random [[c:SecureRandom]] などの乱数生成器を渡すことができます。
+
+#@samplecode 例
+require 'securerandom'
+a = (1..10).to_a
+p a.sample(random: SecureRandom)  #=>  2
 #@end
 
 --- cycle(n=nil) {|obj| block } -> nil

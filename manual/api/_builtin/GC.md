@@ -1,0 +1,766 @@
+---
+library: _builtin
+---
+# module GC
+
+GC は Ruby インタプリタの「ゴミ集め(Garbage Collection)」を制御するモジュールです。
+
+#%since 4.1
+Ruby 4.1 から、デフォルトの GC は [c:Ractor] ごとに動作します。各 Ractor は自分のヒープを自分のスレッドで、他の Ractor を止めずに回収します。
+全 Ractor を止める(stop-the-world の)グローバル GC は、明示的な [m:GC.start]、共有可能オブジェクトの増加、終了した Ractor のヒープの回収といった、本当に必要なときだけ行われます。
+[m:GC.start] の `global` キーワード引数、[m:GC.stat] の `process` キーワード引数と `:global_gc_count`・`:global_gc_invocation_count`、[m:GC.disable] と [m:GC.enable] の Ractor ごとの扱いも参照してください。
+#%end
+
+### GCのチューニングについて
+
+Ruby 2.1ではRGenGCと呼ばれる新たなGCメカニズムが導入されました。
+それにともない、以下の環境変数が導入され、これらを設定することでGCの動作をチューニングできます。
+これらの環境変数の効果はRubyの起動時のみ有効です(つまりrubyを動かしている途中で変更することはできません)。
+
+#### チューニングのための環境変数 {#tuning_gc}
+
+- RUBY_GC_HEAP_INIT_SLOTS (default: 10000) - 最初に確保されるスロット数。
+- RUBY_GC_HEAP_FREE_SLOTS (default: 4096) - GC後、必ずこの数の空きスロット数が確保される。
+   つまりGC後に空きスロットが足りなければ新たなページを確保し、空きスロット数を増やす。
+- RUBY_GC_HEAP_GROWTH_FACTOR (default: 1.8) - Rubyではスロットを増やすための
+   メモリ確保をするたびに確保するサイズをこの係数で大きくする。
+   つまり全スロット数は指数的に増大する。これは動かしているRubyプログラムが
+   必要とするスロット数に速やかに到達するための仕組みである。
+- RUBY_GC_HEAP_GROWTH_MAX_SLOTS (default: 0) -
+   RUBY_GC_HEAP_GROWTH_FACTORで説明したようにRubyではスロットのためのメモリ確保のサイズを
+   指数的に大きくしていくが、その上限を決める値。0は上限なしを意味する。
+   この値を指定すると、スロット数が特定の値を越えると指数的ではなく線形的に
+   スロット数が増大する。
+- RUBY_GC_HEAP_FREE_SLOTS_MIN_RATIO (Ruby 2.4 以降、default: 0.20) -
+   GC後の空きスロット割合の下限。
+   つまり空きスロット数の全スロット数に対する割合がこの値より小さいときは新たな
+   ページを確保する。
+- RUBY_GC_HEAP_FREE_SLOTS_GOAL_RATIO (Ruby 2.4 以降、
+   default: 0.40) - GC後の空きスロットの割合の目標。
+   RUBY_GC_HEAP_FREE_SLOTS_MIN_RATIOの閾値にひっかかって新たなスロットを確保するときは
+   この割合が目標となる。
+   この値が 0.0 の場合は、RUBY_GC_HEAP_GROWTH_FACTORを直接使う。
+- RUBY_GC_HEAP_FREE_SLOTS_MAX_RATIO (Ruby 2.4 以降、default: 0.65) -
+   GC後の空きスロットの割合の上限。
+   空きスロット数の全スロット数に対する割合がこの値より大きい場合は
+   積極的にページを解放する。
+
+- RUBY_GC_HEAP_OLDOBJECT_LIMIT_FACTOR (2.0) - RubyのフルGCを呼びだすための oldobject
+   数の上限を決めるための係数。
+   RubyのフルGCは oldobject の個数が閾値 old_objects_limit
+   を越えるごとに実行される。old_objects_limit はフルGCの直後に変更される。
+   その値はフルGC直後の oldobject の個数 (
+   old_objects) の RUBY_GC_HEAP_OLDOBJECT_LIMIT_FACTOR 倍となる。
+   つまり、フルGC直後から oldobject の個数が RUBY_GC_HEAP_OLDOBJECT_LIMIT_FACTOR 倍に
+   なったタイミングでフルGCが実行される。
+   この値を調整することでフルGCの頻度を調整できる。
+
+- RUBY_GC_MALLOC_LIMIT (default: 16*1024*1024 = 16MB) - malloc によるマイナーGC発動の
+   閾値の初期値
+- RUBY_GC_MALLOC_LIMIT_MAX (default: 32*1024*1024 = 32MB) - malloc によるマイナーGC発動の
+   閾値の最大値
+- RUBY_GC_MALLOC_LIMIT_GROWTH_FACTOR (default: 1.4) - malloc によるマイナーGC発動の
+   閾値の増加率
+
+- RUBY_GC_OLDMALLOC_LIMIT (default: 16*1024*1024 = 16MB) - oldobject による malloc
+   によるフルGC発動の閾値の初期値
+- RUBY_GC_OLDMALLOC_LIMIT_MAX (default: 128*1024*1024 = 128MB) oldobject による malloc
+   によるフルGC発動の閾値の最大値
+- RUBY_GC_OLDMALLOC_LIMIT_GROWTH_FACTOR (default: 1.2) - oldobject による malloc
+   によるフルGC発動の閾値の増加率
+
+以下の2つの環境変数はobsoleteであり、新しいものを使うことが望ましい
+  - RUBY_FREE_MIN       -> RUBY_GC_HEAP_FREE_SLOTS
+  - RUBY_HEAP_MIN_SLOTS -> RUBY_GC_HEAP_INIT_SLOTS
+
+#### RUBY_GC_HEAP_GROWTH_FACTOR と RUBY_GC_HEAP_FREE_SLOTS_GOAL_RATIO に関する補足説明
+
+RUBY_GC_HEAP_GROWTH_FACTOR と RUBY_GC_HEAP_FREE_SLOTS_GOAL_RATIO はともに
+GC後に空きスロットが少ないときにどれだけの量のメモリを新たに確保するかを決めるパラメータである。この2つのパラメータの優先順位は以下の通りである。
+
+  - RUBY_GC_HEAP_FREE_SLOTS_GOAL_RATIO が 0.0 のときはこの値は無視され、
+    RUBY_GC_HEAP_GROWTH_FACTOR のみが利用される。つまり
+    スロットが不足状態の場合にはスロット数は単純に指数的に増加する。
+  - RUBY_GC_HEAP_FREE_SLOTS_GOAL_RATIO が 0.0 でない場合には、
+    RUBY_GC_HEAP_GROWTH_FACTOR で決まるスロット数と
+    RUBY_GC_HEAP_FREE_SLOTS_GOAL_RATIO で決まるスロット数の大きいほうが採用される。
+
+当然、RUBY_GC_HEAP_GROWTH_MAX_SLOTS はこれらより優先度が高いことに注意。
+
+#### malloc閾値についての説明
+
+Rubyが利用するメモリはスロット以外にもある。例えば長い文字列は malloc によってCのヒープ上に確保される。GCはこのようなヒープ上のメモリを解放するためにも実行される。
+そこで、rubyでは malloc によるメモリ消費量を保持し、この消費量がある閾値を越えるとGCが起動される。また、GCが起動されるごとにこの消費量カウンタが0にリセットされる。
+
+このカウンタは2種類あり、一方は malloc_increase_bytes、もう一方は
+oldmalloc_increase_bytes と呼ばれる。この2つの性質は以下のようになっている。
+
+  - malloc_increase_bytes について
+    - malloc_increase_bytes はRuby内でのmalloc, realloc, freeの呼びだし
+      (ruby_xmalloc, ruby_xrealloc, ruby_xfreeなど)によるメモリ利用量の増減を
+      計測する
+    - malloc_increase_bytes はマイナーGCで0にリセットされる
+    - malloc_increase_bytes が malloc_increase_bytes_limits を越えるとマイナーGCが起動される
+    - malloc_increase_bytes_limits は処理系の起動時に RUBY_GC_MALLOC_LIMIT で初期化される
+    - malloc_increase_bytes_limits を越えたことが原因でGCが起動された場合は
+      malloc_increase_bytes_limits が RUBY_GC_MALLOC_LIMIT_GROWTH_FACTOR 倍される
+      (ただし、 RUBY_GC_MALLOC_LIMIT_MAX を越えることはできない)
+  - oldmalloc_increase_bytes について
+    - oldmalloc_increase_bytes はRuby内でのmalloc, realloc, freeの呼びだし
+      (ruby_xmalloc, ruby_xrealloc, ruby_xfreeなど)によるメモリ利用量の増減を
+      計測する(これは malloc_increase_bytes と同じ)
+    - oldmalloc_increase_bytes はフルGCで0にリセットされる
+    - oldmalloc_increase_bytes が
+      oldmalloc_increase_bytes_limits を越えるとフルGCが起動される
+    - oldmalloc_increase_bytes_limits は処理系の起動時に
+      RUBY_GC_OLDMALLOC_LIMIT で初期化される
+    - oldmalloc_increase_bytes_limits を越えたことが原因でGCが起動された場合は
+      oldmalloc_increase_bytes_limits が RUBY_GC_OLDMALLOC_LIMIT_GROWTH_FACTOR 倍される
+      (ただし、 RUBY_GC_OLDMALLOC_LIMIT_MAX を越えることはできない)
+
+#### 実行中のパラメータ
+
+プログラム実行中には、GCに関する統計情報/閾値情報を [m:GC.stat] で見ることができるが、この文章で説明した以下の情報はこれで調べることができる。
+
+  - malloc_increase_bytes
+  - malloc_increase_bytes_limits
+  - oldmalloc_increase_bytes
+  - oldmalloc_increase_bytes_limits
+  - old_objects_limit
+
+#### チューニングについて
+
+  - 原理的にはメモリ使用量と実行速度のトレードオフがある。
+    実行速度を上げるためにはGCの回数を減らせばよいが、そうすると
+    メモリ使用量は増える傾向になる。
+  - チューニングのためにはまず計測することが重要。[m:GC.stat]、[c:GC::Profiler]などを
+    利用してGCを計測する
+      - GCが性能上のボトルネックではないことも多い。そういう部分も含め計測する。
+      - newrelicのような高度なツールを使うことも考慮する
+  - <https://web.archive.org/web/20250908211051/http://tmm1.net/ruby21-rgengc/> には
+    RUBY_GC_HEAP_INIT_SLOTS や RUBY_GC_HEAP_FREE_SLOTS
+    のチューニングに関する簡単な指針が書いてあって参考になる
+  - 結局の所トライ&エラーで調整する必要がある。
+
+#### この設定を理解するための用語集
+
+  - スロット - Ruby のオブジェクトを1つ保持するためのメモリ領域。
+    実際にはこの領域からのポインタがCのヒープ領域に確保したメモリを所持していることが多く、
+    メモリ上の実占有領域はスロット外にもあることがしばしばある。
+    RubyのGCのチューニングには重要な概念。
+  - RGenGC - Ruby 2.1 で採用された世代別GC。マイナーGCとフルGCの2段階のGCをすることで
+    効率的なGCを実現する。
+  - マイナーGC - 新しいオブジェクト(前回のGCの後に生成されたオブジェクト)
+    のみを対象としたGC。GCすべきオブジェクトの数が少ないので高速。
+    また、多くのオブジェクトは経験的に生成されてすぐ不要になるので
+    マイナーGCは効率的に動作する可能性が高い。
+    マイナーGCでGCされなかったオブジェクトはoldobjectと呼ぶ。
+  - フルGC (メジャーGC) - すべてのオブジェクトを対象としたGC。マイナーGCより遅いため、
+    フルGCの回数を減らすことはGC性能に重要な問題である。
+  - ページ - スロットのメモリ確保は効率性のため、
+    「すべて別々に確保する」「大きなメモリの塊で一気に確保する」
+    のどちらでもなく、ページと呼ばれる単位で数百個という単位で確保される。
+    x86_64上でのlinuxでは16kバイトがページのサイズと決められている。
+    スロット用のメモリの確保および解放はこの単位で行われる。
+    この「ページ」はOSのメモリ管理用語であるページとは異なる概念であることに注意。
+
+#### 参考資料
+
+  - <http://www.atdot.net/~ko1/activities/2014_rubyconf_ph_pub.pdf>
+  - <https://web.archive.org/web/20250908211051/http://tmm1.net/ruby21-rgengc/>
+
+- **SEE** [c:ObjectSpace]
+
+## Singleton Methods
+
+### def GC.auto_compact -> bool
+
+auto compaction が有効化どうかを返します。
+
+- **return** -- auto compaction が有効な場合 true を返します。
+        そうでなければ false を返します。
+
+- **SEE** [m:GC.auto_compact=]
+
+### def GC.auto_compact=(bool)
+
+[m:GC.compact] をフルGCで行うかどうかを制御します。
+
+true を設定するとフルGCのタイミングでヒープをコンパクションします。
+
+この機能を有効にするとフルGCのパフォーマンスが低下します。
+
+デフォルトは false です。
+
+詳細は[feature:17176]を参照してください。
+
+- **param** `bool` -- フルGCでコンパクションするかどうかを true か false で設定します。
+
+- **SEE** [m:GC.compact] [m:GC.auto_compact]
+
+#%since 3.4
+### def GC.config -> {Symbol => object}
+### def GC.config(hash) -> {Symbol => object}
+
+GC の設定を取得、変更します。
+
+引数を省略すると現在の設定を返します。
+hash を指定すると、その内容を現在の設定にマージしてから設定を返します。
+設定に無いキーは無視されます。
+
+hash を指定したときの返り値は、Ruby 3.4 では指定したキーだけを含む [c:Hash] で、
+Ruby 4.0 以降では設定全体を含む [c:Hash] です。
+
+このメソッドは処理系依存 (CRuby 特有) です。
+設定できる項目は GC の実装ごとに異なり、予告なく変更される可能性があります。
+
+すべての実装に共通する項目は `:implementation` だけです。
+これは実装の名前を表す読み取り専用の項目で、Ruby の既定の実装では `"default"` です。
+
+既定の実装では `:rgengc_allow_full_mark` を設定できます。
+false を指定すると、フルマークを行う GC (major GC) が実行されなくなります。
+
+- **param** `hash` -- 変更する設定を [c:Hash] で指定します。キーは [c:Symbol] で指定します。
+- **return** -- 設定を [c:Hash] で返します。
+- **raise** `ArgumentError` -- hash が [c:Hash] でない場合に発生します。
+
+```ruby
+p GC.config # => {rgengc_allow_full_mark: true, implementation: "default"}
+
+GC.config(rgengc_allow_full_mark: false)
+p GC.config # => {rgengc_allow_full_mark: false, implementation: "default"}
+
+# 設定に無いキーは無視される
+GC.config(unknown_key: 1)
+p GC.config # => {rgengc_allow_full_mark: false, implementation: "default"}
+```
+
+#%end
+
+### def GC.disable -> bool
+
+ガーベージコレクトを禁止します。
+
+前回の禁止状態を返します(禁止されていたなら true, GC が有効であったなら、
+false)。
+
+#%since 4.1
+Ruby 4.1 から、デフォルトの GC は [c:Ractor] ごとに動作し、このメソッドによる禁止状態も Ractor ごとに保持されます。
+ある Ractor で [m:GC.enable] を呼び出しても、別の Ractor が行った禁止は上書きされません。
+
+#%end
+
+```ruby title="例"
+p GC.disable # => false
+p GC.disable # => true
+```
+
+- **SEE** [m:GC.enable]
+
+### def GC.enable -> bool
+
+ガーベージコレクトを許可します。
+
+前回の禁止状態を返します(禁止されていたなら true, GC が有効であったなら、
+false)。
+
+#%since 4.1
+Ruby 4.1 から、デフォルトの GC は [c:Ractor] ごとに動作し、禁止状態も Ractor ごとに保持されます。
+このメソッドは呼び出した Ractor の禁止だけを解除し、別の Ractor が [m:GC.disable] で行った禁止は上書きしません。
+
+#%end
+- **SEE** [m:GC.disable]
+
+```ruby title="例"
+p GC.disable # => false
+p GC.enable  # => true
+p GC.enable  # => false
+```
+
+#%since 4.1
+### def GC.start(full_mark: true, immediate_mark: true, immediate_sweep: true, global: true) -> nil
+#%else
+### def GC.start(full_mark: true, immediate_mark: true, immediate_sweep: true) -> nil
+#%end
+
+ガーベージコレクトを開始します。
+
+[m:GC#garbage_collect] や [m:ObjectSpace?.garbage_collect] と同じ働きをします。
+[m:GC.disable] により GC が禁止されている場合でもガベージコレクトを開始します。
+
+nil を返します。
+
+- **param** `full_mark` -- マイナー GC を動作させる場合は false を、そうでない場合は true を指定します。
+
+- **param** `immediate_mark` -- mark を遅らせる(Lazy Mark を行う)場合は false
+                       を、そうでない場合は true を指定します。
+
+- **param** `immediate_sweep` -- sweep を遅らせる(Lazy Sweep を行う)場合は false
+                       を、そうでない場合は true を指定します。
+
+#%since 4.1
+- **param** `global` -- 他の [c:Ractor] のオブジェクト空間が存在するときに、全 Ractor を対象とするグローバル GC を行う場合は true(デフォルト)を、呼び出した Ractor だけのメジャー GC を行う場合は false を指定します。Ractor が 1 つしか無いときは効果がありません。
+
+終了した Ractor のオブジェクト空間はすぐには消えず、あとで別の Ractor(通常はメイン Ractor)のオブジェクト空間に統合されます。
+他の Ractor のオブジェクト空間が存在するとき(終了した Ractor の、まだ統合されていないオブジェクト空間も含みます)や、前回のグローバル GC のあとにこの統合が行われたときは、`global` が true なら全 Ractor を対象とするグローバル GC になり、[m:GC.stat] の `:global_gc_count` と `:global_gc_invocation_count` が増えて `:major_gc_count` は増えません。
+
+#%end
+注意: これらのキーワード引数は Ruby の実装やバージョンによって異なります。将来のバージョンとの互換性も保証されません。また、Ruby の実装がサポートしていない場合はキーワード引数を指定しても無視される可能性があります。
+
+```ruby title="例"
+p GC.count  # => 3
+p GC.start  # => nil
+p GC.count  # => 4
+```
+
+### def GC.stress -> bool
+
+GCがストレスモードかどうかを返します。
+
+真が設定されている場合は GC を行えるすべての機会に GC を行います。
+
+- **SEE** [m:GC.stress=]
+
+### def GC.stress=(value)
+
+GCのストレスモードを引数 value に設定します。
+引数 value が真に設定されている間は、GC を行えるすべての機会に GC を行います。
+
+この機能はデバッグ用途に提供されています。ストレスモードを有効にするとプログラムのパフォーマンスが低下します。
+
+- **param** `value` -- 任意のオブジェクト。整数以外の値を指定した場合は真偽値として解釈されます。
+             整数を指定する場合は以下のフラグをOR演算した値を指定します。
+- **`0x01`**:
+  マイナー GC を動作させる場合に指定します。
+- **`0x02`**:
+  sweep を遅らせる(Lazy Sweep を行う)に指定します。
+- **`0x04`**:
+  malloc/calloc/realloc の後でメジャーGCを動作させる場合に指定します。
+
+  ```ruby title="例"
+  p GC.stress # => false
+  GC.stress = true
+  p GC.stress # => true
+  ```
+
+- **SEE** [m:GC.stress]
+
+### def GC.count -> Integer
+
+プロセス開始からガーベージコレクトを実行した回数を [c:Integer] で返します。
+
+```ruby title="例"
+p GC.count # => 3
+```
+
+#%since 4.1
+### def GC.stat(result_hash = {}, process: false) -> {Symbol => Integer}
+### def GC.stat(key, process: false) -> Numeric
+#%else
+### def GC.stat(result_hash = {}) -> {Symbol => Integer}
+### def GC.stat(key) -> Numeric
+#%end
+
+GC 内部の統計情報を [c:Hash] で返します。
+
+- **param** `result_hash` -- 戻り値のためのハッシュを指定します。省略した場合は新しくハッシュを作成します。`result_hash` の内容は上書きされます。
+
+- **param** `key` -- 得られる統計情報から特定の情報を取得したい場合にキーを
+           [c:Symbol] で指定します。
+
+#%since 4.1
+- **param** `process` -- 統計情報の対象を指定します。偽(デフォルト)のときは現在の [c:Ractor] のオブジェクト空間の統計情報を、真のときはプロセス全体の統計情報を返します。
+
+- **raise** `ArgumentError` -- `key` に未知のキーや、`process` で選んだ統計情報に含まれないキーを指定した場合に発生します。
+
+- **raise** `NotImplementedError` -- デフォルト以外の GC 実装(MMTk など)で `process` に真を指定した場合に発生します。
+
+`process` が偽のときの統計情報には、グローバル GC(全 [c:Ractor] を止める stop-the-world の GC)の回数を表すキーが 2 つ含まれます。
+`:global_gc_count` は、その Ractor のヒープを回収したグローバル GC の回数です。どの Ractor が開始したかは問いません。
+`:global_gc_invocation_count` は、その Ractor が開始したグローバル GC の回数です。各グローバル GC を開始した Ractor はちょうど 1 つです。
+`:minor_gc_count` と `:major_gc_count` はその Ractor のヒープに対するローカルな GC の回数で、グローバル GC は含みません。
+`:count` は `:minor_gc_count`、`:major_gc_count`、`:global_gc_count` の合計です。
+
+`process` が真のとき、デフォルトの GC では、全 Ractor にわたる累積の GC 回数と計測した CPU 時間、全オブジェクト空間が共有するページプールの状態を返します。
+GC 回数と CPU 時間には、終了した Ractor のオブジェクト空間の分も含みます。
+返るキーは `:count`、`:time`、`:marking_time`、`:sweeping_time`、`:minor_gc_count`、`:major_gc_count`、`:global_gc_count`、`:page_pool_arenas`、`:page_pool_arenas_freed`、`:page_pool_total_pages`、`:page_pool_discarded_pages` の 11 個だけです。
+
+`process` が真のときの `:global_gc_count` はプロセス内のグローバル GC の回数で、止めた Ractor の数によらず 1 回ずつ数えます。
+`:count` は各ローカル GC と各グローバル GC を 1 回ずつ数えるので、`:minor_gc_count`、`:major_gc_count`、`:global_gc_count` の合計になります。
+1 回のグローバル GC は全ヒープを回収するので、この `:count` は Ractor ごとの `:count` の合計とは一致しません。
+
+`:page_pool_arenas` は現在マップされているページプールのアリーナの数、`:page_pool_arenas_freed` はページプールがアンマップしたアリーナの数です。
+`:page_pool_total_pages` はマップされているアリーナ内のページ本体の数、`:page_pool_discarded_pages` はメモリを OS に返した空きページ本体の数です。
+
+このときの `:time` はナノ秒単位の値を合計してからミリ秒に変換するので、`:marking_time` と `:sweeping_time` の和より 1 ミリ秒大きくなることがあります。
+これらの時間は GC が使った CPU 時間で、プログラムの停止時間ではありません。
+時間が累積されるかどうかは [m:GC.measure_total_time] の設定に従います。
+読み出しは各オブジェクト空間が公開している値を合算するだけで、stop-the-world を要求しません。
+[m:Process.fork] で作った子プロセスは、親プロセスの累積値を引き継ぎます。
+
+[m:GC.count] と [m:GC.total_time] は、常に現在の Ractor の値を返します。
+
+```ruby title="例"
+# 他の Ractor のオブジェクト空間があるので、子 Ractor の GC.start はグローバル GC になる
+r = Ractor.new { GC.start; GC.stat(:global_gc_invocation_count) }
+p r.value                                  # => 1
+p GC.stat(:global_gc_count)                # => 1 (main Ractor のヒープも回収された)
+p GC.stat(:global_gc_invocation_count)     # => 0 (main Ractor は開始していない)
+p GC.stat(:global_gc_count, process: true) # => 1
+p GC.stat(process: true).key?(:page_pool_arenas) # => true
+GC.stat(:page_pool_arenas) # ~> unknown key: page_pool_arenas (ArgumentError)
+```
+
+#%end
+
+- **return** -- GC 内部の統計情報を [c:Hash] で返します。
+        引数 `key` を指定した場合は数値を返します。
+
+```ruby
+p GC.stat
+#%since 3.4
+# =>
+# {
+#   count: 0,
+#   heap_allocated_pages: 24,
+#   heap_sorted_length: 24,
+#   heap_allocatable_pages: 0,
+#   heap_available_slots: 9783,
+#   heap_live_slots: 7713,
+#   heap_free_slots: 2070,
+#   heap_final_slots: 0,
+#   heap_marked_slots: 0,
+#   heap_swept_slots: 0,
+#   heap_eden_pages: 24,
+#   heap_tomb_pages: 0,
+#   total_allocated_pages: 24,
+#   total_freed_pages: 0,
+#   total_allocated_objects: 7796,
+#   total_freed_objects: 83,
+#   malloc_increase_bytes: 2389312,
+#   malloc_increase_bytes_limit: 16777216,
+#   minor_gc_count: 0,
+#   major_gc_count: 0,
+#   remembered_wb_unprotected_objects: 0,
+#   remembered_wb_unprotected_objects_limit: 0,
+#   old_objects: 0,
+#   old_objects_limit: 0,
+#   oldmalloc_increase_bytes: 2389760,
+#   oldmalloc_increase_bytes_limit: 16777216
+# }
+#%else
+# =>
+# {
+#   :count=>0,
+#   :heap_allocated_pages=>24,
+#   :heap_sorted_length=>24,
+#   :heap_allocatable_pages=>0,
+#   :heap_available_slots=>9783,
+#   :heap_live_slots=>7713,
+#   :heap_free_slots=>2070,
+#   :heap_final_slots=>0,
+#   :heap_marked_slots=>0,
+#   :heap_swept_slots=>0,
+#   :heap_eden_pages=>24,
+#   :heap_tomb_pages=>0,
+#   :total_allocated_pages=>24,
+#   :total_freed_pages=>0,
+#   :total_allocated_objects=>7796,
+#   :total_freed_objects=>83,
+#   :malloc_increase_bytes=>2389312,
+#   :malloc_increase_bytes_limit=>16777216,
+#   :minor_gc_count=>0,
+#   :major_gc_count=>0,
+#   :remembered_wb_unprotected_objects=>0,
+#   :remembered_wb_unprotected_objects_limit=>0,
+#   :old_objects=>0,
+#   :old_objects_limit=>0,
+#   :oldmalloc_increase_bytes=>2389760,
+#   :oldmalloc_increase_bytes_limit=>16777216
+# }
+#%end
+```
+
+戻り値のハッシュは処理系に依存します。これは将来変更になるかもしれません。
+
+本メソッドは CRuby 以外では動作しません。
+
+#%since 3.2
+### def GC.stat_heap                     -> {Integer => Hash}
+### def GC.stat_heap(heap_id)            -> {Symbol => Integer}
+### def GC.stat_heap(heap_id, key)       -> Integer
+### def GC.stat_heap(heap_id, result_hash) -> {Symbol => Integer}
+### def GC.stat_heap(nil, result_hash)   -> {Integer => Hash}
+
+サイズプールごとの GC の統計情報を [c:Hash] で返します。
+
+引数を省略すると、すべてのサイズプールの統計情報を、サイズプールの番号をキーとしたハッシュで返します。
+heap_id を指定すると、そのサイズプールの統計情報だけを返します。
+
+- **param** `heap_id` -- サイズプールの番号を [c:Integer] で指定します。
+           nil を指定すると、すべてのサイズプールが対象になります。
+- **param** `key` -- 特定の情報だけを取得したい場合にキーを [c:Symbol] で指定します。
+- **param** `result_hash` -- 戻り値のためのハッシュを指定します。省略した場合は新しくハッシュを作成します。result_hash の内容は上書きされます。
+- **raise** `ArgumentError` -- 存在しないサイズプールの番号を指定した場合に発生します。
+
+```ruby
+# サイズプールごとの統計情報を返す
+p GC.stat_heap.keys # => [0, 1, 2, 3, 4]
+
+# サイズプール 0 が扱うオブジェクトの大きさ (バイト)
+p GC.stat_heap(0, :slot_size) # => 40
+```
+
+戻り値のハッシュは処理系に依存します。これは将来変更になるかもしれません。
+
+本メソッドは CRuby 以外では動作しません。
+
+- **SEE** [m:GC.stat]
+#%end
+
+### def GC.latest_gc_info(result_hash = {}) -> Hash
+### def GC.latest_gc_info(key)              -> object
+
+最新のGCの情報を返します。
+
+- **param** `result_hash` -- 戻り値のためのハッシュを指定します。省略した場合は新しくハッシュを作成します。result_hash の内容は上書きされます。
+
+- **param** `key` -- 得られる情報から特定の情報を取得したい場合にキーを
+           [c:Symbol] で指定します。
+
+```ruby title="例"
+latest = GC.latest_gc_info
+#%since 3.4
+p latest # => {major_by: nil, gc_by: :newobj, have_finalizer: false, immediate_sweep: false, state: :sweeping}
+#%else
+p latest # => {:major_by=>nil, :gc_by=>:newobj, :have_finalizer=>false, :immediate_sweep=>false, :state=>:sweeping}
+#%end
+
+stat = GC.stat
+merged = GC.latest_gc_info(stat)
+p merged == latest.merge(stat) # => true
+
+p GC.latest_gc_info(:gc_by)  # => :newobj
+```
+
+#%since 3.1
+### def GC.total_time -> Integer
+
+プロセス開始から GC にかかった時間の合計をナノ秒で返します。
+
+時間が積算されるのは [m:GC.measure_total_time] が true の間だけです。
+計測を無効にしている間に GC が実行されても、返り値は変化しません。
+
+```ruby
+p GC.measure_total_time # => true
+p GC.total_time         # => 625000
+
+GC.start
+p GC.total_time         # => 937500
+
+GC.measure_total_time = false
+GC.start
+p GC.total_time         # => 937500  計測が無効なので増えない
+```
+
+返り値は実行環境や実行状況によって異なります。
+
+- **SEE** [m:GC.measure_total_time]
+
+### def GC.measure_total_time -> bool
+
+GC にかかった時間を計測するかどうかを返します。
+既定では計測が有効です。
+
+- **return** -- 計測が有効なら true を、無効なら false を返します。
+
+```ruby
+p GC.measure_total_time # => true
+```
+
+- **SEE** [m:GC.total_time], [m:GC.measure_total_time=]
+
+### def GC.measure_total_time=(flag)
+
+GC にかかった時間を計測するかどうかを設定します。
+既定では計測が有効です。
+
+計測を有効にすると GC のたびに時間を測るため、わずかに実行速度が落ちます。
+
+- **param** `flag` -- nil または false を指定すると計測を無効にします。
+           それ以外の値を指定すると有効にします。
+
+```ruby
+p GC.measure_total_time # => true
+
+GC.measure_total_time = false
+p GC.measure_total_time # => false
+
+GC.measure_total_time = nil
+p GC.measure_total_time # => false
+```
+
+- **SEE** [m:GC.total_time], [m:GC.measure_total_time]
+#%end
+
+### def GC.compact -> Hash
+
+ヒープをコンパクションします。
+
+詳細は[feature:15626]を参照してください。
+
+- **SEE** [m:GC.verify_compaction_references], [m:GC.latest_compact_info]
+
+### def GC.latest_compact_info -> Hash
+
+最後に実行されたヒープコンパクション([m:GC.compact] など)の統計情報を返します。
+
+返り値の [c:Hash] のキーは以下のとおりで、値はいずれもオブジェクトの型ごとの件数を表す [c:Hash] です(コンパクションがまだ実行されていない場合は空の [c:Hash])。
+
+- `:considered` -- 移動の対象として検討されたオブジェクト数
+- `:moved` -- 実際に移動されたオブジェクト数
+#%since 3.2
+- `:moved_up` -- 移動先のアドレスが元より高かったオブジェクト数
+- `:moved_down` -- 移動先のアドレスが元より低かったオブジェクト数
+#%end
+
+- **SEE** [m:GC.compact], [m:GC.auto_compact]
+
+#%since 3.2
+### def GC.verify_compaction_references(toward: nil, double_heap: false, expand_heap: false) -> Hash
+#%else
+### def GC.verify_compaction_references(toward: nil, double_heap: false) -> Hash
+#%end
+
+コンパクションの参照の一貫性を検証します。
+
+このメソッドは処理系依存 (CRuby 特有) です。
+コンパクション中に移動されたオブジェクトは T_MOVED オブジェクトに置き換えられます。
+コンパクション後には T_MOVED を参照するオブジェクトは存在するべきではありません。
+
+#%since 3.4
+`expand_heap` または `double_heap` に真を指定した場合は、全てのオブジェクトを確実に移動できる余地を確保するためにヒープを拡張します(Ruby 3.4 以降はどちらを指定しても同じです)。
+#%end
+#%version 3.2...3.4
+`expand_heap` に真を指定した場合は、全てのオブジェクトを確実に移動できる余地を確保するためにヒープを拡張します。`double_heap` に真を指定した場合はヒープを 2 倍にします(両方を指定した場合は `expand_heap` が優先されます)。
+#%end
+#%until 3.2
+`double_heap` に真を指定した場合は、全てのオブジェクトが移動する余地を確保するためにヒープを 2 倍にします。
+#%end
+その後、全ての移動を確実にするためにヒープをコンパクションして、全ての参照を更新して、それからフル GC を実行します。
+もし T_MOVED への参照をもつオブジェクトがあれば、マークスタックにプッシュされて、
+SEGV が起きるでしょう。
+
+- **param** `toward` -- nil か :empty を指定します。
+#%since 3.2
+- **param** `double_heap` -- ヒープサイズを2倍にするかどうかを真偽値で指定します。Ruby 3.2 から非推奨です。`expand_heap` を使ってください。
+#%else
+- **param** `double_heap` -- ヒープサイズを2倍にするかどうかを真偽値で指定します。
+#%end
+#%since 3.2
+- **param** `expand_heap` -- 全てのオブジェクトが移動できる余地を確保するためにヒープを拡張するかどうかを真偽値で指定します。
+#%end
+
+- **return** -- [m:GC.compact] の返り値と同じです。
+
+- **SEE** [m:GC.compact]
+
+### def GC.verify_internal_consistency -> nil
+{: since="2.1.0"}
+
+GC 内部の一貫性を検証します。
+
+デバッグ用のメソッドです。世代別 GC (RGenGC) をサポートしている場合は世代間の一貫性もあわせて検証します。内部に矛盾が見つかった場合はプロセスが異常終了します。
+
+本メソッドは CRuby 以外では動作しません。
+
+```ruby title="例"
+p GC.verify_internal_consistency # => nil
+```
+
+#%version 3.1...3.3
+### def GC.using_rvargc? -> bool
+
+実験的機能である Variable Width Allocation (可変長のオブジェクト割り当て) が有効かどうかを返します。
+
+有効な場合は true を、そうでない場合は false を返します。この値はビルド時の設定に依存します。
+
+- **SEE** [m:GC.stat]
+
+#%end
+
+## Instance Methods
+
+#%since 4.1
+### def garbage_collect(full_mark: true, immediate_mark: true, immediate_sweep: true, global: true) -> nil
+#%else
+### def garbage_collect(full_mark: true, immediate_mark: true, immediate_sweep: true) -> nil
+#%end
+
+ガーベージコレクトを開始します。
+
+[m:GC.start] や [m:ObjectSpace?.garbage_collect] と同じ働きをします。
+[m:GC.disable] により GC が禁止されている場合でもガベージコレクトを開始します。
+
+nil を返します。
+
+- **param** `full_mark` -- マイナー GC を動作させる場合は false を、そうでない場合は true を指定します。
+
+- **param** `immediate_mark` -- mark を遅らせる(Lazy Mark を行う)場合は false
+                       を、そうでない場合は true を指定します。
+
+- **param** `immediate_sweep` -- sweep を遅らせる(Lazy Sweep を行う)場合は false
+                       を、そうでない場合は true を指定します。
+
+#%since 4.1
+- **param** `global` -- 他の [c:Ractor] のオブジェクト空間が存在するときに、全 Ractor を対象とするグローバル GC を行う場合は true(デフォルト)を、呼び出した Ractor だけのメジャー GC を行う場合は false を指定します。Ractor が 1 つしか無いときは効果がありません。詳しくは [m:GC.start] を参照してください。
+#%end
+
+注意: これらのキーワード引数は Ruby の実装やバージョンによって異なります。将来のバージョンとの互換性も保証されません。また、Ruby の実装がサポートしていない場合はキーワード引数を指定しても無視される可能性があります。
+
+```ruby title="例"
+include GC
+p GC.count  # => 3
+garbage_collect
+p GC.count  # => 4
+```
+
+## Constants
+
+### const OPTS -> [String]
+
+コンパイル時に指定したGCのオプションです。
+
+可能性があるオプション文字列は以下の通りです。
+
+  - "GC_DEBUG"
+  - "USE_RGENGC"
+  - "RGENGC_DEBUG"
+  - "RGENGC_CHECK_MODE"
+  - "RGENGC_PROFILE"
+  - "RGENGC_ESTIMATE_OLDMALLOC"
+  - "GC_PROFILE_MORE_DETAIL"
+  - "GC_ENABLE_LAZY_SWEEP"
+  - "CALC_EXACT_MALLOC_SIZE"
+  - "MALLOC_ALLOCATED_SIZE"
+  - "MALLOC_ALLOCATED_SIZE_CHECK"
+  - "GC_PROFILE_DETAIL_MEMORY"
+
+```ruby title="例"
+p GC::OPTS # => ["USE_RGENGC", "RGENGC_ESTIMATE_OLDMALLOC", "GC_ENABLE_LAZY_SWEEP"]
+# この場合、GCデバッグ機能やプロファイル機能は無効化されている
+```
+
+### const INTERNAL_CONSTANTS -> {Symbol => Integer}
+
+GC用内部定数の値を保持するハッシュテーブルです。
+
+```ruby
+p GC::INTERNAL_CONSTANTS
+#%since 3.4
+# => {RVALUE_SIZE: 40, HEAP_PAGE_OBJ_LIMIT: 408, HEAP_PAGE_BITMAP_SIZE: 56, HEAP_PAGE_BITMAP_PLANES: 4}
+#%else
+# => {:RVALUE_SIZE=>40, :HEAP_PAGE_OBJ_LIMIT=>408, :HEAP_PAGE_BITMAP_SIZE=>56, :HEAP_PAGE_BITMAP_PLANES=>4}
+#%end
+```
+

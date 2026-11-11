@@ -1,5 +1,4 @@
 = class Net::HTTPGenericRequest < Object
-
 include Net::HTTPHeader
 
 [[c:Net::HTTPRequest]] のスーパークラスです。
@@ -177,7 +176,7 @@ print res.body
 --- new(path, initheader = nil) -> Net::HTTPRequest
 HTTP リクエストオブジェクトを生成します。
 
-initheader でリクエストヘッダを指定することができます。
+initheader でリクエストヘッダを指定できます。
 {ヘッダフィールド名(文字列)=>その中身(文字列)} という
 [[c:Hash]] を用います。
 

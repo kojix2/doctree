@@ -1,6 +1,16 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - 'refm/**'
+      - 'tools/**'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'refm/**'
+      - 'tools/**'
 
 jobs:
   ruby-versions:
@@ -19,11 +29,23 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         ruby: ${{ fromJson(needs.ruby-versions.outputs.versions) }}
+        exclude:
+        - os: macos-latest
+        - os: windows-latest
+        include:
+        - os: macos-latest
+          ruby: head
+        - os: windows-latest
+          ruby: head
+    env:
+      # Released Bundler is broken on ruby-head due to ruby/ruby#16895.
+      # Use Ruby's bundled Bundler until rubygems/rubygems#9529 is released.
+      BUNDLER_VERSION: ${{ matrix.ruby == 'head' && '0' || '' }}
 
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
@@ -50,7 +72,7 @@ jobs:
         ls -Name "*.*" | foreach {
           tar acf "../artifact/${_}.tar.xz" $_
         }
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v7
       with:
         name: statichtml-${{ matrix.os }}-${{ matrix.ruby }}
         path: /tmp/artifact/*.*.tar.xz
@@ -59,31 +81,36 @@ jobs:
       run: |
         cd /tmp
         mv -v html html.pr
-    - uses: actions/checkout@v3
+    - name: Checkout base
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.base.sha }}
-    - name: Install dependencies
+    - name: Install dependencies (base)
       run: bundle install
-    - name: Run rake
+    - name: Run rake (base)
       run: bundle exec rake
+      id: generate_base
+      continue-on-error: true
     - name: Rename generated html and generate diff
       run: |
         cd /tmp
         mv -v html html.base
         git diff --no-index html.base html.pr --stat || true
         git diff --no-index html.base html.pr --output artifact/html.diff || true
-    - uses: actions/upload-artifact@v3
+      if: ${{ steps.generate_base.outcome == 'success' }}
+    - uses: actions/upload-artifact@v7
       with:
         name: diff-${{ matrix.os }}-${{ matrix.ruby }}
         path: /tmp/artifact/html.diff
+      if: ${{ steps.generate_base.outcome == 'success' }}
 
   misspell:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
     - name: Install misspell
       run: 'curl -L https://git.io/misspell | bash'
     - name: Run misspell
       run: |
-        git ls-files -z | xargs -0 ./bin/misspell -error -i addopt
+        git ls-files -z -- ':(top)' ':(exclude)refm' ':(exclude)docs' ':(exclude)tools' | xargs -0 ./bin/misspell -error -i addopt

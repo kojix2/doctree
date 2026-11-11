@@ -1,0 +1,1053 @@
+#%#== packテンプレート文字列
+
+以下にあげるものは、[m:Array#pack]、[m:String#unpack]、[m:String#unpack1]
+のテンプレート文字の一覧です。テンプレート文字は後に「長さ」を表す数字を続けることができます。「長さ」の代わりに`*`とすることで「残り全て」を表すこともできます。
+
+長さの意味はテンプレート文字により異なりますが大抵、
+
+```text
+"iiii"
+```
+
+のように連続するテンプレート文字は
+
+```text
+"i4"
+```
+
+と書き換えることができます。
+
+テンプレート文字列中の空白類は無視されます。
+また、`#` から改行あるいはテンプレート文字列の最後まではコメントとみなされ無視されます。
+
+#%since 3.3
+未知のテンプレート文字を指定すると [c:ArgumentError] が発生します。
+#%else
+未知のテンプレート文字は、警告を出したうえで無視されます。
+#%end
+
+### 整数のテンプレート文字のシステム依存性
+
+各テンプレート文字の説明の中で、
+short や long はシステムによらずそれぞれ 2, 4バイトサイズの数値(32ビットマシンで一般的なshort, longのサイズ)を意味しています。s, S, l, L に対しては直後に _ または ! を "s_" あるいは "s!" のように続けることでシステム依存の short, long のサイズにすることもできます。
+#%#((- _ は、Perl の真似だったようですが、Perl が途中で ! に変えたため
+#%#Ruby ではこれら2つが残ったんだそうです-))
+
+i, I (int)のサイズは常にシステム依存であり、n, N, v, V
+のサイズは常にシステム依存ではない(!をつけられない)ことに注意してください。
+#%#((- ruby-1.8.1, pack.c:1.58 で変わった？ -))
+
+つまり、[m:IO#ioctl] などで C の構造体を渡すときのように、システム依存のサイズとエンディアンに合わせる必要があるときには
+s!, S!, i!, I!, l!, L!, q!, Q!, j!, J! を用います。
+また、ネットワークプロトコルやファイルフォーマットのように、システムに依存しないデータを扱うときには
+n, N, v, V を用います。
+
+#%since 4.1
+Ruby 4.1 から、`!` は `x` と `@` の後ろにも付けられます
+(`x!`・`@!`。位置をバイト境界に揃える指定で、整数のサイズやエンディアンとは関係ありません)。
+#%end
+
+強制的にエンディアンを指定したいときは、リトルエンディアンなら < を、ビッグエンディアンなら >
+を後ろにつけます。! と組み合わせることも可能です。
+
+まとめると以下のようになります。
+
+- **エンディアン非依存、整数サイズ非依存 (ネットワークプロトコルなどに適切)**:
+  ```
+    n: big endian unsigned 16bit
+    N: big endian unsigned 32bit
+    v: little endian unsigned 16bit
+    V: little endian unsigned 32bit
+  ```
+
+- **エンディアン依存、整数サイズ依存 (C の構造体などに適切)**:
+  ```
+    s!: signed short
+    S!: unsigned short
+    i,i!: signed int
+    I,I!: unsigned int
+    l!: signed long
+    L!: unsigned long
+    q!: signed long long
+    Q!: unsigned long long
+    j,j!: intptr_t
+    J,J!: uintptr_t
+  ```
+
+- **エンディアン依存、整数サイズ非依存 (C99 の stdint.h にある厳密な幅を持つ整数型に適切)**:
+  ```
+    s: int16_t
+    S: uint16_t
+    l: int32_t
+    L: uint32_t
+    q: int64_t
+    Q: uint64_t
+  ```
+
+- **エンディアンの強制指定(バイナリ解析などに適切)**:
+  ```
+    S>:  big endian unsigned 16bit(nと同じ)
+    s>:  big endian int16_t
+    s!>: big endian signed short
+    l<:  little endian int32_t
+    l!<: little endian signed long
+  ```
+
+### 各テンプレート文字の説明
+
+説明中、[m:Array#pack] と [m:String#unpack] で違いのあるものは `/` で区切って「Array#pack の説明 / String#unpack の説明」としています。
+
+- **`a`**:
+
+  ASCII文字列(ヌル文字を詰める/後続するヌル文字やスペースを残す)
+  ```ruby
+  p ["abc"].pack("a")  # => "a"
+  p ["abc"].pack("a*") # => "abc"
+  p ["abc"].pack("a4") # => "abc\x00"
+
+  p "abc\0".unpack("a4") # => ["abc\x00"]
+  p "abc ".unpack("a4")  # => ["abc "]
+  ```
+
+- **`A`**:
+
+  ASCII文字列(スペースを詰める/後続するヌル文字やスペースを削除)
+  ```ruby
+  p ["abc"].pack("A")  # => "a"
+  p ["abc"].pack("A*") # => "abc"
+  p ["abc"].pack("A4") # => "abc "
+
+  p "abc ".unpack("A4")  # => ["abc"]
+  p "abc\0".unpack("A4") # => ["abc"]
+  ```
+
+- **`Z`**:
+
+  ヌル終端文字列(長さが`*`の場合も含め、ヌル文字を詰める/後続するヌル文字を削除)
+  ```ruby
+  p ["abc"].pack("Z")  # => "a"
+  p ["abc"].pack("Z*") # => "abc\x00"
+  p ["abc"].pack("Z5") # => "abc\x00\x00"
+
+  p "abc\0".unpack("Z4") # => ["abc"]
+  p "abc ".unpack("Z4")  # => ["abc "]
+  ```
+
+- **`b`**:
+
+  ビットストリング(各バイトごとに下位ビットから上位ビット)
+  ```ruby
+  p "\xFF\x00".unpack("b*") # => ["1111111100000000"]
+  p "\x01\x02".unpack("b*") # => ["1000000001000000"]
+  p "\x01\x02".unpack("b3") # => ["100"]
+
+
+  p ["1000000001000000"].pack("b*") # => "\x01\x02"
+  ```
+
+- **`B`**:
+
+  ビットストリング(各バイトごとに上位ビットから下位ビット)
+  ```ruby
+  p "\xFF\x00".unpack("B*")  # => ["1111111100000000"]
+  p "\x01\x02".unpack("B*")  # => ["0000000100000010"]
+  p "\x01\x02".unpack("B9")  # => ["000000010"]
+  p "\x01\x02".unpack("B15") # => ["000000010000001"]
+
+  p ["0000000100000010"].pack("B*")  # => "\x01\x02"
+  p ["0000000100000010"].pack("B0")  # => ""
+  p ["0000000100000010"].pack("B1")  # => "\x00"
+  p ["0000000100000010"].pack("B7")  # => "\x00"
+  p ["0000000100000010"].pack("B8")  # => "\x01"
+  p ["0000000100000010"].pack("B9")  # => "\x01\x00"
+  p ["0000000100000010"].pack("B14") # => "\x01\x00"
+  p ["0000000100000010"].pack("B15") # => "\x01\x02"
+  p ["0000000100000010"].pack("B16") # => "\x01\x02"
+  ```
+
+- **`h`**:
+
+  16進文字列(下位ニブルが先)
+  ```ruby
+  p "\x01\xFE".unpack("h*") # => ["10ef"]
+  p "\x01\xFE".unpack("h3") # => ["10e"]
+
+  p ["10ef"].pack("h*") # => "\x01\xFE"
+  ```
+
+- **`H`**:
+
+  16進文字列(上位ニブルが先)
+  ```ruby
+  p "\x01\xFE".unpack("H*") # => ["01fe"]
+  p "\x01\xFE".unpack("H3") # => ["01f"]
+  p "~".unpack("H2")      # => ["7e"]
+
+  p ["01fe"].pack("H*") # => "\x01\xFE"
+  p ["7e"].pack("H2") # => "~"
+  ```
+
+- **`c`**:
+
+  char (8bit 符号つき整数)
+  ```ruby
+  p "\x01\xFE".unpack("c*") # => [1, -2]
+
+  p [1, -2].pack("c*")  # => "\x01\xFE"
+  p [1, 254].pack("c*") # => "\x01\xFE"
+  ```
+
+- **`C`**:
+
+  unsigned char (8bit 符号なし整数)
+  ```ruby
+  p "\x01\xFE".unpack("C*") # => [1, 254]
+
+  p [1, -2].pack("C*")  # => "\x01\xFE"
+  p [1, 254].pack("C*") # => "\x01\xFE"
+  ```
+
+- **`s`**:
+
+  short (16bit 符号つき整数, エンディアンに依存)
+  (s! は 16bit でなく、short のサイズに依存)
+
+  リトルエンディアン (x86_64):
+  ```ruby
+  p "\x01\x02\xFE\xFD".unpack("s*") # => [513, -514]
+
+  p [513, 65022].pack("s*") # => "\x01\x02\xFE\xFD"
+  p [513, -514].pack("s*")  # => "\x01\x02\xFE\xFD"
+  ```
+
+  ビッグエンディアン (SPARC64):
+  ```ruby
+  p "\x01\x02\xFE\xFD".unpack("s*") # => [258, -259]
+
+  p [258, 65277].pack("s*") # => "\x01\x02\xFE\xFD"
+  p [258, -259].pack("s*")  # => "\x01\x02\xFE\xFD"
+  ```
+
+- **`S`**:
+
+  unsigned short (16bit 符号なし整数, エンディアンに依存)
+  (S! は 16bit でなく、short のサイズに依存)
+
+  リトルエンディアン (x86_64):
+  ```ruby
+  p "\x01\x02\xFE\xFD".unpack("S*") # => [513, 65022]
+
+  p [513, 65022].pack("s*") # => "\x01\x02\xFE\xFD"
+  p [513, -514].pack("s*")  # => "\x01\x02\xFE\xFD"
+  ```
+
+  ビッグエンディアン (SPARC64):
+
+  ```ruby
+  p "\x01\x02\xFE\xFD".unpack("S*") # => [258, 65277]
+
+  p [258, 65277].pack("S*") # => "\x01\x02\xFE\xFD"
+  p [258, -259].pack("S*")  # => "\x01\x02\xFE\xFD"
+  ```
+
+- **`i`**:
+
+  int (符号つき整数, エンディアンと int のサイズに依存)
+
+  リトルエンディアン (x86_64), 32bit int:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("i*") # => [67305985, -50462977]
+
+  p [67305985, 4244504319].pack("i*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [67305985, -50462977].pack("i*")  # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+#%# [67305985, 4244504319].pack("i*") が RangeError になるのは 1.8.0 から 1.8.2-preview3 まで
+
+  ビッグエンディアン (SPARC64), 32bit int:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("i*") # => [16909060, -66052]
+
+  p [16909060, 4294901244].pack("i*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [16909060, -66052].pack("i*")   # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+- **`I`**:
+
+  unsigned int (符号なし整数, エンディアンと int のサイズに依存)
+
+  リトルエンディアン (x86_64), 32bit int:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("I*") # => [67305985, 4244504319]
+
+  p [67305985, 4244504319].pack("I*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [67305985, -50462977].pack("I*")  # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+  ビッグエンディアン (SPARC64), 32bit int:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("I*") # => [16909060, 4294901244]
+
+  p [16909060, 4294901244].pack("I*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [16909060, -66052].pack("I*")   # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+
+- **`l`**:
+
+  long (32bit 符号つき整数, エンディアンに依存)
+  (l! は 32bit でなく、long のサイズに依存)
+
+  リトルエンディアン (x86_64), 32bit long:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("l*") # => [67305985, -50462977]
+
+  p [67305985, 4244504319].pack("l*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [67305985, -50462977].pack("l*")  # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+
+  ビッグエンディアン (SPARC64), 32bit long:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("l*") # => [16909060, -66052]
+
+  p [16909060, 4294901244].pack("l*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [16909060, -66052].pack("l*")   # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+
+- **`L`**:
+
+  unsigned long (32bit 符号なし整数, エンディアンに依存)
+  (L! は 32bit でなく、long のサイズに依存)
+
+  リトルエンディアン (x86_64), 32bit long:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("L*") # => [67305985, 4244504319]
+
+  p [67305985, 4244504319].pack("L*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [67305985, -50462977].pack("L*")  # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+
+  ビッグエンディアン (SPARC64), 32bit long:
+  ```ruby
+  p "\x01\x02\x03\x04\xFF\xFE\xFD\xFC".unpack("L*") # => [16909060, 4294901244]
+
+  p [16909060, 4294901244].pack("L*") # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  p [16909060, -66052].pack("L*")   # => "\x01\x02\x03\x04\xFF\xFE\xFD\xFC"
+  ```
+
+- **`q`**:
+
+  64bit 符号付き整数 (エンディアンに依存)
+  (q! は 64bit でなく、long long のサイズに依存)
+
+  リトルエンディアン (x86_64):
+  ```ruby
+  "\x01\x02\x03\x04\x05\x06\x07\x08\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8".unpack("q*")
+  # => [578437695752307201, -506097522914230529]
+
+  [578437695752307201, -506097522914230529].pack("q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  [578437695752307201, 17940646550795321087].pack("q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  ```
+
+  ビッグエンディアン (SPARC64):
+  ```ruby
+  "\x01\x02\x03\x04\x05\x06\x07\x08\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8".unpack("q*")
+  # => [72623859790382856, -283686952306184]
+
+  [72623859790382856, -283686952306184].pack("q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  [72623859790382856, 18446460386757245432].pack("q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  ```
+- **`Q`**:
+
+  64bit 符号なし整数 (エンディアンに依存)
+  (Q! は 64bit でなく、long long のサイズに依存)
+
+  リトルエンディアン (x86_64):
+  ```ruby
+  "\x01\x02\x03\x04\x05\x06\x07\x08\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8".unpack("Q*")
+  # => [578437695752307201, 17940646550795321087]
+
+  [578437695752307201, 17940646550795321087].pack("Q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  [578437695752307201, -506097522914230529].pack("Q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  ```
+
+  ビッグエンディアン (SPARC64):
+  ```ruby
+  "\x01\x02\x03\x04\x05\x06\x07\x08\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8".unpack("Q*")
+  # => [72623859790382856, 18446460386757245432]
+
+  [72623859790382856, 18446460386757245432].pack("Q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  [72623859790382856, -283686952306184].pack("Q*")
+  # => "\x01\x02\x03\x04\x05\x06\a\b\xFF\xFE\xFD\xFC\xFB\xFA\xF9\xF8"
+  ```
+- **`m`**:
+
+  base64された文字列。60 オクテットごと(と最後)に改行コードが付加されます。
+
+  Base64は、3オクテット(8bits * 3 = 24bits)のバイナリコードをASCII文字の
+  うちの65文字 ([A-Za-z0-9+/]の64文字とpaddingのための'=')だけを使用して
+  4オクテット(6bits * 4 = 24bits)の印字可能文字列に変換するエンコーディ
+  ング法です。[RFC:2045], [RFC:4648] で定義されています。
+  ```ruby
+  p [""].pack("m")           # => ""
+  p ["\0"].pack("m")         # => "AA==\n"
+  p ["\0\0"].pack("m")       # => "AAA=\n"
+  p ["\0\0\0"].pack("m")     # => "AAAA\n"
+  p ["\xFF"].pack("m")       # => "/w==\n"
+  p ["\xFF\xFF"].pack("m")   # => "//8=\n"
+  p ["\xFF\xFF\xFF"].pack("m") # => "////\n"
+
+  ["abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"].pack("m")
+  # => "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTk9QUVJT\nVFVWV1hZWg==\n"
+  ["abcdefghijklmnopqrstuvwxyz"].pack("m3")
+  # => "YWJj\nZGVm\nZ2hp\namts\nbW5v\ncHFy\nc3R1\ndnd4\neXo=\n"
+
+  p "".unpack("m")     # => [""]
+  p "AA==\n".unpack("m") # => ["\x00"]
+  p "AA==".unpack("m") # => ["\x00"]
+
+  "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTk9QUVJT\nVFVWV1hZWg==\n".unpack("m")
+  # => ["abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+  "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWg==\n".unpack("m")
+  # => ["abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+  ```
+  m0 は [RFC:4648] 対応
+  ```ruby
+  p [""].pack("m0")           # => ""
+  p ["\0"].pack("m0")         # => "AA=="
+  p ["\0\0"].pack("m0")       # => "AAA="
+  p ["\0\0\0"].pack("m0")     # => "AAAA"
+  p ["\xFF"].pack("m0")       # => "/w=="
+  p ["\xFF\xFF"].pack("m0")   # => "//8="
+  p ["\xFF\xFF\xFF"].pack("m0") # => "////"
+
+  ["abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"].pack("m0")
+  # => "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWg=="
+
+  p "".unpack("m0")     # => [""]
+  "AA==\n".unpack("m0") # ~> ArgumentError: invalid base64
+  p "AA==".unpack("m0") # => ["\x00"]
+
+  "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWg==".unpack("m0")
+  # => ["abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+  ```
+- **SEE** [lib:base64]
+
+- **`M`**:
+
+  quoted-printable encoding された文字列
+  ```ruby
+  p ["a b c\td \ne"].pack("M") # => "a b c\td =\n\ne=\n"
+
+  p "a b c\td =\n\ne=\n".unpack("M") # => ["a b c\td \ne"]
+  ```
+
+- **`n`**:
+
+  ネットワークバイトオーダー(ビッグエンディアン)のunsigned short (16bit 符号なし整数)
+  ```ruby
+  [0,1,-1,32767,-32768,65535].pack("n*")
+  # => "\x00\x00\x00\x01\xFF\xFF\x7F\xFF\x80\x00\xFF\xFF"
+
+  "\x00\x00\x00\x01\xFF\xFF\x7F\xFF\x80\x00\xFF\xFF".unpack("n*")
+  # => [0, 1, 65535, 32767, 32768, 65535]
+  ```
+
+- **`N`**:
+
+  ネットワークバイトオーダー(ビッグエンディアン)のunsigned long (32bit 符号なし整数)
+  ```ruby
+  p [0,1,-1].pack("N*") # => "\x00\x00\x00\x00\x00\x00\x00\x01\xFF\xFF\xFF\xFF"
+
+  p "\x00\x00\x00\x00\x00\x00\x00\x01\xFF\xFF\xFF\xFF".unpack("N*") # => [0, 1, 4294967295]
+  ```
+
+- **`v`**:
+
+  "VAX"バイトオーダー(リトルエンディアン)のunsigned short (16bit 符号なし整数)
+  ```ruby
+  [0,1,-1,32767,-32768,65535].pack("v*")
+  # => "\x00\x00\x01\x00\xFF\xFF\xFF\x7F\x00\x80\xFF\xFF"
+
+  "\x00\x00\x01\x00\xFF\xFF\xFF\x7F\x00\x80\xFF\xFF".unpack("v*")
+  # => [0, 1, 65535, 32767, 32768, 65535]
+  ```
+
+- **`V`**:
+
+  "VAX"バイトオーダー(リトルエンディアン)のunsigned long (32bit 符号なし整数)
+  ```ruby
+  p [0,1,-1].pack("V*") # => "\x00\x00\x00\x00\x01\x00\x00\x00\xFF\xFF\xFF\xFF"
+
+
+  p "\x00\x00\x00\x00\x01\x00\x00\x00\xFF\xFF\xFF\xFF".unpack("V*") # => [0, 1, 4294967295]
+  ```
+
+- **`f`**:
+
+  単精度浮動小数点数(機種依存)
+
+  x86_64 (IEEE754 単精度 リトルエンディアン):
+  ```ruby
+  p [1.0].pack("f")    # => "\x00\x00\x80?"
+  p [0.0/0.0].pack("f")  # => "\x00\x00\xC0\x7F"      # NaN
+  p [1.0/0.0].pack("f")  # => "\x00\x00\x80\x7F"      # +Infinity
+  p [-1.0/0.0].pack("f") # => "\x00\x00\x80\xFF"      # -Infinity
+  ```
+
+  SPARC64 (IEEE754 単精度 ビッグエンディアン):
+  ```ruby
+  p [1.0].pack("f")    # => "?\x80\x00\x00"
+  p [0.0/0.0].pack("f")  # => "\x7F\xC0\x00\x00"      # NaN
+  p [1.0/0.0].pack("f")  # => "\x7F\x80\x00\x00"      # +Infinity
+  p [-1.0/0.0].pack("f") # => "\xFF\x80\x00\x00"      # -Infinity
+  ```
+
+  VAX (NetBSD 3.0) (非IEEE754):
+  ```ruby
+  p [1.0].pack("f") # => "\x80@\x00\x00"
+  ```
+
+- **`d`**:
+
+  倍精度浮動小数点数(機種依存)
+
+  x86_64 (IEEE754 倍精度 リトルエンディアン):
+  ```ruby
+  p [1.0].pack("d")    # => "\x00\x00\x00\x00\x00\x00\xF0?"
+  p [0.0/0.0].pack("d")  # => "\x00\x00\x00\x00\x00\x00\xF8\x7F"      # NaN
+  p [1.0/0.0].pack("d")  # => "\x00\x00\x00\x00\x00\x00\xF0\x7F"      # +Infinity
+  p [-1.0/0.0].pack("d") # => "\x00\x00\x00\x00\x00\x00\xF0\xFF"      # -Infinity
+  ```
+
+  SPARC64 (IEEE754 倍精度 ビッグエンディアン):
+  ```ruby
+  p [1.0].pack("d")    # => "?\xF0\x00\x00\x00\x00\x00\x00"
+  p [0.0/0.0].pack("d")  # => "\x7F\xF8\x00\x00\x00\x00\x00\x00"      # NaN
+  p [1.0/0.0].pack("d")  # => "\x7F\xF0\x00\x00\x00\x00\x00\x00"      # +Infinity
+  p [-1.0/0.0].pack("d") # => "\xFF\xF0\x00\x00\x00\x00\x00\x00"      # -Infinity
+  ```
+
+  VAX (NetBSD 3.0) (非IEEE754):
+  ```ruby
+  p [1.0].pack("d") # => "\x80@\x00\x00\x00\x00\x00\x00"
+  ```
+
+- **`e`**:
+
+  リトルエンディアンの単精度浮動小数点数(機種依存)
+
+  x86_64 (IEEE754):
+  ```ruby
+  p [1.0].pack("e") # => "\x00\x00\x80?"
+  ```
+
+  SPARC64 (IEEE754):
+  ```ruby
+  p [1.0].pack("e") # => "\x00\x00\x80?"
+  ```
+
+- **`E`**:
+
+  リトルエンディアンの倍精度浮動小数点数(機種依存)
+
+  x86_64 (IEEE754):
+  ```ruby
+  p [1.0].pack("E") # => "\x00\x00\x00\x00\x00\x00\xF0?"
+  ```
+
+  SPARC64 (IEEE754):
+  ```ruby
+  p [1.0].pack("E") # => "\x00\x00\x00\x00\x00\x00\xF0?"
+  ```
+
+- **`g`**:
+
+  ビッグエンディアンの単精度浮動小数点数(機種依存)
+
+  x86_64 (IEEE754):
+  ```ruby
+  p [1.0].pack("g") # => "?\x80\x00\x00"
+  ```
+
+  SPARC64 (IEEE754):
+  ```ruby
+  p [1.0].pack("g") # => "?\x80\x00\x00"
+  ```
+
+  IEEE754準拠な環境の場合、以下のようにして符号、指数部、仮数部を取り出せます。
+  ```ruby
+  s = [v].pack("g").unpack("B*")[0][0,1]      # 符号
+  e = [v].pack("g").unpack("B*")[0][1,8]      # 指数部
+  f = [v].pack("g").unpack("B*")[0][9,23]     # 仮数部
+  ```
+
+  そして、s, e, f の意味は以下の通りです。
+  ```ruby
+  sgn = s == "0" ? +1.0 : -1.0
+  exp = Integer("0b" + e)
+  fra = Integer("0b" + f)
+  if exp == 0
+    if fra == 0
+      sgn * 0                     # ±0 (positive/negative zero)
+    else
+      sgn * fra * 2**(-126-23)    # 非正規化数 (denormalized number)
+    end
+  elsif exp == 255
+    if fra == 0
+      sgn * Inf                   # ±∞ (positive/negative infinity)
+    else
+      NaN                         # 非数 (not a number)
+    end
+  else
+    fra += 1 << 23                # ゲタ
+    sgn * fra * 2**(exp-127-23)   # 正規化数 (normalized number)
+  end
+  ```
+
+- **`G`**:
+
+  ビッグエンディアンの倍精度浮動小数点数(機種依存)
+
+  x86_64 (IEEE754):
+  ```ruby
+  p [1.0].pack("G") # => "?\xF0\x00\x00\x00\x00\x00\x00"
+  ```
+
+  SPARC64 (IEEE754):
+  ```ruby
+  p [1.0].pack("G") # => "?\xF0\x00\x00\x00\x00\x00\x00"
+  ```
+
+  IEEE754準拠な環境の場合、以下のようにして符号、指数部、仮数部を取り出せます。
+  ```ruby
+  s = [v].pack("G").unpack("B*")[0][0,1]    # 符号
+  e = [v].pack("G").unpack("B*")[0][1,11]   # 指数部
+  f = [v].pack("G").unpack("B*")[0][12,52]  # 仮数部
+  ```
+
+  そして、s, e, f の意味は以下の通りです。
+  ```ruby
+  sgn = s == "0" ? +1.0 : -1.0
+  exp = Integer("0b" + e)
+  fra = Integer("0b" + f)
+  if exp == 0
+    if fra == 0
+      sgn * 0                     # ±0 (positive/negative zero)
+    else
+      sgn * fra * 2**(-1022-52)   # 非正規化数 (denormalized number)
+    end
+  elsif exp == 2047
+    if fra == 0
+      sgn * Inf                   # ±∞ (positive/negative infinity)
+    else
+      NaN                         # 非数 (not a number)
+    end
+  else
+    fra += 1 << 52                # ゲタ
+    sgn * fra * 2**(exp-1023-52)  # 正規化数 (normalized number)
+  end
+  ```
+
+- **`p`**:
+
+  ヌル終端の文字列へのポインタ
+  ```ruby
+  p [""].pack("p")           # => "\x980\xBEf\x1CV\x00\x00"
+  p ["a", "b", "c"].pack("p3") # => "\x98\xE5\x9ER\xD2U\x00\x00p\xE5\x9ER\xD2U\x00\x00H\xE5\x9ER\xD2U\x00\x00"
+  p [nil].pack("p")          # => "\x00\x00\x00\x00\x00\x00\x00\x00"
+  ```
+
+- **`P`**:
+
+  構造体(固定長文字列)へのポインタ
+  ```ruby
+  p [nil].pack("P")  # => "\x00\x00\x00\x00\x00\x00\x00\x00"
+  p ["abc"].pack("P3") # => "\xA0\xEE\er\x84U\x00\x00"
+
+  ["abc"].pack("P4") # ~> ArgumentError: too short buffer for P(3 for 4)
+  [""].pack("P")     # ~> ArgumentError: too short buffer for P(0 for 1)
+  ```
+
+- **`u`**:
+
+  uuencodeされた文字列
+  ```ruby
+  p [""].pack("u")         # => ""
+  p ["a"].pack("u")        # => "!80``\n"
+  p ["abc"].pack("u")      # => "#86)C\n"
+  p ["abcd"].pack("u")     # => "$86)C9```\n"
+  p ["a"*45].pack("u")     # => "M86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A\n"
+  p ["a"*46].pack("u")     # => "M86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A86%A\n!80``\n"
+  p ["abcdefghi"].pack("u6") # => "&86)C9&5F\n#9VAI\n"
+  ```
+
+- **`U`**:
+
+  UTF-8
+  ```ruby
+  p [0].pack("U")                             # => "\u0000"
+  p [1].pack("U")                             # => "\u0001"
+  p [0x7f].pack("U")                          # => "\u007F"
+  p [0x80].pack("U")                          # => "\u0080"
+  p [0x7fffffff].pack("U")                    # => "\xFD\xBF\xBF\xBF\xBF\xBF"
+  [0x80000000].pack("U")                      # ~> RangeError: pack(U): value out of range
+  p [0,256,65536].pack("U3").b                # => "\x00\xC4\x80\xF0\x90\x80\x80"
+
+  p "\x00\xC4\x80\xF0\x90\x80\x80".unpack("U3") # => [0, 256, 65536]
+  p "\x00\xC4\x80\xF0\x90\x80\x80".unpack("U")  # => [0]
+  p "\x00\xC4\x80\xF0\x90\x80\x80".unpack("U*") # => [0, 256, 65536]
+  ```
+
+- **`w`**:
+
+  BER圧縮整数
+
+  1バイトあたり7ビットを使用して必要最小限のバイト数で任意サイズの
+  0以上の整数を表す数値表現。各バイトの最上位ビットはデータの最後
+  を除いて必ず1が立っている(つまり最上位ビットはどこまでデータがあ
+  るかを示している)。
+
+  ISO/IEC 8825-1:1995 : Information technology−ASN.1 encoding rules : Specification of Basic Encoding Rules(BER) に定められる整数の符号化方法。
+
+  ```ruby
+  p [0].pack("w")           # => "\x00"
+  p [1].pack("w")           # => "\x01"
+  p [127].pack("w")         # => "\x7F"
+  p [128].pack("w")         # => "\x81\x00"
+  p [0x3fff].pack("w")      # => "\xFF\x7F"
+  p [0x4000].pack("w")      # => "\x81\x80\x00"
+  p [0x3fffffff].pack("w")  # => "\x83\xFF\xFF\xFF\x7F"
+  p [0x40000000].pack("w")  # => "\x84\x80\x80\x80\x00"
+  p [0xffffffff].pack("w")  # => "\x8F\xFF\xFF\xFF\x7F"
+  p [0x100000000].pack("w") # => "\x90\x80\x80\x80\x00"
+
+  p "\x00".unpack("w")            # => [0]
+  p "\x00\x81\x00\x01".unpack("w*") # => [0, 128, 1]
+  ```
+
+  なお、BER圧縮整数でエンコードした結果は大小関係を保存しない。
+  たとえば、[0x3fff].pack("w") > [0x4000].pack("w") である。
+
+#%since 4.1
+- **`R`**:
+
+  符号なし LEB128(ULEB128)。1バイトあたり7ビットを下位から使用して、
+  0以上の任意サイズの整数を表す数値表現。各バイトの最上位ビットはデータの最後を除いて1になります。
+  Ruby 4.1 から使えます。
+
+  [m:Array#pack] では負の整数を渡すと [c:ArgumentError] が発生します。
+  [c:Float] は整数に切り捨てられます。
+  [m:String#unpack] では、データが途中で終わっていて完結していない場合は `nil` を返します。
+  ```ruby
+  p [300].pack("R")       # => "\xAC\x02"
+  p [300, 5].pack("R*")   # => "\xAC\x02\x05"
+  p [0].pack("R")         # => "\x00"
+  p [1.5].pack("R")       # => "\x01"
+  [-1].pack("R")          # ~> ArgumentError: can't encode negative numbers in ULEB128
+
+  p "\xAC\x02".b.unpack("R") # => [300]
+  p "\x80".b.unpack("R")     # => [nil]
+  ```
+
+- **`r`**:
+
+  符号付き LEB128(SLEB128)。`R` と同じく1バイトあたり7ビットを使用して、
+  負の数も含む任意サイズの整数を表す数値表現。Ruby 4.1 から使えます。
+  ```ruby
+  p [-2].pack("r")  # => "~"
+  p [63].pack("r")  # => "?"
+  p [64].pack("r")  # => "\xC0\x00"
+
+  p [-300].pack("r").unpack1("r") # => -300
+  ```
+
+#%end
+- **`x`**:
+
+  ヌルバイト（pack）／1バイト読み飛ばし（unpack）
+  ```ruby
+  p [97, 98].pack("CxC")  # => "a\x00b"
+  p [97, 98].pack("Cx3C") # => "a\x00\x00\x00b"
+
+  p "abc".unpack("CxC")  # => [97, 99]
+  "abc".unpack("Cx3C") # ~> ArgumentError: x outside of string
+  ```
+
+#%since 4.1
+  Ruby 4.1 から、`x!` の形で現在の位置をバイト境界に揃えられます。
+  `!` の後ろに数 N を書くと、現在の位置を N バイト境界(N の倍数)まで進めます
+  ([m:Array#pack] ではヌルバイトで埋め、[m:String#unpack] では読み飛ばします)。
+  すでに境界上にあるときは何もしません。N は 2 のべき乗でなくてもかまいません。
+  境界の基準になるのは、その pack/unpack の開始位置です
+  (`buffer:` を指定した [m:Array#pack] では元の文字列の長さ、`offset:` を指定した [m:String#unpack] では指定した位置。どちらも指定していなければ 0 です)。
+  数の代わりに別のテンプレート文字を書くと、そのテンプレート文字の ABI 上のアラインメントに揃えます
+  (`S` なら 2、`l` や `N` なら 4、`q`・`d`・`j` なら 8)。
+  数もテンプレート文字も無い場合は [c:ArgumentError]、`x!0` は [c:RangeError]、
+  アラインメントを持たないテンプレート文字(`x!a` など)は [c:ArgumentError] になります。
+  [m:String#unpack] で境界が文字列の末尾を超える場合も [c:ArgumentError] が発生します。
+  ```ruby
+  p [1, 2].pack("Cx!4S")       # => "\x01\x00\x00\x00\x02\x00"
+  p [1, 2].pack("Cx!SS")       # => "\x01\x00\x02\x00"
+  p [1, 2, 3, 4, 5].pack("CCCCx!4C") # => "\x01\x02\x03\x04\x05"
+
+  p "\x01\x00\x00\x00\x02\x00".b.unpack("Cx!4S") # => [1, 2]
+  ```
+#%end
+
+- **`X`**:
+
+  1バイト後退
+  ```ruby
+  p [97, 98, 99].pack("CCXC") # => "ac"
+
+  p "abcdef".unpack("x*XC") # => [102]
+  ```
+
+- **`@`**:
+
+  絶対位置への移動
+  ```ruby
+  p [97, 98].pack("C @3 C") # => "a\x00\x00b"
+
+  p "abcd".unpack("C @3 C") # => [97, 100]
+  ```
+
+#%since 4.1
+  Ruby 4.1 から、`@!` の形で現在の位置をバイト境界に揃えられます。
+  書き方は `x!` と同じで、`!` の後ろの数 N、または別のテンプレート文字の ABI 上のアラインメントに揃えます。
+  `x!` が pack/unpack の開始位置を基準にするのに対して、`@!` は常に文字列の先頭(オフセット 0)を基準にします。
+  `buffer:` や `offset:` を指定していなければ、両者の結果は同じです。
+  [m:String#unpack] で境界が文字列の末尾を超える場合に [c:ArgumentError] が発生するのも `x!` と同じです。
+  ```ruby
+  p [1, 2].pack("C@6@!4C") # => "\x01\x00\x00\x00\x00\x00\x00\x00\x02"
+
+  p "\x01\x02\x03\x04\x05\x00\x00\x00\x09".b.unpack("CCCCC@!4C") # => [1, 2, 3, 4, 5, 9]
+  ```
+
+- **`^`**:
+
+  現在のオフセットを整数で返します(何も消費しません。[m:String#unpack] でのみ使えます)。
+  後ろに数を書いても無視されます。[m:Array#pack] に指定すると [c:ArgumentError] が発生します。
+  Ruby 4.1 から使えます。
+  ```ruby
+  p "\xAC\x02xyz".b.unpack("R^a*") # => [300, 2, "xyz"]
+  p "\xAC\x02xyz".b.unpack("^R^")  # => [0, 300, 2]
+  p "abcdef".unpack("a2^a2^")      # => ["ab", 2, "cd", 4]
+  p "abcdef".unpack("@3^x^X^")     # => [3, 4, 3]
+  p "abcdef".unpack("a2^3a2")      # => ["ab", 2, "cd"]
+  ```
+#%end
+
+- **`j`**:
+
+intptr_t (ポインタの幅の符号つき整数, エンディアンに依存)
+#%# [[url:https://bugs.ruby-lang.org/issues/11215]]
+
+- **`J`**:
+
+uintptr_t (ポインタの幅の符号なし整数, エンディアンに依存)
+#%# [[url:https://bugs.ruby-lang.org/issues/11215]]
+
+### 使用例
+
+以下、pack/unpack の使用例の一部です。
+
+pack を使用しなくても同じことができる場合はその例も載せています。
+pack は暗号になりやすい面があることを考慮し、pack を使いたくない人に別解を示すためです。
+
+- **数値(文字コード)の配列を文字列に変換する例**:
+  ```ruby
+  p [82, 117, 98, 121].pack("cccc")  # => "Ruby"
+  p [82, 117, 98, 121].pack("c4")  # => "Ruby"
+  p [82, 117, 98, 121].pack("c*")  # => "Ruby"
+
+  s = ""
+  [82, 117, 98, 121].each {|c| s << c}
+  p s  # => "Ruby"
+
+  p [82, 117, 98, 121].collect {|c| sprintf "%c", c}.join # => "Ruby"
+
+  p [82, 117, 98, 121].inject("") {|s, c| s << c}  # => "Ruby"
+  ```
+
+- **文字列を数値(文字コード)の配列に変換する例**:
+  ```ruby
+  p "Ruby".unpack('C*')  # => [82, 117, 98, 121]
+
+  a = []
+  "Ruby".each_byte {|c| a << c}
+  p a  # => [82, 117, 98, 121]
+  ```
+
+- **"x" でヌルバイトを埋めることができる**:
+  ```ruby
+  p [82, 117, 98, 121].pack("ccxxcc")  # => "Ru\x00\x00by"
+  ```
+
+- **"x" で文字を読み飛ばす事が出来る**:
+  ```ruby
+  p "Ru\x00\x00by".unpack('ccxxcc')  # => [82, 117, 98, 121]
+  ```
+
+- **Hexダンプを数値の配列に変換する例**:
+  ```ruby
+  "61 62 63 64 65 66".delete(' ').lines.pack('H*').unpack('C*')
+  # => [97, 98, 99, 100, 101, 102]
+
+  "61 62 63 64 65 66".split.collect {|c| c.hex}
+  # => [97, 98, 99, 100, 101, 102]
+  ```
+
+- **バイナリと16進数のpackでは長さ指定は生成されるバイト数ではなく、ビットやニブルの個数を表す**:
+  ```ruby
+  [0b01010010, 0b01110101, 0b01100010, 0b01111001].pack("C4")
+  # => "Ruby"
+  ["01010010011101010110001001111001"].pack("B32") # 8 bits * 4
+  # => "Ruby"
+
+  [0x52, 0x75, 0x62, 0x79].pack("C4")
+  # => "Ruby"
+  ["52756279"].pack("H8")  # 2 nybbles * 4
+  # => "Ruby"
+  ```
+
+- **テンプレート文字'a'の長さ指定は1つの文字列だけに適用される**:
+  ```ruby
+  ["RUBY", "u", "b", "y"].pack("a4")
+  # => "RUBY"
+
+  ["RUBY", "u", "b", "y"].pack("aaaa")
+  # => "Ruby"
+
+  ["RUBY", "u", "b", "y"].pack("a*aaa")
+  # => "RUBYuby"
+  ```
+
+- **テンプレート文字"a"は、長さが足りない分をヌル文字で補う**:
+  ```ruby
+  ["Ruby"].pack("a8")
+  # => "Ruby\x00\x00\x00\x00"
+  ```
+
+- **リトルエンディアンとビッグエンディアン**:
+  ```ruby
+  [1,2].pack("s2")
+  # => "\x01\x00\002\x00" # リトルエンディアンのシステムでの出力
+  # => "\x00\x01\x00\002" # ビッグエンディアンのシステムでの出力
+
+  [1,2].pack("n2")
+  # => "\x00\x01\x00\002" # システムによらずビッグエンディアン
+
+  [1,2].pack("v2")
+  # => "\x01\x00\002\x00" # システムによらずリトルエンディアン
+  ```
+
+- **ネットワークバイトオーダの signed long**:
+  ```ruby
+  s = "\xFF\xFF\xFF\xFE"
+  n = s.unpack("N")[0]
+  if n[31] == 1
+    n = -((n ^ 0xffff_ffff) + 1)
+  end
+  p n # => -2
+  ```
+
+- **ネットワークバイトオーダの signed long(その2)**:
+  ```ruby
+  s = "\xFF\xFF\xFF\xFE"
+  n = s.unpack("N").pack("l").unpack("l")[0]
+  p n # => -2
+  ```
+
+- **IPアドレス**:
+  ```ruby
+  require 'socket'
+  official_hostname, alias_hostnames, address_family, *address_list = Socket.gethostbyname("localhost")
+  address_list.find {|address| address.size == 4 }.unpack("C4").join(".")
+  # => "127.0.0.1"
+
+  "127.0.0.1".split(".").collect {|c| c.to_i}.pack("C4")
+  # => "\x7F\x00\x00\x01"
+  ```
+
+- **sockaddr_in 構造体**:
+  ```ruby
+  require 'socket'
+  [Socket::AF_INET,
+   Socket.getservbyname('echo'),
+   127, 0, 0, 1].pack("s n C4 x8")
+  # => "\x02\x00\x00\a\x7F\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+  ```
+
+  pack/unpack を使う代わりに
+  [m:Socket.pack_sockaddr_in],
+  [m:Socket.unpack_sockaddr_in] メソッドがあります。
+
+- **'\0'終端文字列のアドレス**:
+
+  テンプレート文字 "p" や "P" は、C 言語レベルのインタフェースのた
+  めにあります(例えば [m:IO#ioctl])。
+  ```ruby
+  p ["foo"].pack("p")  # => "xp\xC2\x85\vV\x00\x00"
+  ```
+
+  結果の文字列はゴミに見えますが、実際は文字列"foo\0"を指すアドレ
+  ス(のバイナリ表現)です。以下のようにすれば見慣れた表記で見ること
+  が出来ます
+  ```ruby
+  printf "%#014x\n", "xp\xC2\x85\vV\x00\x00".unpack("J")[0] # => 0x560b85c27078
+  ```
+
+  アドレスが指す先のオブジェクト(この例で "foo\0") は、pack の結
+  果が GC されるまではGCされないことが保証されています。
+
+  unpack("p"), unpack("P") は、pack の結果からしか unpack できません。
+  ```ruby
+  p ["foo"].pack("p").unpack("p") # => ["foo"]
+  "xp\xC2\x85\vV\x00\x00".unpack("p")
+  # ~> ArgumentError: no associated pointer
+  ```
+  "p" や "P" は、nil を特別に扱い NULL
+  ポインタとして解釈します。(以下は、64bitマシンで一般的な結果)
+  ```ruby
+  p [nil].pack("p")      # => "\x00\x00\x00\x00\x00\x00\x00\x00"
+  p "\x00\x00\x00\x00\x00\x00\x00\x00".unpack("p") # => [nil]
+  ```
+
+- **構造体のアドレス**:
+
+  例えば、
+  ```c
+  struct {
+    int   a;
+    short b;
+    long  c;
+  } v = {1,2,3};
+  ```
+  を表す文字列は
+  ```ruby
+  v = [1,2,3].pack("i!s!l!")
+  ```
+  です。(byte alignment の問題から実際は適当な padding が必要に
+  なるかもしれません)
+
+  この構造体を指すアドレスは
+  ```ruby
+  p [v].pack("P")  # => "\xC0\xCC2L\fV\x00\x00"
+  ```
+  で得られます。
+
+- **UTF-8からUCS-2への変換 (サロゲートを処理していないので UTF-16 とはいえない)**:
+
+  リトルエンディアン:
+  ```ruby
+  p ("Comments").unpack("U*").pack("v*") # => "C\x00o\x00m\x00m\x00e\x00n\x00t\x00s\x00"
+  ```
+  ビッグエンディアン:
+  ```ruby
+  p ("Comments").unpack("U*").pack("n*") # => "\x00C\x00o\x00m\x00m\x00e\x00n\x00t\x00s"
+  ```

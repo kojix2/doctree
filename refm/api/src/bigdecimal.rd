@@ -22,7 +22,7 @@ end
 print sum # => 0.9999999999999062
 #@end
 
-#@samplecode  例2: 0.0001 を 10000 回足す場合。(BigDecimal)
+#@samplecode 例2: 0.0001 を 10000 回足す場合。(BigDecimal)
 require 'bigdecimal'
 
 sum = BigDecimal("0")
@@ -32,7 +32,7 @@ end
 print sum # => 0.1e1
 #@end
 
-#@samplecode  例3: 1.2 - 1.0 と 0.2 との比較
+#@samplecode 例3: 1.2 - 1.0 と 0.2 との比較
 require "bigdecimal"
 
 (BigDecimal("1.2") - BigDecimal("1.0")) == BigDecimal("0.2") # => true
@@ -231,7 +231,7 @@ frac[0]=1234、frac[1]=5678、frac[2]=4321、 exponent=1、sign=2
 
 ==== 10進表記された数値なら確実に内部表現に変換できる
 
-例えば、以下のようなプログラムは全く誤差無しで計算することができます。
+例えば、以下のようなプログラムは全く誤差無しで計算できます。
 以下の例は、一行に一つの数値が書いてあるファイル file の合計数値を求める例です。
 
 #@samplecode digits.txt
@@ -344,7 +344,7 @@ p BigDecimal("6.66666666666666").round(12).to_s(10)
 ==== 自分で精度をコントロールしたい場合
 
 自分で精度(有効桁数)をコントロールしたい場合は add、sub、mult、div 等のメソッドが使用できます。
-以下の円周率を計算するプログラム例のように、求める桁数は自分で指定することができます。
+以下の円周率を計算するプログラム例のように、求める桁数は自分で指定できます。
 
 #@samplecode pi.rb
 #!/usr/local/bin/ruby

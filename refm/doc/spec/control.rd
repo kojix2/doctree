@@ -151,9 +151,12 @@ end
             式..]
           end
 
-case は一つの式に対する一致判定による分岐を行います。when
-節で指定された値と最初の式を評価した結果とを演算子 === を用いて
-比較して、一致する場合には when 節の本体を評価します。
+case は一つの式に対する一致判定による分岐を行います。
+上から順番に、when の直後の式を評価した結果をレシーバ、
+case の直後の式を評価した値を引数として === 演算子を呼び出し、
+最初に真を返した when 節の本体を実行します。
+
+どの when 節でも条件が成立しなかった場合は、else 節を実行します。
 
 つまり、
 
@@ -229,6 +232,24 @@ end
 case は、条件が成立した when 節、(あるいは else 節)
 の最後に評価した式の結果を返します。いずれの条件も成り立たなければ
 nil を返します。
+
+#@# Since Ruby 2.7, +case+ expressions also provide a more powerful experimental
+#@# pattern matching feature via the +in+ keyword:
+Ruby 2.7 からは case 式は in キーワードを通じてより強力なパターンマッチ構文を提供しています。
+
+#@samplecode
+case {a: 1, b: 2, c: 3}
+in a: Integer => m
+  "matched: #{m}"
+else
+  "not matched"
+end
+# => "matched: 1"
+#@end
+
+#@# The pattern matching syntax is described on
+#@# {its own page}[rdoc-ref:syntax/pattern_matching.rdoc].
+パターンマッチ構文については[[d:spec/pattern_matching]]で説明しています。
 
 === 繰り返し
 
@@ -444,9 +465,10 @@ next により抜けた yield 式は nil を返します。
 
 ====[a:redo] redo
 
-#@samplecode 例
-redo
-#@end
+例:
+
+          redo
+
 
 文法:
 
@@ -490,9 +512,9 @@ iter { p "(b)"; break }     # -> (a)..(b)(d)
 
 ====[a:retry] retry
 
-#@samplecode 例
-retry
-#@end
+例:
+
+          retry
 
 文法:
 
@@ -580,7 +602,7 @@ end
 本体の実行中に例外が発生した場合、rescue 節(複数指定できます)が
 与えられていれば例外を捕捉できます。発生した例外と一致する
 rescue 節が存在する時には rescue 節の本体が実行されます。
-発生した例外は [[m:$!]] を使って参照することができます。また、
+発生した例外は [[m:$!]] を使って参照できます。また、
 指定されていれば変数 evar にも $! と同様に発生した例外が格
 納されます。
 
@@ -624,8 +646,7 @@ begin式全体の評価値は、本体／rescue節／else節のうち
 
 [[ref:d:spec/def#class]]、[[ref:d:spec/def#module]]、[[ref:d:spec/def#method]]
 などの定義文では、それぞれ
-begin なしで rescue, ensure 節を定義でき、これにより例外を処理することが
-できます。
+begin なしで rescue, ensure 節を定義でき、これにより例外を処理できます。
 
 ==== rescue修飾子
 

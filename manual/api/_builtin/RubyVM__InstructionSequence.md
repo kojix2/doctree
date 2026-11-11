@@ -1,0 +1,861 @@
+---
+library: _builtin
+---
+# class RubyVM::InstructionSequence
+
+Ruby の Virtual Machine のコンパイル済みの命令シーケンスを表すクラスです。
+
+[c:Method]、[c:Proc] オブジェクトや Ruby のソースコードを表す文字列から VM の命令シーケンスを得る事ができます。また、
+RubyVM::InstructionSequence オブジェクトを元に命令シーケンスを読みやすい文字列に変換する事もできます。Ruby の命令シーケンスコンパイラの設定を扱う必要がありますが、Ruby の VM がどのように働くかを知るのに有用です。
+
+VM の命令シーケンスの一覧はRuby のソースコード中の insns.def から参照できます。
+
+- <https://github.com/ruby/ruby/blob/master/insns.def>
+
+#%# The instruction sequence results will almost certainly change as Ruby
+#%# changes, so example output in this documentation may be different from what
+#%# you see.
+
+## Singleton Methods
+
+### def RubyVM::InstructionSequence.compile(source, file = nil, path = nil, line = 1, options = nil) -> RubyVM::InstructionSequence
+### def RubyVM::InstructionSequence.new(source, file = nil, path = nil, line = 1, options = nil) -> RubyVM::InstructionSequence
+
+引数 source で指定した Ruby のソースコードを元にコンパイル済みの
+[c:RubyVM::InstructionSequence] オブジェクトを作成して返します。
+
+- **param** `source` -- Ruby のソースコードを文字列で指定します。
+
+- **param** `file` -- ファイル名を文字列で指定します。
+
+- **param** `path` -- 引数 file の絶対パスファイル名を文字列で指定します。
+
+- **param** `line` -- 引数 source の 1 行目の行番号を指定します。
+
+- **param** `options` -- コンパイル時のオプションを true、false、[c:Hash] オブジェクトのいずれかで指定します。詳細は
+               [m:RubyVM::InstructionSequence.compile_option=] を参照してください。
+
+```ruby
+p RubyVM::InstructionSequence.compile("a = 1 + 2")
+# => <RubyVM::InstructionSequence:<compiled>@<compiled>>
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.compile_file]
+
+### def RubyVM::InstructionSequence.compile_file(file, options = nil) -> RubyVM::InstructionSequence
+
+引数 file で指定した Ruby のソースコードを元にコンパイル済みの
+[c:RubyVM::InstructionSequence] オブジェクトを作成して返します。
+
+[m:RubyVM::InstructionSequence.compile] とは異なり、file、path などのメタデータは自動的に取得します。
+
+- **param** `file` -- ファイル名を文字列で指定します。
+
+- **param** `options` -- コンパイル時のオプションを true、false、[c:Hash] オブジェクトのいずれかで指定します。詳細は
+               [m:RubyVM::InstructionSequence.compile_option=] を参照してください。
+
+```ruby
+# /tmp/hello.rb
+puts "Hello, world!"
+
+# irb
+p RubyVM::InstructionSequence.compile_file("/tmp/hello.rb")
+# => <RubyVM::InstructionSequence:<main>@/tmp/hello.rb>
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.compile]
+
+### def RubyVM::InstructionSequence.compile_option -> Hash
+
+命令シーケンスのコンパイル時のデフォルトの最適化オプションを Hash で返します。
+
+#%version 3.4...
+
+```ruby title="例"
+require "pp"
+pp RubyVM::InstructionSequence.compile_option
+
+# => {inline_const_cache: true,
+# peephole_optimization: true,
+# tailcall_optimization: false,
+# specialized_instruction: true,
+# operands_unification: true,
+# instructions_unification: false,
+# debug_frozen_string_literal: false,
+# coverage_enabled: true,
+# debug_level: 0,
+# frozen_string_literal: nil}
+```
+
+#%end
+#%version 3.3
+
+```ruby title="例"
+require "pp"
+pp RubyVM::InstructionSequence.compile_option
+
+# => {:inline_const_cache=>true,
+# :peephole_optimization=>true,
+# :tailcall_optimization=>false,
+# :specialized_instruction=>true,
+# :operands_unification=>true,
+# :instructions_unification=>false,
+# :frozen_string_literal=>false,
+# :debug_frozen_string_literal=>false,
+# :coverage_enabled=>true,
+# :debug_level=>0}
+```
+
+#%end
+#%version ...3.3
+
+```ruby title="例"
+require "pp"
+pp RubyVM::InstructionSequence.compile_option
+
+# => {:inline_const_cache=>true,
+# :peephole_optimization=>true,
+# :tailcall_optimization=>false,
+# :specialized_instruction=>true,
+# :operands_unification=>true,
+# :instructions_unification=>false,
+# :stack_caching=>false,
+# :frozen_string_literal=>false,
+# :debug_frozen_string_literal=>false,
+# :coverage_enabled=>true,
+# :debug_level=>0}
+```
+
+#%end
+
+- **SEE** [m:RubyVM::InstructionSequence.compile_option=]
+
+### def RubyVM::InstructionSequence.compile_option=(options)
+
+命令シーケンスのコンパイル時のデフォルトの最適化オプションを引数
+options で指定します。
+
+- **param** `options` -- コンパイル時の最適化オプションを true、false、nil、
+               [c:Hash] のいずれかで指定します。true を指定した場合は全てのオプションを有効にします。false を指定した場合は全てのオプションを無効にします。nil を指定した場合はいずれのオプションも変更しません。また、[c:Hash] を指定した場合は以下のキーに対して、true か false を指定する事で個別に有効、無効を指定します。
+  ```
+    * :inline_const_cache
+    * :instructions_unification
+    * :operands_unification
+    * :peephole_optimization
+    * :specialized_instruction
+#%version ...3.3
+    * :stack_caching
+#%end
+    * :tailcall_optimization
+  ```
+               :debug_level をキーに指定した場合は値を数値で指定します。
+
+.new、.compile、.compile_file メソッドの実行の際に option 引数を指定した場合はその実行のみ最適化オプションを変更する事もできます。
+
+- **SEE** [m:RubyVM::InstructionSequence.new],
+     [m:RubyVM::InstructionSequence.compile],
+     [m:RubyVM::InstructionSequence.compile_file]
+
+### def RubyVM::InstructionSequence.disasm(body)      -> String
+### def RubyVM::InstructionSequence.disassemble(body) -> String
+
+引数 body で指定したオブジェクトから作成した
+[c:RubyVM::InstructionSequence] オブジェクトを人間が読める形式の文字列に変換して返します。
+
+- **param** `body` -- [c:Proc]、[c:Method] オブジェクトを指定します。
+
+例1:[c:Proc] オブジェクトを指定した場合
+
+```ruby
+# /tmp/proc.rb
+p = proc { num = 1 + 2 }
+puts RubyVM::InstructionSequence.disasm(p)
+```
+
+```text title="出力"
+== disasm: <RubyVM::InstructionSequence:block in <main>@/tmp/proc.rb>===
+== catch table
+| catch type: redo   st: 0000 ed: 0012 sp: 0000 cont: 0000
+| catch type: next   st: 0000 ed: 0012 sp: 0000 cont: 0012
+|------------------------------------------------------------------------
+local table (size: 2, argc: 0 [opts: 0, rest: -1, post: 0, block: -1] s1)
+[ 2] num
+0000 trace            1                                               (   1)
+0002 putobject        1
+0004 putobject        2
+0006 opt_plus         <ic:1>
+0008 dup
+0009 setlocal         num, 0
+0012 leave
+```
+
+例2:[c:Method] オブジェクトを指定した場合
+
+```ruby
+# /tmp/method.rb
+def hello
+  puts "hello, world"
+end
+
+puts RubyVM::InstructionSequence.disasm(method(:hello))
+```
+
+```text title="出力"
+== disasm: <RubyVM::InstructionSequence:hello@/tmp/method.rb>============
+0000 trace            8                                               (   1)
+0002 trace            1                                               (   2)
+0004 putself
+0005 putstring        "hello, world"
+0007 send             :puts, 1, nil, 8, <ic:0>
+0013 trace            16                                              (   3)
+0015 leave                                                            (   2)
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#disasm]
+
+### def RubyVM::InstructionSequence.of(body) -> RubyVM::InstructionSequence
+
+引数 body で指定した [c:Proc]、[c:Method] オブジェクトを元に
+[c:RubyVM::InstructionSequence] オブジェクトを作成して返します。
+
+- **param** `body` -- [c:Proc]、[c:Method] オブジェクトを指定します。
+
+例1:irb で実行した場合
+
+```console
+# proc
+> p = proc { num = 1 + 2 }
+> RubyVM::InstructionSequence.of(p)
+> # => <RubyVM::InstructionSequence:block in irb_binding@(irb)>
+
+# method
+> def foo(bar); puts bar; end
+> RubyVM::InstructionSequence.of(method(:foo))
+> # => <RubyVM::InstructionSequence:foo@(irb)>
+```
+
+例2: [m:RubyVM::InstructionSequence.compile_file] を使用した場合
+
+```console
+# /tmp/iseq_of.rb
+def hello
+  puts "hello, world"
+end
+
+$a_global_proc = proc { str = 'a' + 'b' }
+
+# irb
+> require '/tmp/iseq_of.rb'
+
+# hello メソッド
+> RubyVM::InstructionSequence.of(method(:hello))
+> # => #<RubyVM::InstructionSequence:0x007fb73d7cb1d0>
+
+# グローバル proc
+> RubyVM::InstructionSequence.of($a_global_proc)
+> # => #<RubyVM::InstructionSequence:0x007fb73d7caf78>
+```
+
+### def RubyVM::InstructionSequence.load_from_binary(binary) -> RubyVM::InstructionSequence
+
+[m:RubyVM::InstructionSequence#to_binary]により作られたバイナリフォーマットの文字列からiseqのオブジェクトをロードします。
+
+このローダーは検証機構をもっておらず、壊れたり改変されたバイナリを読み込むと深刻な問題を引き起こします。
+
+他者により提供されたバイナリデータはロードすべきではありません。自分が変換したバイナリデータを使うべきです。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+binary = iseq.to_binary
+p RubyVM::InstructionSequence.load_from_binary(binary).eval # => 3
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#to_binary]
+
+### def RubyVM::InstructionSequence.load_from_binary_extra_data(binary) -> String
+
+バイナリフォーマットの文字列から埋め込まれたextra_dataを取り出します。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+binary = iseq.to_binary("extra_data")
+p RubyVM::InstructionSequence.load_from_binary_extra_data(binary) # => extra_data
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#to_binary]
+
+#%since 3.3
+### def RubyVM::InstructionSequence.compile_prism(source, file = nil, path = nil, line = 1, options = nil) -> RubyVM::InstructionSequence
+
+引数 source で指定した Ruby のソースコードを構文解析器 Prism でパースしてコンパイルし、
+[c:RubyVM::InstructionSequence] オブジェクトを作成して返します。
+
+[m:RubyVM::InstructionSequence.compile] とは異なり、常に Prism でパースします。
+
+- **param** `source` -- Ruby のソースコードを表す文字列、または開いた File オブジェクトを指定します。
+- **param** `file` -- ファイル名を文字列で指定します。
+- **param** `path` -- 引数 file の絶対パスファイル名を文字列で指定します。
+- **param** `line` -- 引数 source の 1 行目の行番号を指定します。
+- **param** `options` -- コンパイル時のオプションを true、false、[c:Hash] オブジェクトのいずれかで指定します。詳細は
+               [m:RubyVM::InstructionSequence.compile_option=] を参照してください。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile_prism("a = 1 + 2")
+p iseq.eval # => 3
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.compile]
+
+### def RubyVM::InstructionSequence.compile_file_prism(file, options = nil) -> RubyVM::InstructionSequence
+
+引数 file で指定した Ruby のソースコードを構文解析器 Prism でパースしてコンパイルし、
+[c:RubyVM::InstructionSequence] オブジェクトを作成して返します。
+
+[m:RubyVM::InstructionSequence.compile_file] とは異なり、常に Prism でパースします。
+
+- **param** `file` -- ファイル名を文字列で指定します。
+- **param** `options` -- コンパイル時のオプションを true、false、[c:Hash] オブジェクトのいずれかで指定します。詳細は
+               [m:RubyVM::InstructionSequence.compile_option=] を参照してください。
+
+```ruby title="例"
+# /tmp/hello.rb
+puts "Hello, world!"
+
+iseq = RubyVM::InstructionSequence.compile_file_prism("/tmp/hello.rb")
+iseq.eval
+# => Hello, world!
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.compile_file]
+
+#%end
+
+#%since 3.4
+### def RubyVM::InstructionSequence.compile_parsey(source, file = nil, path = nil, line = 1, options = nil) -> RubyVM::InstructionSequence
+
+引数 source で指定した Ruby のソースコードを、旧来のパーサ(parse.y)でパースしてコンパイルし、
+[c:RubyVM::InstructionSequence] オブジェクトを作成して返します。
+
+Ruby 3.4 以降、[m:RubyVM::InstructionSequence.compile] は既定でパーサ Prism を使いますが、
+本メソッドは常に parse.y でパースします。
+
+- **param** `source` -- Ruby のソースコードを表す文字列、または開いた File オブジェクトを指定します。
+- **param** `file` -- ファイル名を文字列で指定します。
+- **param** `path` -- 引数 file の絶対パスファイル名を文字列で指定します。
+- **param** `line` -- 引数 source の 1 行目の行番号を指定します。
+- **param** `options` -- コンパイル時のオプションを true、false、[c:Hash] オブジェクトのいずれかで指定します。詳細は
+               [m:RubyVM::InstructionSequence.compile_option=] を参照してください。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile_parsey("a = 1 + 2")
+p iseq.eval # => 3
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.compile]
+
+#%end
+
+## Instance Methods
+
+### def inspect -> String
+
+self の情報をラベルとパスを含んだ人間に読みやすい文字列にして返します。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+p iseq.inspect # => "<RubyVM::InstructionSequence:<compiled>@<compiled>>"
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#label],
+     [m:RubyVM::InstructionSequence#path]
+
+### def disasm      -> String
+### def disassemble -> String
+
+self が表す命令シーケンスを人間が読める形式の文字列に変換して返します。
+
+```ruby
+puts RubyVM::InstructionSequence.compile('1 + 2').disasm
+```
+
+```text title="出力"
+== disasm: <RubyVM::InstructionSequence:<compiled>@<compiled>>==========
+0000 trace            1                                               (   1)
+0002 putobject        1
+0004 putobject        2
+0006 opt_plus         <ic:1>
+0008 leave
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.disasm]
+
+### def to_a -> Array
+
+self の情報を 14 要素の配列にして返します。
+
+命令シーケンスを以下の情報で表します。
+
+- **`magic`**:
+
+  データフォーマットを示す文字列。常に
+  "YARVInstructionSequence/SimpleDataFormat"。
+
+- **`major_version`**:
+
+  命令シーケンスのメジャーバージョン。
+
+- **`minor_version`**:
+
+  命令シーケンスのマイナーバージョン。
+
+- **`format_type`**:
+
+  データフォーマットを示す数値。常に 1。
+
+- **`misc`**:
+
+  以下の要素から構成される [c:Hash] オブジェクト。
+
+  :arg_size： メソッド、ブロックが取る引数の総数(1 つもない場合は 0)。
+
+  :local_size： ローカル変数の総数 + 1。
+
+  :stack_max： スタックの深さ。([c:SystemStackError] を検出するために使用)
+
+- **`#label`**:
+
+  メソッド名、クラス名、モジュール名などで構成される命令シーケンスのラ
+  ベル。トップレベルでは "<main>"。文字列から作成していた場合は
+  "<compiled>"。
+
+- **`#path`**:
+
+  命令シーケンスの相対パス。文字列から作成していた場合は "<compiled>"。
+
+- **`#absolute_path`**:
+
+  命令シーケンスの絶対パス。文字列から作成していた場合は nil。
+
+- **`#first_lineno`**:
+
+  命令シーケンスの 1 行目の行番号。
+
+- **`type`**:
+
+  命令シーケンスの種別。
+  :top、:method、:block、:class、:rescue、:ensure、:eval、:main、
+  :defined_guard のいずれか。
+
+- **`locals`**:
+
+  全ての引数名、ローカル変数名からなる [c:Symbol] の配列。
+
+- **`args`**:
+
+  引数の指定が必須のメソッド、ブロックの引数の個数。あるいは以下のよう
+  な配列。
+
+    [required_argc, [optional_arg_labels, ...],
+     splat_index, post_splat_argc, post_splat_index,
+     block_index, simple]
+
+  より詳細な情報については、vm_core.h を参照。
+
+- **`catch_table`**:
+
+  例外や制御構造のオペレータ(rescue、next、redo、break など)の一覧。
+
+- **`bytecode`**:
+
+  命令シーケンスを構成する命令とオペランドの配列の配列。
+
+  ```ruby title="例"
+  require 'pp'
+
+  iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+  pp iseq.to_a
+  # ※ Ruby 2.5 での実行結果
+#%since 3.4
+  # => ["YARVInstructionSequence/SimpleDataFormat",
+  # 2,
+  # 0,
+  # 1,
+  # {arg_size: 0, local_size: 2, stack_max: 2},
+  # "<compiled>",
+  # "<compiled>",
+  # nil,
+  # 1,
+  # :top,
+  # [:num],
+  # 0,
+  # [],
+  # [1,
+  #  [:trace, 1],
+  #  [:putobject_OP_INT2FIX_O_1_C_],
+  #  [:putobject, 2],
+  #  [:opt_plus, {mid: :+, flag: 256, orig_argc: 1, blockptr: nil}],
+  #  [:dup],
+  #  [:setlocal_OP__WC__0, 2],
+  #  [:leave]]]
+#%else
+  # => ["YARVInstructionSequence/SimpleDataFormat",
+  # 2,
+  # 0,
+  # 1,
+  # {:arg_size=>0, :local_size=>2, :stack_max=>2},
+  # "<compiled>",
+  # "<compiled>",
+  # nil,
+  # 1,
+  # :top,
+  # [:num],
+  # 0,
+  # [],
+  # [1,
+  #  [:trace, 1],
+  #  [:putobject_OP_INT2FIX_O_1_C_],
+  #  [:putobject, 2],
+  #  [:opt_plus, {:mid=>:+, :flag=>256, :orig_argc=>1, :blockptr=>nil}],
+  #  [:dup],
+  #  [:setlocal_OP__WC__0, 2],
+  #  [:leave]]]
+#%end
+  ```
+
+### def eval -> object
+
+self の命令シーケンスを評価してその結果を返します。
+
+```ruby
+p RubyVM::InstructionSequence.compile("1 + 2").eval # => 3
+```
+
+### def path -> String
+
+self が表す命令シーケンスの相対パスを返します。
+
+self の作成時に指定した文字列を返します。self を文字列から作成していた場合は "<compiled>" を返します。
+
+例1:irb で実行した場合
+
+```ruby
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+p iseq
+# => <RubyVM::InstructionSequence:<compiled>@<compiled>>
+p iseq.path
+# => "<compiled>"
+```
+
+例2: [m:RubyVM::InstructionSequence.compile_file] を使用した場合
+
+```console
+# /tmp/method.rb
+def hello
+  puts "hello, world"
+end
+
+# irb
+> iseq = RubyVM::InstructionSequence.compile_file('method.rb')
+> iseq.path # => "method.rb"
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#absolute_path]
+
+### def absolute_path -> String | nil
+
+self が表す命令シーケンスの絶対パスを返します。
+
+self を文字列から作成していた場合は nil を返します。
+
+例1:irb で実行した場合
+
+```ruby
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+p iseq
+# => <RubyVM::InstructionSequence:<compiled>@<compiled>>
+p iseq.absolute_path
+# => nil
+```
+
+例2: [m:RubyVM::InstructionSequence.compile_file] を使用した場合
+
+```console
+# /tmp/method.rb
+def hello
+  puts "hello, world"
+end
+
+# irb
+> iseq = RubyVM::InstructionSequence.compile_file('/tmp/method.rb')
+> iseq.absolute_path # => "/tmp/method.rb"
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#path]
+
+### def label -> String
+
+self が表す命令シーケンスのラベルを返します。通常、メソッド名、クラス名、モジュール名などで構成されます。
+
+トップレベルでは "<main>" を返します。self を文字列から作成していた場合は "<compiled>" を返します。
+
+例1:irb で実行した場合
+
+```ruby
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+p iseq
+# => <RubyVM::InstructionSequence:<compiled>@<compiled>>
+p iseq.label
+# => "<compiled>"
+```
+
+例2: [m:RubyVM::InstructionSequence.compile_file] を使用した場合
+
+```console
+# /tmp/method.rb
+def hello
+  puts "hello, world"
+end
+
+# irb
+> iseq = RubyVM::InstructionSequence.compile_file('/tmp/method.rb')
+> iseq.label # => "<main>"
+```
+
+```ruby title="例3"
+# /tmp/method2.rb
+def hello
+  puts "hello, world"
+end
+
+p RubyVM::InstructionSequence.of(method(:hello)).label
+# => "hello"
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#base_label]
+
+### def base_label -> String
+
+self が表す命令シーケンスの基本ラベルを返します。
+
+例1:irb で実行した場合
+
+```ruby
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+p iseq
+# => <RubyVM::InstructionSequence:<compiled>@<compiled>>
+p iseq.base_label
+# => "<compiled>"
+```
+
+例2: [m:RubyVM::InstructionSequence.compile_file] を使用した場合
+
+```console
+# /tmp/method.rb
+def hello
+  puts "hello, world"
+end
+
+# irb
+> iseq = RubyVM::InstructionSequence.compile_file('/tmp/method.rb')
+> iseq.base_label # => "<main>"
+```
+
+```ruby title="例3"
+# /tmp/method2.rb
+def hello
+  puts "hello, world"
+end
+
+p RubyVM::InstructionSequence.of(method(:hello)).base_label
+# => "hello"
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#label]
+
+### def first_lineno -> Integer
+
+self が表す命令シーケンスの 1 行目の行番号を返します。
+
+例1:irb で実行した場合
+
+```ruby
+p RubyVM::InstructionSequence.compile('num = 1 + 2').first_lineno
+# => 1
+```
+
+```ruby title="例2"
+# /tmp/method.rb
+require "foo-library"
+def foo
+  p :foo
+end
+
+p RubyVM::InstructionSequence.of(method(:foo)).first_lineno
+# => 2
+```
+
+### def to_binary(extra_data = nil) -> String
+
+バイナリフォーマットでシリアライズされたiseqのデータを文字列として返します。
+[m:RubyVM::InstructionSequence.load_from_binary] メソッドでバイナリデータに対応するiseqオブジェクトを作れます。
+
+引数の extra_data はバイナリデータと共に保存されます。
+[m:RubyVM::InstructionSequence.load_from_binary_extra_data] メソッドでこの文字列にアクセス出来ます。
+
+注意: 変換後のバイナリデータはポータブルではありません。 to_binary で得たバイナリデータは他のマシンに移動できません。他のバージョンや他のアーキテクチャのRubyで作られたバイナリデータは使用できません。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile('num = 1 + 2')
+iseq.to_binary("extra_data")
+
+# ※表示の都合上改行しているが実際は改行はない
+# => "YARB\x02\x00\x00\x00\x03\x00\x00\x00\x16\x02\x00\x00\n\x00\x00\x00\x01
+# \x00\x00\x00\x03\x00\x00\x00\x05\x00\x00\x00\x84\x01\x00\x00\x88\x01\x00
+# \x00\x02\x02\x00\x00x86_64-darwin15\x00*\x00\x00\x00\x00\x00\x00\x00\x01
+# \x00\x00\x00\x00\x00\x00\x00\\\x00\x00\x00\x00\x00\x00\x00\x0F\x00\x00\x00
+# \x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00=\x00\x00\x00\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1F
+# \x00\x00\x00\x00\x00\x00\x00Y\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00
+# \x00\x00\x00\x003\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00
+# \x00\x01\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x10
+# \x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\f\x00\x00\x00<\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00
+# \x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00
+# \x00\x00\x9C\x00\x00\x00\x00\x00\x00\x00\xA4\x00\x00\x00\x00\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xAC\x00\x00\x00
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+# \x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00
+# \x01\x00\x00\x00\x02\x00\x00\x00\xBC\x00\x00\x00\x00\x00\x00\x00\x00\x00
+# \x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00
+# \xF1\x7F\x00\x00\b\x00\x00\x00\x00\x00\x00\x00E\x7F\x00\x00\x02\x00\x00\x00
+# \x00\x00\x00\x00\n\x00\x00\x00\x00\x00\x00\x00<compiled>\xF5\x7F\x00\x00
+# \x05\x00\x00\x00\x00\x00\x00\x00E\x7F\x00\x00\x02\x00\x00\x00\x00\x00\x00
+# \x00\x03\x00\x00\x00\x00\x00\x00\x00numE\x7F\x00\x00\x02\x00\x00\x00\x00
+# \x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00+\xA0\x01\x00\x00\xAC\x01\x00
+# \x00\xCA\x01\x00\x00\xD6\x01\x00\x00\xED\x01\x00\x00extra_data"
+```
+
+- **SEE** [m:RubyVM::InstructionSequence.load_from_binary]
+- **SEE** [m:RubyVM::InstructionSequence.load_from_binary_extra_data]
+
+### def each_child {|child_iseq| ... } -> self
+{: since="2.5.0"}
+
+`self` が直接含む(ネストした)命令シーケンスを、それぞれ引数としてブロックに渡して繰り返します。
+
+繰り返す順序は実装やバージョンによって異なるため、順序に依存すべきではありません。
+
+```ruby title="例"
+def foo
+  bar = -> { 1 }
+  bar.call
+end
+
+iseq = RubyVM::InstructionSequence.of(method(:foo))
+children = []
+iseq.each_child {|child| children << child.label }
+p children # => ["block in foo"]
+```
+
+### def trace_points -> [[Integer, Symbol]]
+{: since="2.5.0"}
+
+`self` が表す命令シーケンス内のトレースポイント(イベントが発生しうる位置)の一覧を返します。
+
+配列の要素は `[行番号, イベントを表す Symbol]` という 2 要素の配列です。
+イベントを表す Symbol は `:class`、`:call`、`:b_call`、`:line`、`:end`、`:return`、`:b_return` のいずれかです。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile(<<~RUBY)
+  def hello
+    puts "hi"
+  end
+RUBY
+p iseq.trace_points # => [[1, :line]]
+```
+
+#%since 3.1
+### def script_lines -> [String] | nil
+
+`self` が表す命令シーケンスに対応するソースコードの行を配列で返します。記録されていない場合は nil を返します。
+
+配列に含まれる行は `self` の命令シーケンスの範囲に限られず、ソースファイル全体の行です。
+
+記録するには、コンパイルする前に [m:RubyVM.keep_script_lines] を true に設定しておく必要があります。
+
+このメソッドは Ruby 内部での利用、デバッグ、研究のための API です。それ以外の目的で使うべきではありません。将来のバージョンとの互換性も保証されません。
+
+```ruby title="例"
+RubyVM.keep_script_lines = true
+iseq = RubyVM::InstructionSequence.compile("num = 1 + 2\nputs num")
+p iseq.script_lines # => ["num = 1 + 2\n", "puts num"]
+RubyVM.keep_script_lines = false
+```
+
+- **SEE** [m:RubyVM.keep_script_lines]
+
+#%end
+
+#%since 4.1
+### def node_id -> Integer
+
+`self` のコンパイル元になった抽象構文木(AST)のノードの `node_id` を返します。
+
+[m:RubyVM::InstructionSequence#syntax_tree] は、この値と [m:RubyVM::InstructionSequence#source_hash] を使って、再度パースし直したソースから対応するノードを探します。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile("1 + 2")
+p iseq.node_id.is_a?(Integer) # => true
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#source_hash], [m:RubyVM::InstructionSequence#syntax_tree]
+
+### def source_hash -> Integer | nil
+
+`self` のコンパイル元になったソースのハッシュ値を返します。
+
+ソースが不明な場合は nil を返します。
+
+[m:RubyVM::InstructionSequence#syntax_tree] は、この値を使って、再度パースし直したソースが元のソースから変わっていないかどうかを確認します。
+
+```ruby title="例"
+iseq = RubyVM::InstructionSequence.compile("x = 1")
+p iseq.source_hash.is_a?(Integer) # => true
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#node_id], [m:RubyVM::InstructionSequence#syntax_tree]
+
+### def syntax_tree -> Ruby::Prism::Node | RubyVM::AbstractSyntaxTree::Node | nil
+
+`self` のコンパイル元になった抽象構文木(AST)のノードを、コンパイルに使ったのと同じパーサでソースを再度パースし直すことで返します。
+
+デフォルトの prism でコンパイルされていれば [c:Ruby::Prism] のノード(`Ruby::Prism::Node` のサブクラス)を、`parse.y` でコンパイルされていれば [c:RubyVM::AbstractSyntaxTree::Node] を返します。
+
+以下のように、ノードを確実に取得できない場合は nil を返します。
+
+- ソースを利用できない場合(文字列からコンパイルした場合や、`RubyVM.keep_script_lines` を有効にせずに eval したコードなど)
+- コンパイルしたあとにソースファイルが変更されている場合
+
+返されるノードは prism gem のノードではなく、インタプリタに組み込まれた [c:Ruby::Prism] のノードです。そのため、インストールされている prism gem のバージョンにかかわらず、返される構文木は実行中のコードに対応します。
+
+このメソッドは実験的なもので、予告なく変更される可能性があります。
+
+```ruby title="例"
+# /tmp/hello.rb
+puts "hello, world"
+
+iseq = RubyVM::InstructionSequence.compile_file("/tmp/hello.rb")
+p iseq.syntax_tree.type # => :program_node
+
+# 文字列からコンパイルした場合はソースを再度読み込めないので nil
+p RubyVM::InstructionSequence.compile("1 + 2").syntax_tree # => nil
+```
+
+- **SEE** [m:RubyVM::InstructionSequence#node_id], [m:RubyVM::InstructionSequence#source_hash], [m:Proc#syntax_tree]
+
+#%end
+

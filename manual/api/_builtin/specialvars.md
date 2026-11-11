@@ -1,0 +1,676 @@
+## Special Variables
+
+### gvar $_ -> String | nil
+
+最後に [m:Kernel?.gets] または [m:Kernel?.readline] で読み込んだ文字列です。
+EOF に達した場合には、 nil になります。
+(覚え方: Perlと同じ)
+
+[m:Kernel?.print] のような Perl 由来の幾つかのメソッドは、引数を省略すると代わりに $_ を利用します。
+
+この変数はローカルスコープかつスレッドローカルです。
+Ruby起動時の初期値は nil です。
+
+- **SEE** [m:Kernel?.print], [m:Kernel?.gets], [m:Kernel?.readline], [m:Object::ARGF]
+
+### 例
+
+example.txt:
+
+```text
+foo
+bar
+baz
+```
+
+このとき、コマンド ruby -e 'print while gets' example.txt は次を出力します
+
+```text
+foo
+bar
+baz
+```
+
+ただし、このプログラムは次のように書く方がよりRuby的です。
+
+```ruby title="例"
+ARGF.each do |line|
+  print line
+end
+```
+
+### gvar $& -> String | nil
+
+現在のスコープで最後に成功した正規表現のマッチでマッチした文字列です。
+最後のマッチが失敗していた場合には nil となります。
+
+[m:Regexp.last_match][0] と同じです。
+
+この変数はローカルスコープかつスレッドローカル、読み取り専用です。
+Ruby起動時の初期値は nil です。
+
+```ruby title="例"
+str = '<p><a href="http://example.com">example.com</a></p>'
+if %r[<a href="(.*?)">(.*?)</a>] =~ str
+  p $& 
+end
+# => "<a href=\"http://example.com\">example.com</a>"
+```
+
+### gvar $~ -> MatchData | nil
+
+現在のスコープで最後に成功したマッチに関する [c:MatchData]オブジェクトです。
+[m:Regexp.last_match] の別名です。
+
+このデータから n 番目のマッチ ($n) を取り出すためには $~[n] を使います。
+
+この値に代入すると Regexp.last_match や、 [m:$&], [m:$1], [m:$2], ... などの関連する組み込み変数の値が変化します。
+MatchData オブジェクトでも nil でもない値を代入しようとすると [c:TypeError] が発生します。
+
+この変数はローカルスコープかつスレッドローカルです。
+Ruby起動時の初期値は nil です。
+
+```ruby title="例"
+str = '<p><a href="http://example.com">example.com</a></p>'
+if %r[<a href="(.*?)">(.*?)</a>] =~ str
+  p $~[1]
+end
+# => "http://example.com"
+```
+
+### gvar $` -> String | nil
+
+現在のスコープで最後に成功した正規表現のマッチでマッチした部分より前の文字列です。
+最後のマッチが失敗していた場合には nil となります。
+
+[m:Regexp.last_match].pre_match と同じです。
+
+この変数はローカルスコープかつスレッドローカル、読み取り専用です。
+Ruby起動時の初期値は nil です。
+
+```ruby title="例"
+str = '<p><a href="http://example.com">example.com</a></p>'
+if %r[<a href="(.*?)">(.*?)</a>] =~ str
+  p $`
+end
+# => "<p>"
+```
+
+### gvar $' -> String | nil
+
+現在のスコープで最後に成功した正規表現のマッチでマッチした部分より後ろの文字列です。
+最後のマッチが失敗していた場合には nil となります。
+
+[m:Regexp.last_match].post_match と同じです。
+
+この変数はローカルスコープかつスレッドローカル、読み取り専用です。
+Ruby起動時の初期値は nil です。
+
+```ruby title="例"
+str = '<p><a href="http://example.com">example.com</a></p>'
+if %r[<a href="(.*?)">(.*?)</a>] =~ str
+  p $'
+end
+# => "</p>"
+```
+
+### gvar $+ -> String | nil
+
+現在のスコープで最後に成功した正規表現のマッチでマッチした中で最後の括弧に対応する部分文字列です。
+
+最後のマッチが失敗していた場合には nil。
+いくつかある選択型のパターンのどれがマッチしたのか分からない時に便利です。
+
+この変数はローカルスコープかつスレッドローカルです。
+
+### gvar $1 -> String | nil
+### gvar $2 -> String | nil
+### gvar $3 -> String | nil
+### gvar $4 -> String | nil
+### gvar $5 -> String | nil
+### gvar $6 -> String | nil
+### gvar $7 -> String | nil
+### gvar $8 -> String | nil
+### gvar $9 -> String | nil
+### gvar $10 -> String | nil
+### gvar $11 -> String | nil
+
+最後に成功したマッチで n 番目の括弧にマッチした値が格納されます。
+該当する括弧がなければ nil が入っています。(覚え方: \数字 のようなもの)
+
+番号 n は任意の正整数にできますが、巨大な数に対しては常に nil を返し、警告を表示します。
+
+[`Regexp.last_match(1)`](m:Regexp.last_match),
+[`Regexp.last_match(2)`](m:Regexp.last_match), ... と同じ。
+
+これらの変数はローカルスコープかつスレッドローカル、読み取り専用です。
+
+```ruby title="例"
+str = '<p><a href="http://example.com">example.com</a></p>'
+if %r[<a href="(.*?)">(.*?)</a>] =~ str
+  print $1
+  print $2
+end
+# => "http://example.com"
+# => "example.com"
+```
+
+### gvar $? -> Process::Status | nil
+
+このスレッドで最後に終了した子プロセスのステータスです。
+
+[c:Process::Status] オブジェクトが入っています。
+子プロセスの終了時ステータスは [m:Process::Status#exitstatus] で得られます。
+
+この変数はスレッドローカルで読み取り専用です。
+
+- **SEE** [m:Process?.wait]
+- **SEE** [m:Process.last_status]
+
+### gvar $! -> Exception | nil
+
+最後に例外が発生したときの [c:Exception] オブジェクトです。
+該当する例外がないときは nil です。
+
+[m:Kernel?.raise] によって設定されます。
+
+この変数はスレッドローカル、読み取り専用です。
+
+### gvar $@ -> [String] | nil
+
+最後に例外が発生した時のバックトレースを表す配列です。
+[m:Kernel?.raise] によって設定されます。
+
+配列の各要素はメソッドの呼び出し位置を示す文字列で形式は
+
+```text
+"filename:line"
+```
+
+または
+
+```text
+#%since 3.4
+"filename:line:in 'methodname'"
+#%else
+"filename:line:in `methodname'"
+#%end
+```
+
+です。これは [m:Kernel?.caller] が返す値と同じ形式です。
+
+$@ へ値を代入するときは、[m:$!] が nil であってはいけません。
+$@ の値は、[m:$!].backtrace の値と同じです。
+また、$@ への代入は [m:$!].set_backtrace 呼び出しと同じです。
+
+文字列の配列でも nil でもない値を代入しようとすると、 [c:TypeError] 例外が発生します。
+
+この変数はスレッドローカルです。
+
+### gvar $SAFE -> object
+
+通常のグローバル変数です。
+
+Ruby 2.7 までは特殊変数でしたが、Ruby 3.0 から通常のグローバル変数になりました。
+
+### gvar $= -> bool
+
+過去との互換性のために残されていますが、もはや何の意味もありません。
+
+値は常に false です。代入しても無視されます。
+
+この変数はグローバルスコープです。
+
+```ruby title="例"
+$= = true # => warning: variable $= is no longer effective; ignored
+p $=      # => warning: variable $= is no longer effective
+          #    false
+```
+
+### gvar $/  -> String | nil
+### gvar $-0 -> String | nil
+
+入力レコード区切りを表す文字列です。
+awk の RS 変数のように働きます。
+
+[m:Kernel?.gets] のような「行」単位の読み込みメソッドが「行」の区切りとして使用します。
+Rubyがコマンドオプション -0 付きで起動されたときには -0 で指定された値が既定値となります。そうでないとき、既定値は "\n" です。
+
+この変数に nil を設定すると読み込みメソッドはファイル全体を一度に読み込みます。
+空文字列 "" を設定するとパラグラフモードとみなされ、
+2 つ以上連続した改行が「行」の区切りになります。
+
+$/ には正規表現は使えません。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $\ -> String | nil
+
+出力レコード区切りを表す文字列です。
+[m:Kernel?.print] が最後にこの文字列を出力します。
+
+デフォルトは nil で、何も出力しません。
+
+この変数はグローバルスコープです。
+
+### gvar $, -> String | nil
+
+デフォルトの出力フィールド区切り文字列です。
+[m:Array#join] で引数を省略した場合と、
+[m:Kernel?.print] の各引数の間で出力されます。
+
+デフォルト値は nil で、空文字列と同じ結果になります。
+
+Ruby 2.7からは nil 以外に変更することは非推奨になったため、
+nil 以外を代入すると警告がでるようになりました。
+
+この変数はグローバルスコープです。
+
+### gvar $;  -> Regexp | String | nil
+### gvar $-F -> Regexp | String | nil
+
+[m:String#split] で引数を省略した場合の区切り文字です。
+
+Ruby 2.7からは nil 以外に変更することは非推奨になったため、
+nil 以外を代入すると警告がでるようになりました。
+
+nilを設定すると特殊な分割を行います。
+詳細は [m:String#split] を参照してください。
+
+コマンドラインオプション -F を指定して Ruby を起動した場合、初期値は -F で指定した値です。
+それ以外の時には初期値は nil です。
+
+$; には任意のオブジェクトを代入できます。
+ただし、[m:String#split] の仕様変更を考慮すると常に正規表現を指定すべきです。
+
+Ruby のバージョンによらず動作するプログラムを書くときは
+$; に頼らないコードを書くべきです。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $. -> Integer
+
+いずれかの [c:IO] オブジェクトが最後に読んだ行の行番号です。
+[m:Object::ARGF] などの IO 互換のオブジェクトも $. を更新します。
+
+IO からの読み込みが起きるタイミングが予測不能であるような複雑なプログラムでは使用すべきではありません。特に、マルチスレッドプログラムではスレッド間で競合を起こす可能性があります。
+そのような場合には、 [m:IO#lineno] を使用してください。
+
+この変数はグローバルスコープです。
+Ruby起動時の初期値は 0 です。
+
+### gvar $< -> IO
+
+すべての引数または標準入力で構成される仮想ファイルです。
+定数 [m:Object::ARGF] の別名です。
+
+この変数はグローバルスコープ、読み取り専用です。
+
+### gvar $0 -> String
+### gvar $PROGRAM_NAME -> String
+
+現在実行中の Ruby スクリプトの名前を表す文字列です。
+
+OS と Ruby のバージョンによっては、この変数に代入すると [man:ps(1)] の出力が変化します。
+この機能はプログラムの現在の状態を表示するのに便利です。
+
+この変数はグローバルスコープです。
+
+### gvar $* -> [String]
+
+Rubyスクリプトに与えられた引数を表す配列です。
+組み込み定数 [m:Object::ARGV] の別名です。
+
+Ruby 自身に対する引数は取り除かれています。
+
+この変数はグローバルスコープです。
+
+### gvar $$ -> Integer
+
+現在実行中の Ruby プロセスのプロセス ID です。
+[m:Process?.pid] と同じです。
+
+この変数はグローバルスコープです。
+
+### gvar $:         -> [String]
+### gvar $LOAD_PATH -> [String]
+### gvar $-I        -> [String]
+
+Rubyライブラリをロードするときの検索パスです。
+
+[m:Kernel?.load] や [m:Kernel?.require]
+がファイルをロードする時に検索するディレクトリのリストを含む配列です。
+
+起動時にはコマンドラインオプション -I で指定したディレクトリ、環境変数 RUBYLIB の値、コンパイル時に指定したデフォルト値をこの順番で含みます。
+
+以下に典型的な UNIX システム上でのロードパスを示します。
+
+- `-I` で指定したパス
+- 環境変数 RUBYLIB の値
+- `/usr/local/lib/ruby/site_ruby/VERSION` -- サイト固有、バージョン依存のライブラリ
+- `/usr/local/lib/ruby/site_ruby/VERSION/ARCH` -- サイト固有、システム依存、拡張ライブラリ
+- `/usr/local/lib/ruby/site_ruby` -- サイト固有ライブラリ
+- `/usr/local/lib/ruby/VERSION` -- 標準ライブラリ
+- `/usr/local/lib/ruby/VERSION/ARCH` -- 標準、システム依存、拡張ライブラリ
+
+上記の VERSION は Ruby のバージョンを表す文字列で、「1.6」や「1.8」です。
+ARCH はハードウェアと OS を表す文字列で、「i686-linux」や「alpha-osf5.1」などです。
+ARCH の値は Config::CONFIG['arch'] で得られます。
+
+コンパイル時のデフォルトパスは多くの UNIX システムでは "/usr/local/lib/ruby" です。
+[d:platform/mswin32]、[d:platform/mingw32]、[d:platform/Cygwin]
+環境では
+ruby.dll の位置からの相対で決まります。
+
+require 'foo' を実行すると、以下のように foo.rb と foo.so が交互に探索されます。
+
+```text
+/usr/local/lib/ruby/site_ruby/VERSION/foo.rb
+/usr/local/lib/ruby/site_ruby/VERSION/foo.so
+/usr/local/lib/ruby/site_ruby/VERSION/ARCH/foo.rb
+/usr/local/lib/ruby/site_ruby/VERSION/ARCH/foo.so
+  :
+  :
+```
+
+なお、共有ライブラリの拡張子が .so でないシステムでは「.so」が適切な拡張子に変更されます。
+例えば HP-UX では require 'foo.so' とすると foo.sl を検索します。
+したがって Ruby で記述されたコードでは常に .so を使うべきです。
+
+なお、ロードパスをコマンドラインから調べるには
+
+```console
+$ ruby -e 'puts $:'
+```
+
+とします。
+
+$LOAD_PATH の特異メソッドとして resolve_feature_path が定義されています。
+require を呼んだときに読み込まれるファイルを特定できます。
+
+```ruby
+p $LOAD_PATH.resolve_feature_path('set')
+# => [:rb, "/build-all-ruby/2.7.0/lib/ruby/2.7.0/set.rb"]
+```
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd], [d:spec/envvars]
+
+### gvar $"               -> [String]
+### gvar $LOADED_FEATURES -> [String]
+
+[m:Kernel?.require] でロードされたファイル名を含む配列です。
+
+[m:Kernel?.require] で同じファイルを複数回ロードしないようにするためのロックとして使われます。
+
+この変数はグローバルスコープです。
+
+### gvar $DEBUG -> bool
+### gvar $-d    -> bool
+
+この値が真のときはインタプリタがデバッグモードになります。
+
+コマンドラインオプション -d でセットされます。
+スクリプトから代入することもできます。
+
+デバッグモードでは、通常モードに比べて以下の違いがあります。
+
+- 通常時はいずれかのスレッドが例外によって終了しても
+   他のスレッドは実行を続けますが、デバッグモードでは
+   いずれかのスレッドが例外によって終了した時に
+   インタプリタ全体が中断されるようになります。
+   [m:Thread.abort_on_exception] を
+   true にセットするのと同じ効果です。
+- Thread.abort_on_exception= の効果がなくなります。
+- 例外を捕捉しているかどうかに関係なく、
+   例外が発生した時点で [m:$stderr] にそれが出力されます。
+   スクリプトの処理は続行されます。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $FILENAME -> String
+
+仮想ファイル [m:Object::ARGF] で現在読み込み中のファイル名です。
+[m:ARGF.class#filename] と同じです。
+
+この変数はグローバルスコープです。
+
+### gvar $stdin -> object
+
+標準入力です。
+
+自プロセスの標準入力をリダイレクトしたいときは
+$stdin に代入すれば十分です。
+
+```ruby title="例"
+# 標準入力の入力元 /tmp/foo に変更
+$stdin = File.open("/tmp/foo", "r")
+gets               # 入力する
+$stdin = STDIN     # 元に戻す
+```
+
+ただし、[m:Kernel?.gets] など、特定の組み込みメソッドは
+$stdin オブジェクトにメソッドを転送して実装されています。
+従って、[m:Kernel?.gets] などが正しく動作するには、
+$stdin オブジェクトに代入したオブジェクトが以下のメソッドを正しく実装していなければいけません。
+
+```text
+gets, readline, readlines, getc, readchar, tell, seek,
+pos=, rewind, fileno, to_io, eof, each_line, each_byte,
+binmode, closed?
+```
+
+```ruby title="例"
+$stdin = Object.new
+def $stdin.gets
+  "foo"
+end
+p gets()  # => "foo"
+```
+
+自プロセスだけでなく、子プロセスの標準入力もリダイレクトしたいときは以下のように [m:IO#reopen] を使います。
+
+```ruby title="例"
+$stdin.reopen("/tmp/foo")
+```
+
+また、リダイレクトしたあと入力先をまた元に戻したい場合は以下のようにします。
+
+```ruby title="例"
+stdin_old = $stdin.dup       # 元の $stdin を保存する
+$stdin.reopen("/tmp/foo")    # $stdin を /tmp/foo にリダイレクトする
+gets                         # /tmp/foo から入力
+$stdin.reopen stdin_old      # 元に戻す
+```
+
+$stdin はグローバルスコープです。
+
+### gvar $>      -> object
+### gvar $stdout -> object
+
+標準出力です。
+
+組み込み関数 [m:Kernel?.print]、[m:Kernel?.puts] や
+[m:Kernel?.p] などのデフォルトの出力先となります。
+初期値は [m:Object::STDOUT] です。
+コマンドラインオプション -i を指定した場合には読み込み元と同じ名前のファイルを表します。
+
+$stdout に代入するオブジェクトには
+write という名前のメソッドが定義されていなければいけません。
+
+自プロセスの標準出力をリダイレクトしたいときには、以下のように $stdout に代入すれば十分です。
+
+```ruby title="例"
+# 標準出力の出力先を /tmp/foo に変更
+$stdout = File.open("/tmp/foo", "w")
+puts "foo"         # 出力する
+$stdout = STDOUT   # 元に戻す
+```
+
+自プロセスだけでなく、子プロセスの標準出力もリダイレクトしたいときは以下のように [m:IO#reopen] を使います。
+
+```ruby title="例"
+STDOUT.reopen("/tmp/foo", "w")
+```
+
+また、リダイレクトしたあと出力先をまた元に戻したい場合は以下のようにします。
+
+```ruby title="例"
+stdout_old = $stdout.dup        # 元の $stdout を保存する
+$stdout.reopen("/tmp/foo")      # $stdout を /tmp/foo にリダイレクトする
+puts "foo"                      # /tmp/foo に出力
+$stdout.flush                   # 念のためフラッシュする
+$stdout.reopen stdout_old       # 元に戻す
+```
+
+$stdout はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $stderr -> object
+
+標準エラー出力です。
+
+Ruby インタプリタが出力するエラーメッセージや警告メッセージ、[m:Kernel?.warn] の出力先となります。
+初期値は [m:Object::STDERR] です。
+
+$stderr に代入するオブジェクトには
+write という名前のメソッドが定義されていなければいけません。
+
+自プロセスの標準エラー出力をリダイレクトしたいときには、
+$stderr に代入すれば十分です。
+
+```ruby title="例"
+# 標準エラー出力の出力先を /tmp/foo に変更
+$stderr = File.open("/tmp/foo", "w")
+puts "foo"         # 出力する
+$stderr = STDERR   # 元に戻す
+```
+
+自プロセスだけでなく、子プロセスの標準エラー出力もリダイレクトしたいときは以下のように [m:IO#reopen] を使います。
+
+```ruby title="例"
+$stderr.reopen("/tmp/foo", "w")
+```
+
+また、リダイレクトしたあと出力先をまた元に戻したい場合は以下のようにします。
+
+```ruby title="例"
+stderr_old = $stderr.dup        # 元の $stderr を保存する
+$stderr.reopen("/tmp/foo")      # $stderr を /tmp/foo にリダイレクトする
+puts "foo"                      # /tmp/foo に出力
+$stderr.flush                   # 念のためフラッシュする
+$stderr.reopen stderr_old       # 元に戻す
+```
+
+$stderr はグローバルスコープです。
+
+### gvar $VERBOSE -> bool | nil
+### gvar $-v      -> bool | nil
+### gvar $-w      -> bool | nil
+
+冗長メッセージフラグです。Rubyインタプリタへのコマンドラインオプション -v でセットされます。
+
+警告レベルは三段階あり、それぞれ以下の通りです。
+
+- **`nil`**:
+    警告を出力しない
+- **`false`**:
+    重要な警告のみ出力 (デフォルト)
+- **`true`**:
+    すべての警告を出力する
+
+$VERBOSE に nil, false 以外を代入すると値は true になります。
+
+$VERBOSE の値はコマンドラインオプション
+-W でも設定できます。
+-W0 オプションで nil、
+-W1 オプションで false、
+-W2, -W オプションで true が設定されます。
+-d, -v, -w の各オプションによっても
+true が設定されます。
+
+$VERBOSE はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $KCODE -> object
+### gvar $-K    -> object
+
+通常のグローバル変数です。
+
+Ruby 2.7 までは特殊変数でしたが、Ruby 3.0 から通常のグローバル変数になりました。
+任意のオブジェクトを代入して nil 以外の値に設定できます。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $-a -> bool
+
+自動 split モードを表すフラグです。
+
+コマンドラインオプション -a を使ったとき true に設定されます。
+この変数には代入できません。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $-i -> String | nil
+
+in-place 置換モードで用いられます。
+
+コマンドラインオプション -i を指定したとき、空文字列になります。
+-i オプションに拡張子を渡した場合にはその拡張子が文字列として格納されます。
+
+-i オプションが指定されていない時の値は nil です。
+
+スクリプト内で $-i に代入することもでき、その場合は [m:Object::ARGV] の次のファイルを読み込み始めるタイミングで in-place 置換を開始します。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $-l -> bool
+
+コマンドラインオプション -l を指定したとき true に設定されます。
+この変数には代入できません。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $-p -> bool
+
+コマンドラインオプション -p を指定したとき true に設定されます。
+この変数には代入できません。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+
+### gvar $-W -> 0 | 1 | 2
+
+コマンドラインオプション -W を指定したとき、そのコマンドライン引数の値が設定されます。
+
+つまり、[m:$VERBOSE] の値によって以下の値を返します。
+
+- **`nil`**:
+    0。警告を出力しない。
+- **`false`**:
+    1。重要な警告のみ出力する。(デフォルト)
+- **`true`**:
+    2。すべての警告を出力する。
+
+この変数には代入できません。
+
+この変数はグローバルスコープです。
+
+- **SEE** [d:spec/rubycmd]
+

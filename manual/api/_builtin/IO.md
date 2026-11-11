@@ -1,0 +1,2485 @@
+---
+library: _builtin
+include:
+  - Enumerable
+  - File::Constants
+---
+# class IO < Object
+
+基本的な入出力機能のためのクラスです。
+
+#%#  * [[unknown:Traps: IO ポートのオープンに関わる問題|trap::IO]]
+
+File::Constants は、[c:File] から IO へ移動しました。
+
+### 多言語化と IO のエンコーディング {#m17n}
+
+IO オブジェクトはエンコーディングを持ちます。
+エンコーディングの影響を受けるメソッドと受けないメソッドがあります。
+
+影響を受けるメソッドでは、IO のエンコーディングに従い読み込まれた文字列のエンコーディングが決定されます。
+また IO のエンコーディングを適切に設定することにより、読み込み時・書き込み時に文字列のエンコーディングを変換させることもできます。
+
+#### エンコーディングの影響を受けるメソッドと受けないメソッド
+
+IO の読み込みメソッドは2種類存在します。
+テキスト読み込みメソッドとバイナリ読み込みメソッドです。
+
+テキスト読み込みメソッドは IO のエンコーディングの影響をうけます。
+詳しくは「[ref:io_encoding]」を参照して下さい。
+以下がテキスト読み込みメソッドです。
+
+- [m:IO.foreach]
+- [m:IO.readlines]
+- [m:IO#each_line]
+- [m:IO#gets]
+- [m:IO#getc]
+- [m:IO#ungetc]
+- [m:IO#read]
+- [m:IO#readchar]
+- [m:IO#readline]
+- [m:IO#readlines]
+
+バイナリ読み込みメソッドは IO のエンコーディングの影響を受けません。
+返す文字列のエンコーディングは常に ASCII-8BIT になります。
+以下がバイナリ読み込みメソッドです。
+
+- [`IO#read(size)`](m:IO#read)
+- [m:IO#read_nonblock]
+- [m:IO#readpartial]
+- [m:IO#sysread]
+
+また書き込みメソッド [m:IO#write] も IO のエンコーディングの影響を受けます。
+IO のすべての書き込みメソッドは内部で [m:IO#write] を呼びますので、書き込みメソッドはすべて IO のエンコーディングの影響を受けます。
+
+シーク関連のメソッドはエンコーディングの影響を受けません。
+常に1バイトを単位として動作します。
+
+```ruby title="例"
+f = File.open('t.txt', 'r+:euc-jp')
+p f.getc.encoding                             # => Encoding::EUC_JP
+p f.read(1).encoding                          # => Encoding::ASCII_8BIT 
+```
+
+#### IO のエンコーディングとエンコーディングの変換 {#io_encoding}
+
+IO オブジェクトは外部エンコーディングと内部エンコーディングを持ちます。
+外部エンコーディングとは IO が表すファイルなどの文字エンコーディングです。
+内部エンコーディングとは IO から読み込まれた文字列、あるいは IO の書き込みメソッドへ渡す文字列の文字エンコーディングです。
+
+以下の三通りがあります。
+
+- **IO のエンコーディングが指定されていない場合**:
+
+  IO からテキスト読み込みメソッドによって読み込まれた文字列のエンコーディングは [m:Encoding.default_external]
+  に設定されます。このとき実際の文字エンコーディングは検査されず、変換もされません。
+
+- **外部エンコーディングのみが指定されている場合**:
+
+  IO からテキスト読み込みメソッドによって読み込まれた文字列のエンコーディングは外部エンコーディング
+  に設定されます。このとき実際の文字エンコーディングは検査されず、変換もされません。
+
+  IO へ書き込まれる文字列は外部エンコーディングへと変換されます。
+  外部エンコーディングへの変換方法が分からない場合は例外が発生します。
+
+- **外部エンコーディングと内部エンコーディング(あるいは default_internal)が指定されている場合**:
+  IO からテキスト読み込みメソッドによって読み込まれた文字列は、外部エンコーディングから内部エンコーディング(あるいは default_internal)へと変換されます。
+  指定された文字エンコーディングと実際の文字エンコーディングが違っていた場合、例外が発生します。
+  内部エンコーディングと  [m:Encoding.default_internal] が両方とも指定されている場合は、内部エンコーディングが優先されます。
+
+  IO へ書き込まれる文字列は外部エンコーディングへと変換されます。
+  外部エンコーディングへの変換方法が分からない場合は例外が発生します。
+
+IO に対してエンコーディングを指定する方法には、生成時に [m:IO.open] や [m:File.open]
+に渡すモードとともに指定するものと生成後に [m:IO#set_encoding] を使って指定するものの二通りがあります。詳しくはそれぞれのメソッドの項を参照して下さい。通常は前者の方法を使います。
+
+```ruby title="例1"
+f = File.open('file1')
+p f.getc.encoding        # => Encoding::EUC_JP
+```
+
+```ruby title="例2"
+f = File.open('t.txt', 'w+:shift_jis:euc-jp')
+f.write "\xB4\xC1\xBB\xFA"            # 文字列 "漢字" の EUC-JP リテラル
+f.rewind
+s = f.read(4)
+puts s.dump                           # => "\x8A\xBF\x8E\x9A" 
+                                      # エンコーディングがSJISへ変換されていることが分かる。
+```
+
+##### まとめ
+
+以上をまとめると以下の表のようになります。[m:Encoding.default_external] は常に設定されているので、省略してあります。
+
+読み込んだ文字列のエンコーディング
+
+| | バイナリ読み込みメソッド | テキスト読み込みメソッド |
+|--------------------------|------------|------------------- |
+| 指定無し                  | ASCII-8BIT | default_external |
+| default_internal のみ    | ASCII-8BIT | default_internal |
+| 外部エンコーディングのみ    | ASCII-8BIT | 外部エンコーディング |
+| 内部エンコーディング指定あり | ASCII-8BIT | 内部エンコーディング |
+| 内部エンコーディングと default_internal 両方 | ASCII-8BIT | 内部エンコーディング |
+
+エンコーディングの変換
+
+| | バイナリ読み込みメソッド | テキスト読み込みメソッド | 書き込みメソッド |
+|------------------------|--------|---------|---------|
+| 指定無し                | 変換なし | 変換なし | 変換なし |
+| 外部エンコーディングのみ   | 変換なし | 変換なし | 変換あり |
+| default_internal のみ  | 変換なし | 変換あり | 変換あり |
+| 内部エンコーディングのみ   | 変換なし | 変換あり | 変換あり |
+| 外部エンコーディングと内部エンコーディング  | 変換なし | 変換あり | 変換あり |
+| 外部エンコーディングと default_internal | 変換なし | 変換あり | 変換あり |
+
+#### デフォルトの外部エンコーディングの指定
+
+[m:Encoding.default_external] はコマンドオプション -E で指定します。
+-E が指定されなかった場合は次のような優先順位で決定されます。
+
+```text
+-E (最優先) > -K > locale
+```
+
+#### ファイル名のエンコーディング
+
+ファイル名の文字エンコーディングはプラットフォームに依存します。
+ファイル名の文字エンコーディングが固定されているプラットフォーム(Win, Mac)では、エンコーディングは暗黙に変換されます(予定)。UNIX では変換されずそのままシステムコールに渡されます。
+
+[m:Dir.glob], [m:Dir.foreach] などが返すファイル名のエンコーディングも同様にプラットフォーム依存です。
+#%#Win, Mac では UTF-8 です(予定)。
+UNIX では ASCII-8BIT です。
+
+#### バイナリモード {#io_binmode}
+
+Windows の IO にはテキストモードとバイナリモードという2種類のモードが存在します。
+これらのモードは上で説明した IO のエンコーディングとは独立です。改行の変換にしか影響しません。
+
+### EOF での読み込みメソッドの振る舞いの違い
+
+空ファイルや EOF での各読み込みメソッドの振る舞いは以下のとおりです。
+ただし、length を指定できるメソッドに関しては、length に nil または 0 を指定した場合、
+EOF であっても常に空文字列 "" を返します。
+
+| メソッド                 | 空のファイルに対して |
+|-------------------------|-------------------|
+| IO.read(空ファイル)         | `""` |
+| IO.read(空ファイル, length)  | `nil` |
+| IO.readlines(空ファイル)    | `[]` |
+| IO.foreach(空ファイル)      | 何もしない |
+
+|メソッド            | 既にEOFだったら|
+|------------------|-----------|
+| IO#each_byte     | 何もしない |
+| IO#getc          | `nil` |
+| IO#gets          | `nil` |
+| IO#read()        | `""` |
+| IO#read(length)  | `nil` |
+| IO#read_nonblock | `EOFError` |
+| IO#readchar      | `EOFError` |
+| IO#readline      | `EOFError` |
+| IO#readlines     | `[]` |
+| IO#readpartial   | `EOFError` |
+| IO#sysread       | `EOFError` |
+
+## Class Methods
+
+### def IO.copy_stream(src, dst, copy_length = nil)             -> Integer
+### def IO.copy_stream(src, dst, copy_length, src_offset) -> Integer
+
+指定された src から dst へコピーします。
+コピーしたバイト数を返します。
+
+コピー元の src が IO オブジェクトの場合は、src のオフセットからファイル名の場合はファイルの最初からコピーを開始します。
+コピー先の dst に関しても同様です。
+
+dst にファイル名を指定し、そのファイルが存在しない場合、ファイルは作成されます。ファイルが存在する場合は長さ 0 に切り詰められます。
+
+src が IO オブジェクトでかつ src_offset が指定されている場合、
+src のオフセット(src.pos)は変更されません。
+
+- **param** `src` -- コピー元となる IO オブジェクトかファイル名を指定します。
+                   IO オブジェクトやファイル名に限らず、readpartial または
+                   read に応答するオブジェクトも指定できます。
+
+- **param** `dst` -- コピー先となる IO オブジェクトかファイル名を指定します。
+                   IO オブジェクトやファイル名に限らず、write に応答するオブジェクトも指定できます。
+
+- **param** `copy_length` -- コピーする長さをバイト単位で指定します。最大 copy_length までコピーされます。
+                   nil を指定した場合、コピーする長さに制限はありません。
+
+- **param** `src_offset` --  コピーを始めるオフセットを数値で指定します。
+
+```ruby title="例"
+IO.write("filetest", "abcdefghij")
+p IO.copy_stream("filetest", "filecopy", 2)   # => 2
+p IO.read("filecopy")                         # => "ab"
+p IO.copy_stream("filetest", "filecopy", 3, 4)  # => 3
+p IO.read("filecopy")                         # => "efg"
+```
+
+```ruby title="例: readpartial/read や write に応答するオブジェクトを指定する"
+require "stringio"
+src = StringIO.new("hello world")
+dst = StringIO.new
+p IO.copy_stream(src, dst)   # => 11
+p dst.string                 # => "hello world"
+```
+
+### def IO.try_convert(obj) -> IO | nil
+
+obj を to_io メソッドによって [c:IO] オブジェクトに変換します。
+変換できなかった場合は nil を返します。
+
+```ruby
+p IO.try_convert(STDOUT)   # => STDOUT
+p IO.try_convert("STDOUT") # => nil
+```
+
+### def IO.new(fd, mode = "r", **opts)                -> IO
+### def IO.for_fd(fd, mode = "r", **opts)             -> IO
+
+オープン済みのファイルディスクリプタ fd に対する新しい
+IO オブジェクトを生成して返します。
+
+IO.new, IO.for_fd はブロックを受け付けません。ブロック付きで呼び出すには [m:IO.open] を使います。
+
+### キーワード引数
+
+このメソッドは以下のキーワード引数を利用できます。
+  - :mode mode引数と同じ意味です
+  - :external_encoding 外部エンコーディング。"-" はデフォルト外部エンコーディングの
+    別名です。
+  - :internal_encoding 内部エンコーディング。"-" はデフォルト内部エンコーディングの
+    別名です。nilなら変換しません。
+  - :encoding "extenc:intenc" の形で外部/内部エンコーディングを指定します。
+  - :textmode 真を渡すと mode の "t" と同じ意味になります。
+  - :binmode 真を渡すと mode の "b" と同じ意味になります。
+  - :autoclose 偽を渡すと close時/GCでのファイナライザ呼出時に fd を close しません。
+  - :newline 改行の変換方法を指定します。指定するとテキストモードになるため、
+    mode の "b" や :binmode と同時には指定できません(指定すると ArgumentError が発生します)。
+    :universal は読み込み時に "\r\n", "\r", "\n" のいずれの改行も "\n" に変換します。
+    :crlf は書き込み時に "\n" を "\r\n" に変換します。
+    :cr は書き込み時に "\n" を "\r" に変換します。
+    :lf は改行の変換を行いません。
+#%since 3.2
+  - :path 文字列を渡すと、[m:IO#path] メソッドがその値を返すようになります。
+#%end
+また、[m:String#encode] で説明されている :invalid => :replace などの変換オプションも指定できます。外部エンコーディングから内部エンコーディングへの変換をするときに用いられます。
+
+- **param** `fd` -- ファイルディスクリプタである整数を指定します。
+
+- **param** `mode` -- [m:Kernel?.open] と同じ形式で IO のモードを指定します。[m:File::Constants::RDONLY] などの定数(数値)でモードを指定できます。詳細は組み込み関数 [m:Kernel?.open] を参照してください。
+            mode は省略可能で、省略時のデフォルトのモードは、
+            [man:fcntl(2)] で F_GETFL フラグが利用できる環境では第一引数で指定した fd のモードを引き継ぎ、利用できない環境では "r" になります。
+
+- **param** `opts` -- キーワード引数
+
+- **raise** `Errno::EXXX` -- IO オブジェクトの生成に失敗した場合に発生します。
+
+```ruby title="例:IO.new による読み込みモードでのファイルオープン"
+io = IO.new(IO.sysopen("testfile"))
+p io.class # => IO
+io.close
+```
+
+```ruby title="例:IO.for_fd による読み込み・バイナリモードでのファイルオープン"
+IO.binwrite("testfile", "\xBF\xAA\x16\x04.\b\xCB\x12\xACoeQ\xFDv2\xCF9+\x81\x18")
+io = IO.for_fd(IO.sysopen("testfile"), "r", binmode: true)
+p io.class # => IO
+p io.binmode? # => true
+io.close
+```
+
+- **SEE** [m:IO.open]
+
+### def IO.open(fd, mode = "r", **opts)               -> IO
+### def IO.open(fd, mode = "r", **opts) {|io| ... }   -> object
+
+オープン済みのファイルディスクリプタ fd に対する新しい
+IO オブジェクトを生成して返します。
+
+ブロックが与えられた場合、IO オブジェクトを生成しそれを引数としてブロックを実行します。ブロックの終了とともに fd はクローズされます。ブロックの結果を返します。
+
+- **param** `fd` -- ファイルディスクリプタである整数を指定します。
+
+- **param** `mode` -- [m:IO.new] の mode と同じです。
+
+- **param** `opts` -- キーワード引数。指定できるオプションは [m:IO.new] を参照してください。
+
+- **raise** `Errno::EXXX` -- IO オブジェクトの生成に失敗した場合に発生します。
+
+```ruby title="例"
+p IO.open(IO.sysopen("testfile")) { |io| p io.class } # => IO
+```
+
+- **SEE** [m:IO.new]
+
+### def IO.foreach(path, rs = $/, chomp: false, **opts) {|line| ... }    -> nil
+### def IO.foreach(path, rs = $/, chomp: false, **opts)                  -> Enumerator
+
+path で指定されたファイルの各行を引数としてブロックを繰り返し実行します。
+path のオープンに成功すれば nil を返します。
+
+ブロックが与えられなかった場合は、path で指定されたファイルの各行を繰り返す
+[c:Enumerator] オブジェクトを生成して返します。
+
+テキスト読み込みメソッドとして動作します。
+
+path が空ファイルの場合、何もせずに nil を返します。
+#%since 4.0
+Ruby 3.x までは path の先頭が "|" のとき "|" に続くコマンドの出力を読み取れましたが、この機能は Ruby 4.0 で削除され、"|" で始まる path も通常のファイル名として扱われます。
+#%else
+[m:Kernel?.open] と同様 path の先頭が "|" ならば、"|" に続くコマンドの出力を読み取ります。
+#%since 3.3
+なお、この "|" によるコマンド起動は Ruby 3.3 から deprecated であり、Ruby 4.0 で削除されました。[m:IO.popen] を使用してください。
+#%end
+#%end
+
+#%since 4.0
+- **param** `path` -- ファイル名を表す文字列を指定します。
+#%else
+- **param** `path` -- ファイル名を表す文字列か "|コマンド名" を指定します。
+#%end
+
+- **param** `rs` -- 行の区切りを文字列で指定します。rs に nil を指定すると行区切りなしとみなします。
+          空文字列 "" を指定すると連続する改行を行の区切りとみなします(パラグラフモード)。
+
+- **param** `chomp` -- true を指定すると各行の末尾から "\n", "\r", または "\r\n" を取り除きます。
+
+- **param** `opts` -- ファイル path を open する時に使われるオプションをキーワード引数で指定します。
+          `:encoding` で読み込んだ行のエンコーディングを、
+          `:mode` で [m:IO.open] のモード文字列を指定できます。
+          これらの他、[m:IO.new] のオプション引数(`:external_encoding` など)が指定できます。
+
+- **raise** `Errno::EXXX` -- path のオープンに失敗した場合、発生します。
+
+```ruby title="例:rs 指定なし"
+IO.write("testfile", "line1\nline2,\nline3\n")
+p IO.foreach("testfile")  # => #<Enumerator: IO:foreach("testfile")>
+IO.foreach("testfile") { |x| print "GOT ", x }
+# => GOT line1
+# GOT line2,
+# GOT line3
+```
+
+```ruby title="例:カンマを行の区切りに指定（ rs = \",\" ）"
+IO.write("testfile", "line1,line2,line3")
+IO.foreach("testfile", ",") { |x| puts "GOT #{x}" }
+# => GOT line1,
+# GOT line2,
+# GOT line3
+```
+
+```ruby title="例: 各行の末尾から \"\\n\", \"\\r\", または \"\\r\\n\" を取り除く（chomp = true）"
+IO.write("testfile", "line1\nline2,\nline3\n")
+IO.foreach("testfile", chomp: true) { |x| print "GOT ", x }
+# => GOT line1GOT line2,GOT line3
+```
+
+```ruby title="例: エンコーディングを指定"
+IO.write("testfile", "line1\nline2,\nline3\n")
+IO.foreach("testfile", encoding: "UTF-8") { |x| p x.encoding }
+# => #<Encoding:UTF-8>
+# #<Encoding:UTF-8>
+# #<Encoding:UTF-8>
+```
+
+- **SEE** [m:$/]
+
+### def IO.pipe                    -> [IO]
+### def IO.pipe(ext_enc)           -> [IO]
+### def IO.pipe(enc_str, **opts)           -> [IO]
+### def IO.pipe(ext_enc, int_enc, **opts)  -> [IO]
+### def IO.pipe{|read_io, write_io| ... } -> object
+### def IO.pipe(ext_enc){|read_io, write_io| ... } -> object
+### def IO.pipe(enc_str, **opts){|read_io, write_io| ... }           -> object
+### def IO.pipe(ext_enc, int_enc, **opts){|read_io, write_io| ... }  -> object
+
+[man:pipe(2)] を実行して、相互につながった2つの
+[c:IO] オブジェクトを要素とする配列を返します。
+
+戻り値の配列は最初の要素が読み込み側で、次の要素が書き込み側です。
+
+ブロックが渡された場合は、そのブロックに2つの IO オブジェクトが渡され、ブロックの返り値がこのメソッドの返り値となります。
+ブロック終了時に IO オブジェクトがもし close されていないならば
+close します(close されていてるオブジェクトはそのままです)。
+
+得られる2つの IO オブジェクトのエンコーディングを引数で指定できます。
+
+- **param** `enc_str` -- 読み込み側の外部エンコーディングを文字列で指定します。
+               文字列がコロンを挟んだ二つのエンコーディング名 "A:B" である場合最初のものが外部エンコーディング、次が内部エンコーディングを意味します。
+
+- **param** `ext_enc` -- 読み込み側の外部エンコーディングを Encoding オブジェクトで指定します。
+
+- **param** `int_enc` -- 読み込み側の内部エンコーディングを Encoding オブジェクトで指定します。
+- **param** `opts` -- エンコーディングなどを設定するキーワード引数(see [m:IO.new])
+
+- **raise** `Errno::EXXX` -- IO オブジェクトの作成に失敗した場合に発生します。
+
+```ruby
+r, w = IO.pipe
+p [r, w]            # => [#<IO:0x401b90f8>, #<IO:0x401b7718>]
+Thread.new do
+  w.puts "foo"
+  w.close
+end
+p r.gets           # => "foo\n"
+```
+
+### def IO.popen(env = {}, command, mode = "r", opt={}) -> IO
+### def IO.popen(env = {}, command, mode = "r", opt={}){|f| ... } -> object
+### def IO.popen([env = {}, cmdname, *args, execopt={}], mode = "r", opt={}) -> IO
+### def IO.popen([env = {}, cmdname, *args, execopt={}], mode = "r", opt={}){|f| ... } -> object
+### def IO.popen([env = {}, [cmdname, arg0], *args, execopt={}], mode = "r", opt={}) -> IO
+### def IO.popen([env = {}, [cmdname, arg0], *args, execopt={}], mode = "r", opt={}){|f| ... } -> object
+### def IO.popen(env = {}, [cmdname, *args, execopt={}], mode = "r", opt={}) -> IO
+### def IO.popen(env = {}, [cmdname, *args, execopt={}], mode = "r", opt={}){|f| ... } -> object
+### def IO.popen(env = {}, [[cmdname, arg0], *args, execopt={}], mode = "r", opt={}) -> IO
+### def IO.popen(env = {}, [[cmdname, arg0], *args, execopt={}], mode = "r", opt={}){|f| ... } -> object
+
+サブプロセスを実行し、そのプロセスの標準入出力との間にパイプラインを確立します。生成したパイプを [c:IO] オブジェクトとして返します。
+
+```ruby
+p io = IO.popen("cat", "r+")  # => #<IO:fd 4>
+io.puts "foo"
+io.close_write
+p io.gets                     # => "foo\n"
+```
+
+サブプロセスを指定する方法は2通りあります。文字列を指定する場合と配列を指定する場合です。
+文字列の場合は、シェルを経由して子プロセスを実行し、配列の場合は、シェルを経由せずに子プロセスを実行します。
+
+シェルを経由しない場合(上のシグネチャで cmdname を含む場合)には *args
+がサブプロセスの引数として使われます。この場合には *args はシェルでのワイルドカード展開などはなされません。
+
+配列内に配列を指定することで、arg0(みせかけのプログラム名)を指定できます。
+
+ブロックが与えられた場合は生成した IO オブジェクトを引数にブロックを実行し、ブロックの実行結果を返します。ブロックの実行後、生成したパイプは自動的にクローズされます。
+
+```ruby
+p IO.popen("cat", "r+") {|io|
+  io.puts "foo"
+  io.close_write
+  io.gets
+}
+# => "foo\n"
+```
+
+opt でプロセス起動のためのオプションや、パイプ IO オブジェクトの属性(エンコーディングや読み書き能力)を指定できます。
+プロセス起動のためのオプションは [m:Kernel?.spawn] と、パイプオブジェクトの属性の指定のオプションは [m:IO.new] と共通です。
+つまり、 :external_encoding や :unsetenv_others が指定できます。
+オプションの詳しい意味は [m:Kernel?.spawn] や [m:IO.new] を参照してください。
+
+```ruby
+# nkfプロセスから得られる文字列を EUC-JP と指定する
+# IO.new などと共通のオプションが指定できる
+IO.popen("nkf -e filename", external_encoding: "EUC-JP"){|nkf_io|
+  nkf_io.read 
+}
+```
+
+これに加えて、プロセス起動のためのオプションを execopt で指定することもできます。
+execopt ではエンコーディングなどは指定できません。
+
+```ruby
+# 標準エラー出力を子プロセス側で標準出力にリダイレクトする
+# 標準エラー出力と標準出力がマージされる
+# Kernel.#spawn と共通のオプション
+IO.popen(["ls", "/", :err=>[:child, :out]]) {|ls_io|
+  ls_result_with_error = ls_io.read
+}
+  
+# 上と同じ、配列の外側でもオプションが指定できる
+IO.popen(["ls", "/"], :err=>[:child, :out]) {|ls_io|
+  ls_result_with_error = ls_io.read
+}
+```
+
+- **param** `env` -- 環境変数を { 変数名 => 内容 } という形式の [c:Hash] で渡します。
+- **param** `command` -- コマンド名を文字列で指定します。シェルを経由して実行されます。
+- **param** `cmdname` -- コマンド名を文字列で指定します
+- **param** `arg0` -- みせかけのコマンド名を指定します
+- **param** `args` -- コマンドのパラメータを文字列で指定します
+- **param** `execopt` -- プロセス実行に関するオプションを Hash で指定します。
+- **param** `mode` -- オープンする IO ポートのモードを指定します。mode の詳細は [m:Kernel?.open] 参照して下さい。
+- **param** `opt` -- プロセス実行やパイプのIOのエンコーディングなどを設定するオプションを指定します
+
+- **raise** `Errno::EXXX` -- パイプ、あるいは子プロセスの生成に失敗した場合に発生します。
+
+### def IO.popen("-", mode = "r", opt={})                -> IO
+### def IO.popen("-", mode = "r", opt={}) {|io| ... }    -> object
+### def IO.popen(env, "-", mode = "r", opt={})            -> IO
+### def IO.popen(env, "-", mode = "r", opt={}){|io| ... } -> object
+
+第一引数に文字列 "-" が指定された時、[man:fork(2)] を行い子プロセスの標準入出力との間にパイプラインを確立します。
+親プロセスでは IO オブジェクトを返し、子プロセスでは
+nil を返します。
+
+```ruby
+io = IO.popen("-", "r+")
+if io  # parent
+  io.puts "foo"
+  p io.gets                   # => "child output: foo\n"
+  io.close
+else   # child
+  s = gets
+  print "child output: " + s
+  exit
+end
+```
+  
+ブロックを与えられた場合、親プロセスでは生成した IO オブジェクトを引数にブロックを実行し、その結果を返します。ブロックの実行後、生成したパイプは自動的にクローズされます。
+子プロセスでは nil を引数にブロックを実行し終了します。
+
+```ruby
+p IO.popen("-", "r+") {|io|
+  if io   # parent
+    io.puts "foo"
+    io.gets
+  else    # child
+    s = gets
+    puts "child output: " + s
+  end
+}
+# => "child output: foo\n"
+```
+
+opt ではエンコーディングの設定やプロセス起動のためのオプションが指定できます。
+[m:IO.new] や [m:Kernel?.spawn] で指定できるものと共通なので詳しくはそちらを見てください。
+
+- **param** `env` -- 環境変数を { 変数名 => 内容 } という形式の [c:Hash] で渡します。
+- **param** `mode` -- オープンする IO ポートのモードを指定します。mode の詳細は [m:Kernel?.open] 参照して下さい。
+- **param** `opt` -- エンコーディングなどを設定するオプション引数(see [m:IO.new])
+
+- **raise** `Errno::EXXX` -- パイプ、あるいは子プロセスの生成に失敗した場合に発生します。
+
+### def IO.read(path, **opt)     -> String | nil
+### def IO.read(path, length = nil, **opt)     -> String | nil
+### def IO.read(path, length = nil, offset = 0, **opt)     -> String | nil
+
+path で指定されたファイルを offset 位置から
+length バイト分読み込んで返します。
+
+既に EOF に達している場合は nil を返します。ただし、length に nil か 0 が指定されている場合は、空文字列 "" を返します。例えば、IO.read(空ファイル) は "" を返します。
+
+引数 length が指定された場合はバイナリ読み込みメソッド、そうでない場合はテキスト読み込みメソッドとして動作します。
+
+#%since 4.0
+Ruby 3.x までは path の先頭が "|" のとき "|" に続くコマンドの出力を読み取れましたが
+(この特別扱いはレシーバが [c:IO] の場合のみ有効で、`File.read` では無効でした)、この機能は Ruby 4.0 で削除されました。
+現在は [m:IO.read]・`File.read` のいずれでも、"|" で始まる path は通常のファイル名として扱われます(該当するファイルが無ければ [c:Errno::ENOENT] が発生します)。
+
+```ruby
+IO.read("|echo hello")    # ~> Errno::ENOENT
+File.read("|echo hello")  # ~> Errno::ENOENT
+```
+
+#%else
+[m:Kernel?.open] と同様 path の先頭が "|" ならば、"|" に続くコマンドの出力を読み取ります。
+ただし、この "|コマンド名" の特別扱いはレシーバが [c:IO] である場合のみ有効です。
+[c:File] は [m:IO.read] を継承していますが、`File.read` では
+path の先頭が "|" であっても普通のファイル名として扱われ、コマンドは実行されません。
+
+```ruby title="例: レシーバによる違い"
+p IO.read("|echo hello")  # => "hello\n" (コマンドを実行する)
+p File.read("|echo hello")  # => Errno::ENOENT ("|echo hello" という名前のファイルを探そうとする)
+```
+
+#%since 3.3
+なお、この "|" によるコマンド起動は Ruby 3.3 から deprecated であり、Ruby 4.0 で削除されました。[m:IO.popen] を使用してください。
+#%end
+#%end
+
+#%since 4.0
+- **param** `path` -- ファイル名を表す文字列を指定します。
+#%else
+- **param** `path` -- ファイル名を表す文字列か "|コマンド名" を指定します。
+                   "|コマンド名" はレシーバが [c:IO] の場合のみ有効です。
+#%end
+
+- **param** `length` -- 読み込む長さを整数で指定します。nil であるか省略した場合には、EOF まで読み込みます。
+
+- **param** `offset` -- 読み込みを始めるオフセットを整数で指定します。
+
+- **param** `opt` -- ファイル path を open する時に使われるオプションをキーワード引数で指定します。
+
+- **raise** `Errno::EXXX` -- path のオープン、offset 位置への設定、ファイルの読み込みに失敗した場合に発生します。
+
+- **raise** `ArgumentError` -- length が負の場合に発生します。
+
+キーワード引数で有効なキーと値は以下のとおりです。
+
+- **`:encoding`**:
+  
+  読み込んだ文字列のエンコーディングを指定します。
+  読み込む長さを指定した場合はこれは無視されます。
+
+- **`:mode`**:
+  
+  [m:IO.open] のモードを指定します。
+  "r" で始まる文字列である必要があります。
+
+- **`:open_args`**:
+  
+  [m:IO.open] に渡される引数を配列で指定します。
+
+これらの他、 :external_encoding など
+[m:IO.open] のオプション引数が指定できます。
+
+- **SEE** [m:IO.binread]
+
+```ruby title="例"
+p IO.read(empty_file)           # => ""
+p IO.read(empty_file, 1)        # => nil
+p IO.read(one_byte_file, 0, 10) # => ""
+p IO.read(one_byte_file, nil, 10) # => "" 
+p IO.read(one_byte_file, 1, 10) # => nil
+```
+
+### def IO.binread(path, length = nil, offset = 0)     -> String | nil
+
+path で指定したファイルを open し、offset の所まで seek し、
+length バイト読み込みます。
+
+#%since 4.0
+Ruby 3.x までは path の先頭が "|" のとき "|" に続くコマンドの出力を読み取れましたが
+([m:IO.read] と同様、レシーバが [c:IO] の場合のみ)、この機能は Ruby 4.0 で削除され、
+[m:IO.binread]・`File.binread` のいずれでも "|" で始まる path は通常のファイル名として扱われます。
+#%else
+[m:Kernel?.open] と同様 path の先頭が "|" ならば、"|" に続くコマンドの出力を読み取ります。
+[m:IO.read] と同様、この "|コマンド名" の特別扱いはレシーバが [c:IO] である場合のみ有効で、`File.binread` では単なるファイル名として扱われます。
+#%since 3.3
+なお、この "|" によるコマンド起動は Ruby 3.3 から deprecated であり、Ruby 4.0 で削除されました。[m:IO.popen] を使用してください。
+#%end
+#%end
+
+length を省略するとファイルの末尾まで読み込みます。
+
+ファイルを開くときの mode は "rb:ASCII-8BIT" です。
+
+```ruby title="例"
+IO.write("testfile", "This is line one\nThis is line two\nThis is line three\nAnd so on...\n")
+p IO.binread("testfile")         # => "This is line one\nThis is line two\nThis is line three\nAnd so on...\n"
+p IO.binread("testfile", 20)     # => "This is line one\nThi"
+p IO.binread("testfile", 20, 10) # => "ne one\nThis is line "
+```
+
+- **SEE** [m:IO.read]
+
+### def IO.readlines(path, rs = $/, chomp: false, opts={})    -> [String]
+### def IO.readlines(path, limit, chomp: false, opts={})      -> [String]
+### def IO.readlines(path, rs, limit, chomp: false, opts={})  -> [String]
+
+path で指定されたファイルを全て読み込んで、その各行を要素としてもつ配列を返します。
+
+#%since 4.0
+Ruby 3.x までは path の先頭が "|" のとき "|" に続くコマンドの出力を読み取れましたが、この機能は Ruby 4.0 で削除され、"|" で始まる path も通常のファイル名として扱われます。
+#%else
+[m:Kernel?.open] と同様 path の先頭が "|" ならば、"|" に続くコマンドの出力を読み取ります。
+#%since 3.3
+なお、この "|" によるコマンド起動は Ruby 3.3 から deprecated であり、Ruby 4.0 で削除されました。[m:IO.popen] を使用してください。
+#%end
+#%end
+
+テキスト読み込みメソッドとして動作します。
+
+limit で最大読み込みバイト数を指定します。ただしマルチバイト文字が途中で切れないように余分に読み込む場合があります。
+
+opts でファイルを開くときのオプションを指定します。エンコーディングなどを指定できます。
+[m:File.open] と同様なのでそちらを参照してください。
+
+#%since 4.0
+- **param** `path` -- ファイル名を表す文字列を指定します。
+#%else
+- **param** `path` -- ファイル名を表す文字列か "|コマンド名" を指定します。
+#%end
+
+- **param** `rs` -- 行の区切りを文字列で指定します。rs に nil を指定すると行区切りなしとみなします。空文字列 "" を指定すると連続する改行を行の区切りとみなします(パラグラフモード)。
+- **param** `limit` -- 最大の読み込みバイト数
+- **param** `chomp` -- true を指定すると各行の末尾から rs を取り除きます。
+- **param** `opts` -- ファイルを開くときのオプション引数
+
+- **raise** `Errno::EXXX` -- path のオープン、ファイルの読み込みに失敗した場合に発生します。
+
+```ruby title="例"
+IO.write("testfile", "line1\nline2,\nline3\n")
+p IO.readlines("testfile")           # => ["line1\n", "line2,\n", "line3\n"]
+p IO.readlines("testfile", ",")      # => ["line1\nline2,", "\nline3\n"]
+```
+
+```ruby title="例: rs を取り除く（chomp = true）"
+IO.write("testfile", "line1,\rline2,\r\nline3,\n")
+p IO.readlines("testfile", chomp: true)      # => ["line1,\rline2,", "line3,"]
+p IO.readlines("testfile", "\r", chomp: true)  # => ["line1,", "line2,", "\nline3,\n"]
+```
+
+### def IO.select(reads, writes = [], excepts = [], timeout = nil)    -> [[IO]] | nil
+
+[man:select(2)] を実行します。
+
+与えられた入力/出力/例外待ちの  IO オブジェクトの中から準備ができたものをそれぞれ配列にして、配列の配列として返します。
+タイムアウトした時には nil を返します。
+
+- **param** `reads` -- 入力待ちする [c:IO] オブジェクトの配列を渡します。
+
+- **param** `writes` -- 出力待ちする [c:IO] オブジェクトの配列を渡します。
+
+- **param** `excepts` -- 例外待ちする [c:IO] オブジェクトの配列を渡します。
+
+- **param** `timeout` -- タイムアウトまでの時間を表す数値または nil を指定します。数値で指定したときの単位は秒です。nil を指定した時には IO がどれかひとつレディ状態になるまで待ち続けます。
+
+- **raise** `IOError` -- 与えられた IO オブジェクトが閉じられていた時に発生します。
+
+- **raise** `Errno::EXXX` -- [man:select(2)] に失敗した場合に発生します。
+
+```ruby
+rp, wp = IO.pipe
+mesg = "ping "
+100.times{
+  rs, ws, = IO.select([rp], [wp])
+  if r = rs[0]
+    ret = r.read(5)
+    print ret
+    case ret
+    when /ping/
+      mesg = "pong\n"
+    when /pong/
+      mesg = "ping "
+    end
+  end
+  if w = ws[0]
+    w.write(mesg)
+  end
+}
+```
+
+- **SEE** [m:Kernel?.select]
+
+### def IO.sysopen(path, mode = "r", perm = 0666)     -> Integer
+
+path で指定されるファイルをオープンし、ファイル記述子を返します。
+
+[m:IO.for_fd] などで IO オブジェクトにしない限り、このメソッドでオープンしたファイルをクローズする手段はありません。
+
+- **param** `path` -- ファイル名を表す文字列を指定します。
+
+- **param** `mode` -- モードを文字列か定数の論理和で指定します。[m:Kernel?.open] と同じです。
+
+- **param** `perm` -- [man:open(2)] の第 3 引数のように、ファイルを生成する場合のファイルのパーミッションを整数で指定します。[m:Kernel?.open] と同じです。
+
+- **raise** `Errno::EXXX` -- ファイルのオープンに失敗した場合に発生します。
+
+```ruby title="例"
+p IO.sysopen("testfile", "w+") # => 3
+```
+
+- **SEE** [m:Kernel?.open]
+
+### def IO.write(path, string, **opts) -> Integer
+### def IO.write(path, string, offset=nil, **opts) -> Integer
+
+path で指定されるファイルを開き、string を書き込み、閉じます。
+
+#%since 4.0
+Ruby 3.x までは path の先頭が "|" のとき "|" に続くコマンドを実行しましたが、この機能は Ruby 4.0 で削除され、"|" で始まる path も通常のファイル名として扱われます。
+#%else
+[m:Kernel?.open] と同様 path の先頭が "|" ならば、"|" に続くコマンドを実行し、コマンドの出力を標準出力に書き込みます。
+#%since 3.3
+なお、この "|" によるコマンド起動は Ruby 3.3 から deprecated であり、Ruby 4.0 で削除されました。[m:IO.popen] を使用してください。
+#%end
+#%end
+
+offset を指定するとその位置までシークします。
+
+offset を指定しないと、書き込みの末尾でファイルを切り捨てます。ただし、キーワード引数 mode に "a" (追記モード) を指定した場合は、ファイルは切り詰められず、既存の内容の末尾に string が追記されます。
+
+キーワード引数はファイルを開くときに使われ、エンコーディングなどを指定できます。
+詳しくは [m:IO.open] を見てください。
+
+- **param** `path` -- ファイル名文字列
+- **param** `string` -- 書き込む文字列
+- **param** `offset` -- 書き込み開始位置
+- **param** `opts` -- ファイルを開くときのキーワード引数
+
+```ruby title="例"
+text = "This is line one\nThis is line two\nThis is line three\nAnd so on...\n"
+p IO.write("testfile", text)            # => 66
+p IO.write("testfile", "0123456789", 20)  # => 10
+p IO.read("testfile")
+# => "This is line one\nThi0123456789two\nThis is line three\nAnd so on...\n"
+p IO.write("testfile", "0123456789")    # => 10
+p IO.read("testfile")                   # => "0123456789"
+```
+
+```ruby title="例: mode: \"a\" を指定した場合は切り詰められない"
+IO.write("testfile", "This is line one\n")
+IO.write("testfile", "This is line two\n", mode: "a")
+p IO.read("testfile")
+# => "This is line one\nThis is line two\n"
+```
+
+- **SEE** [m:IO.binwrite]
+
+### def IO.binwrite(path, string, offset=nil) -> Integer
+
+path で指定されるファイルを開き、string を書き込み、閉じます。
+
+ファイルを開くときの mode が "wb:ASCII-8BIT" で、バイナリモードが有効である点以外は [m:IO.write] と同じです。
+
+#%since 4.0
+Ruby 3.x までは path の先頭が "|" のとき "|" に続くコマンドを実行しましたが、この機能は Ruby 4.0 で削除され、"|" で始まる path も通常のファイル名として扱われます。
+#%else
+[m:Kernel?.open] と同様 path の先頭が "|" ならば、"|" に続くコマンドを実行し、コマンドの出力を標準出力に書き込みます。
+#%since 3.3
+なお、この "|" によるコマンド起動は Ruby 3.3 から deprecated であり、Ruby 4.0 で削除されました。[m:IO.popen] を使用してください。
+#%end
+#%end
+
+offset を指定するとその位置までシークします。
+
+offset を指定しないと、書き込みの末尾でファイルを切り捨てます。
+
+- **param** `path` -- ファイル名文字列
+- **param** `string` -- 書き込む文字列
+- **param** `offset` -- 書き込み開始位置
+
+#%# TODO: 2.4以上のみを対象できる状況になったらString#unpack1でunpack('m').firstを置き換える。
+
+```ruby title="例"
+# 8x8の真っ白なPNG画像データ。
+png = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAADklEQVQIW2P4DwUMlDEA98A/wTjP
+QBoAAAAASUVORK5CYII='.unpack('m').first
+
+# 期待する先頭16バイトの16進ダンプ: どの環境でも同じ。
+puts png[0...16].unpack('C*').map {|c| '%02x' % c }.join(' ')
+# => 89 50 4e 47 0d 0a 1a 0a 00 00 00 0d 49 48 44 52
+
+# binwriteを使用した場合: どの環境でも正しく保存できる。
+IO.binwrite('white.binmode.png', png)
+puts IO.binread('white.binmode.png', 16).unpack('C*').map {|c| '%02x' % c }.join(' ')
+# => 89 50 4e 47 0d 0a 1a 0a 00 00 00 0d 49 48 44 52
+
+# binwriteを使用しなかった場合: Windowsで改行文字(0x0a: "\n")と同じビット列が変換されてしまう。
+IO.write('white.txtmode.png', png)
+puts IO.binread('white.txtmode.png', 16).unpack('C*').map {|c| '%02x' % c }.join(' ')
+# => 89 50 4e 47 0d 0a 1a 0a 00 00 00 0d 49 48 44 52 (Linux/Macの場合
+# => 89 50 4e 47 0d 0d 0a 1a 0d 0a 00 00 00 0d 49 48 (Windowsの場合
+```
+
+- **SEE** [ref:c:IO#io_binmode], [m:IO.write]
+
+## Instance Methods
+
+### def <<(object)    -> self
+
+object を出力します。object が文字列でない時にはメソッド to_s を用いて文字列に変換します。
+
+以下のような << の連鎖を使うことができます。
+
+```ruby
+STDOUT << 1 << " is a " << Integer << "\n"
+```
+
+- **param** `object` -- 出力したいオブジェクトを与えます。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+### def binmode    -> self
+
+ストリームをバイナリモードにします。MSDOS などバイナリモードの存在する OS でのみ有効です。そうでない場合このメソッドは何もしません。
+
+バイナリモードから通常のモードに戻す方法は再オープンしかありません。
+
+- **raise** `Errno::EXXX` -- モードの変更に失敗した場合に発生します。
+
+```ruby title="例"
+IO.open(IO.sysopen("testfile", "w+")) do |io|
+  p io.binmode? # => false
+  p io.binmode  # => #<IO:fd 8>
+  p io.binmode? # => true
+end
+```
+
+- **SEE** [ref:c:IO#io_binmode], [m:IO#binmode?]
+
+### def clone    -> IO
+### def dup      -> IO
+
+レシーバと同じ IO を参照する新しい IO オブジェクトを返します。
+参照しているファイル記述子は [man:dup(2)] されます。
+
+clone の際に self は一旦 [m:IO#flush] されます。
+フリーズした IO の clone は同様にフリーズされた IO を返しますが、
+dup は内容の等しいフリーズされていない IO を返します。
+
+- **raise** `IOError` -- 既に close されていた場合に発生します。 
+
+```ruby title="例"
+clone_io = nil
+IO.write("testfile", "test")
+File.open("testfile") do |io|
+  clone_io = io.clone
+end
+p clone_io.read # => "test"
+clone_io.close
+```
+
+### def close    -> nil
+
+入出力ポートをクローズします。
+
+以後このポートに対して入出力を行うと例外 [c:IOError] が発生します。ガーベージコレクトの際にはクローズされていない IO ポートはクローズされます。
+#%# [[unknown:Traps:closeをGCにまかせる|trap::IO]]
+self がパイプでプロセスにつながっていれば、そのプロセスの終了を待ち合わせます。
+
+既に close されていた場合には単に無視されます。
+
+- **raise** `Errno::EXXX` -- close に失敗した場合に発生します。
+
+```ruby title="例"
+IO.write("testfile", "test")
+f = File.open("testfile")
+p f.read # => "test"
+f.close
+# f.read # => IOError (すでに close しているので read できない)
+```
+
+- **SEE** [m:IO#closed?], [m:IO#close_read], [m:IO#close_write]
+
+### def close_read    -> nil
+
+読み込み用の IO を close します。主にパイプや読み書き両用に作成した IO オブジェクトで使用します。
+
+既に close されていた場合には単に無視されます。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- close に失敗した場合に発生します。
+
+```ruby title="例"
+IO.popen("/bin/sh","r+") do |f|
+  f.close_read
+  # f.readlines # => IOError: not opened for reading
+end
+```
+
+- **SEE** [m:IO#close], [m:IO#closed?], [m:IO#close_write]
+
+### def close_write    -> nil
+
+書き込み用の IO を close します。
+
+既に close されていた場合には単に無視されます。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- close に失敗した場合に発生します。
+
+```ruby title="例"
+f = IO.popen("/bin/sh","r+") do |f|
+  f.close_write
+  # f.print "nowhere" # => IOError: not opened for writing
+end
+```
+
+- **SEE** [m:IO#close], [m:IO#closed?], [m:IO#close_read]
+
+### def closed?    -> bool
+
+self が完全に(読み込み用と書き込み用の両方が)クローズされている場合に true を返します。
+そうでない場合は false を返します。
+
+```ruby title="例"
+IO.write("testfile", "test")
+f = File.new("testfile")
+p f.close       # => nil
+p f.closed?     # => true
+f = IO.popen("/bin/sh","r+")
+p f.close_write # => nil
+p f.closed?     # => false
+p f.close_read  # => nil
+p f.closed?     # => true
+```
+
+- **SEE** [m:IO#close], [m:IO#close_read], [m:IO#close_write]
+
+### def each(rs = $/, chomp: false) {|line| ... }         -> self
+### def each(limit, chomp: false) {|line| ... }           -> self
+### def each(rs, limit, chomp: false) {|line| ... }       -> self
+### def each(rs = $/, chomp: false)                       -> Enumerator
+### def each(limit, chomp: false)                         -> Enumerator
+### def each(rs, limit, chomp: false)                     -> Enumerator
+### def each_line(rs = $/, chomp: false) {|line| ... }    -> self
+### def each_line(limit, chomp: false) {|line| ... }      -> self
+### def each_line(rs, limit, chomp: false) {|line| ... }  -> self
+### def each_line(rs = $/, chomp: false)                  -> Enumerator
+### def each_line(limit, chomp: false)                    -> Enumerator
+### def each_line(rs, limit, chomp: false)                -> Enumerator
+
+IO の現在位置から 1 行ずつ文字列として読み込み、それを引数として与えられたブロックを実行します。
+
+ブロックが与えられなかった場合は、自身から生成した
+[c:Enumerator] オブジェクトを返します。
+
+テキスト読み込みメソッドとして動作します。
+
+limit で最大読み込みバイト数を指定します。ただしマルチバイト文字が途中で切れないように余分に読み込む場合があります。
+
+- **param** `rs` -- 行の区切りを文字列で指定します。rs に nil を指定すると行区切りなしとみなします。
+          空文字列 "" を指定すると連続する改行を行の区切りとみなします(パラグラフモード)。
+- **param** `limit` -- 最大の読み込みバイト数
+- **param** `chomp` -- true を指定すると各行の末尾から "\n", "\r", または "\r\n" を取り除きます。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby title="例: 引数なし"
+IO.write("testfile", "This is line one,\nThis is line two,\nThis is line three,\nAnd so on...")
+f = File.new("testfile")
+f.each { |line| p "#{f.lineno}: #{line}" }
+# => "1: This is line one,\n"
+# "2: This is line two,\n"
+# "3: This is line three,\n"
+# "4: And so on..."
+```
+
+```ruby title="例: 行の区切りに半角カンマ、最大読み取りバイト数に 10 を指定"
+IO.write("testfile", "This is line one,This is line two,This is line three,And so on...")
+f = File.new("testfile")
+f.each(",", 10) { |line| p "#{f.lineno}: #{line}" }
+# => "0: This is li"
+# "1: ne one,"
+# "1: This is li"
+# "2: ne two,"
+# "2: This is li"
+# "3: ne three,"
+# "3: And so on."
+# "4: .."
+```
+
+```ruby title="例: chomp = true"
+IO.write("testfile", "This is line one\nThis is line two\nThis is line three\nAnd so on...")
+f = File.new("testfile")
+f.each(chomp: true) { |line| p "#{f.lineno}: #{line}" }
+# => "1: This is line one"
+# "2: This is line two"
+# "3: This is line three"
+# "4: And so on..."
+```
+
+- **SEE** [m:$/], [m:IO#gets]
+
+### def each_byte {|ch| ... }    -> self
+### def each_byte                -> Enumerator
+
+IO の現在位置から 1 バイトずつ読み込み、それを整数として与え、ブロックを実行します。
+
+ブロックが与えられなかった場合は、自身から生成した
+[c:Enumerator] オブジェクトを返します。
+
+バイナリ読み込みメソッドとして動作します。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby title="例"
+IO.write("testfile", "aあ")
+File.open("testfile") do |io|
+  io.each_byte { |x| p x }
+  # => 97
+  # 227
+  # 129
+  # 130
+end
+```
+
+### def eof     -> bool
+### def eof?    -> bool
+
+ストリームがファイルの終端に達した場合、true を返します。そうでない場合、false を返します。
+
+```ruby
+f = File.new("testfile")
+dummy = f.readlines
+p f.eof # => true
+```
+
+自身がパイプやソケットなどのストリームであった場合、相手がデータを送るか close するまでブロックします。
+
+```ruby
+r, w = IO.pipe
+Thread.new { sleep 10; w.close }
+p r.eof?  # => 10秒ブロックしてから true を返す。
+
+r, w = IO.pipe
+Thread.new { sleep 10; w.puts "a" }
+p r.eof?  # => 10秒ブロックしてから false を返す。
+
+r, w = IO.pipe
+r.eof?  # 永久にブロックします。
+```
+
+eof, eof? は入力バッファにデータを読み込むので、[m:IO#sysread] と同時に使うと正常に動作しません。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+### def fcntl(cmd, arg = 0)    -> Integer
+
+IOに対してシステムコール fcntl を実行します。
+機能の詳細は [man:fcntl(2)] を参照してください。
+fcntl(2) が返した整数を返します。
+
+- **param** `cmd` -- IO に対するコマンドを、添付ライブラリ [lib:fcntl] が提供している定数で指定します。
+
+- **param** `arg` -- cmd に対する引数を整数、文字列、booleanのいずれかで指定します。
+           整数の時にはその値を [man:fcntl(2)] に渡します。
+           文字列の場合には Array#pack した構造体だとみなして渡します。
+           arg が nil か false の場合には 0を、true の場合には 1 を渡します。
+
+- **raise** `Errno::EXXX` -- fcntl の実行に失敗した場合に発生します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby title="例"
+require "fcntl"
+
+IO.write("testfile", "abcde")
+# ファイル状態フラグを読み出す
+File.open("testfile") do |f|
+  p f.fcntl(Fcntl::F_GETFL, 0) # => 0
+  p f.fcntl(Fcntl::F_SETFL, Fcntl::O_NONBLOCK) # => 0
+  p f.fcntl(Fcntl::F_GETFL, 0) # => 4
+end
+```
+
+### def fsync    -> 0
+
+書き込み用の IO に対して、システムコール [man:fsync(2)]
+を実行します。[m:IO#flush] を行ったあと、(OSレベルで)まだディスクに書き込まれていないメモリ上にあるデータをディスクに書き出します。
+
+成功すれば 0 を返します。
+[man:fsync(2)] がサポートされていない場合は nil を返します。
+
+- **raise** `Errno::EXXX` -- 失敗した場合に発生します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+### def fileno    -> Integer
+### def to_i      -> Integer
+
+ファイル記述子を表す整数を返します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby title="例"
+p $stdin.fileno  # => 0
+$stdout.fileno   # => 1
+```
+
+- **SEE** [m:Dir#fileno]
+
+### def flush    -> self
+
+IO ポートの内部バッファをフラッシュします。
+
+このメソッドを使ったとき、即座にメタデータを更新することは保証されません(特にWindowsで)。
+即座にメタデータも更新したいときは [m:IO#fsync] を使います。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- [man:fflush(3)] が失敗した場合に発生します。
+
+```ruby title="例"
+require "tempfile"
+
+Tempfile.open("testtmpfile") do |f|
+  f.print "test"
+  p File.read(f.path) # => ""
+  f.flush
+  p File.read(f.path) # => "test"
+end
+```
+
+### def getc    -> String | nil
+
+IO ポートから外部エンコーディングに従い 1 文字読み込んで返します。
+EOF に到達した時には nil を返します。
+
+テキスト読み込みメソッドとして動作します。
+
+[m:IO#readchar] との違いは EOF での振る舞いのみです。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby title="例"
+File.write("testfile", "test")
+f = File.new("testfile")
+p f.getc                 # => "い"
+p f.getc                 # => "ろ"
+p f.getc                 # => "は"
+f.read
+p f.getc                 # => nil
+```
+
+- **SEE** [m:IO#readchar]
+
+### def gets(rs = $/, chomp: false)    -> String | nil
+### def gets(limit, chomp: false)      -> String | nil
+### def gets(rs, limit, chomp: false)  -> String | nil
+
+一行読み込んで、読み込みに成功した時にはその文字列を返します。
+EOF に到達した時には nil を返します。
+
+テキスト読み込みメソッドとして動作します。
+
+読み込んだ文字列を変数 [m:$_] にセットします。
+[m:IO#readline] との違いは EOF での振る舞いのみです。
+
+limit で最大の読み込みバイト数を指定します。ただしファイルのエンコーディングがマルチバイトエンコーディングである場合には読み込んだ文字列がマルチバイト文字の途中で切れないように数バイト余分に読み込む場合があります。
+
+- **param** `rs` -- 行の区切りを文字列で指定します。rs に nil を指定すると行区切りなしとみなします。
+          空文字列 "" を指定すると連続する改行を行の区切りとみなします(パラグラフモード)。
+- **param** `limit` -- 最大の読み込みバイト数
+- **param** `chomp` -- true を指定すると各行の末尾から "\n", "\r", または "\r\n" を取り除きます。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby
+f = File.new("oneline_file")
+p f.gets                        # => "This is line one\n"
+p $_                            # => "This is line one\n"
+p f.gets                        # => nil
+p $_                            # => nil
+```
+
+- **SEE** [m:$/], [m:IO#readline]
+
+### def ioctl(cmd, arg = 0)    -> Integer
+
+IO に対してシステムコール ioctl を実行し、その結果を返します。
+機能の詳細は [man:ioctl(2)] を参照してください。
+
+- **param** `cmd` -- IO に対するコマンドを整数で指定します。どのようなコマンドが使えるかはプラットフォームに依存します。
+
+- **param** `arg` -- cmd に対する引数を指定します。整数の時にはその値を ioctl に渡します。
+           文字列の場合には [m:Array#pack] した構造体だとみなして渡します。
+           arg が nil か false の場合には 0を、true の場合には 1 を渡します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+### def isatty    -> bool
+### def tty?      -> bool
+
+入出力ポートがttyに結合している時、真を返します。そうでない場合 false を返します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby title="例"
+p File.new("testfile").isatty # => false
+p File.new("/dev/tty").isatty # => true
+```
+
+### def lineno    -> Integer
+
+現在の行番号を整数で返します。実際には [m:IO#gets] が呼ばれた回数です。
+改行以外のセパレータで gets が呼ばれた場合など、実際の行番号と異なる場合があります。
+
+- **raise** `IOError` -- 読み込み用にオープンされていなければ発生します。
+
+```ruby
+f = File.new("testfile")
+p f.lineno               # => 0
+p f.gets                 # => "This is line one\n"
+p f.lineno               # => 1
+p f.gets                 # => "This is line two\n"
+p f.lineno               # => 2
+```
+
+- **SEE** [m:$.]
+
+### def lineno=(number)
+
+現在の行番号を number にセットします。 [m:$.] は次回の読み込みの時に更新されます。
+
+- **param** `number` -- 行番号を整数で指定します。
+
+- **raise** `IOError` -- 読み込み用にオープンされていなければ発生します。
+
+```ruby
+f = File.new("testfile")
+p f.gets                   # => "This is line one\n"
+p $.                       # => 1
+f.lineno = 1000
+p f.lineno                 # => 1000
+p $.                       # => 1
+p f.gets                   # => "This is line two\n"
+p $.                       # => 1001
+```
+
+- **SEE** [m:$.]
+
+### def pid    -> Integer | nil
+
+自身が [m:IO.popen] で作られたIOポートなら、子プロセスのプロセス ID を返します。それ以外は nil を返します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby title="例"
+IO.popen("-") do |pipe|
+  if pipe
+    $stderr.puts "In parent, child pid is #{pipe.pid}" # => In parent, child pid is 16013
+  else
+    $stderr.puts "In child, pid is #{$$}"              # => In child, pid is 16013
+  end
+end
+```
+
+### def pos    -> Integer
+### def tell   -> Integer
+
+ファイルポインタの現在の位置を整数で返します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby title="例"
+IO.write("testfile", "This is line one\n")
+File.open("testfile") do |f|
+  p f.pos  # => 0
+  p f.gets # => "This is line one\n"
+  p f.pos  # => 17
+end
+```
+
+### def pos=(n)
+
+ファイルポインタを指定位置に移動します。
+[m:IO#seek](n, IO::SEEK_SET) と同じです。
+
+- **param** `n` -- 先頭からのオフセットを整数で指定します。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby title="例"
+IO.write("testfile", "This is line one\nThis is line two\n")
+File.open("testfile") do |f|
+  p f.pos  # => 0
+  f.pos = 17
+  p f.gets # => "This is line two\n"
+end
+```
+
+### def print(*arg)    -> nil
+
+引数を IO ポートに順に出力します。引数を省略した場合は、[m:$_] を出力します。
+
+- **param** `arg` -- [m:Kernel?.print] と同じです。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+```ruby title="例"
+$stdout.print("This is ", 100, " percent.\n") # => This is 100 percent.
+```
+
+- **SEE** [m:Kernel?.print]
+
+### def printf(format, *arg)    -> nil
+
+C 言語の printf と同じように、format に従い引数を文字列に変換して、self に出力します。
+
+第一引数に IO を指定できないこと、引数を省略できないことを除けば [m:Kernel?.printf] と同じです。
+
+- **param** `format` -- [m:Kernel?.printf] と同じです。[d:print_format] を参照してください。
+
+- **param** `arg` -- [m:Kernel?.printf] と同じです。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+#%#noexample Kernel.#printf を参照
+
+- **SEE** [m:Kernel?.printf]
+
+### def putc(ch)    -> object
+
+文字 ch を self に出力します。
+引数の扱いは [m:Kernel?.putc] と同じです。詳細はこちらを参照してください。ch を返します。
+
+- **param** `ch` -- 出力したい文字を、文字列か文字コード(整数)で与えます。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+```ruby title="例"
+$stdout.putc "A" # => A
+$stdout.putc 65  # => A
+```
+
+- **SEE** [m:Kernel?.putc]
+
+### def puts(*obj)    -> nil
+
+各 obj を self に出力し、それぞれの後に改行を出力します。
+引数の扱いは [m:Kernel?.puts] と同じです。詳細はこちらを参照してください。
+
+- **param** `obj` -- 出力したいオブジェクトを指定します。[m:Kernel?.puts] と同じです。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+```text
+$stdout.puts("this", "is", "a", "test", [1, [nil, 3]])
+     
+#=>     
+this
+is
+a
+test
+1
+     
+3
+```
+
+- **SEE** [m:Kernel?.puts]
+
+### def read(length = nil, outbuf = "")    -> String | nil
+
+length バイト読み込んで、その文字列を返します。
+
+引数 length が指定された場合はバイナリ読み込みメソッド、そうでない場合はテキスト読み込みメソッドとして動作します。
+既に EOF に達していれば nil を返します。
+ただし、length に nil か 0 が指定されている場合は、空文字列 "" を返します。
+例えば、open(空ファイル) {|f| f.read } は "" となります。
+
+- **param** `length` -- 読み込むサイズを整数で指定します。
+              nil が指定された場合、EOF までの全てのデータを読み込んで、その文字列を返します。
+
+- **param** `outbuf` -- 出力用のバッファを文字列で指定します。IO#read は読み込んだデータをその文字列オブジェクトに上書きして返します。指定した文字列オブジェクトがあらかじめ length 長の領域であれば、余計なメモリの割当てが行われません。指定した文字列の長さが
+              length と異なる場合、その文字列は一旦 length 長に拡張(あるいは縮小)されたあと、実際に読み込んだデータのサイズになります。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- データの読み込みに失敗した場合に発生します。
+
+- **raise** `ArgumentError` -- length が負の場合に発生します。
+
+第二引数を指定した read の呼び出しでデータが空であった場合
+(read が nil を返す場合)、outbuf は空文字列になります。
+
+```text
+outbuf = "x" * 20;
+io = File.open("/dev/null")
+p io.read(10,outbuf)
+p outbuf
+=> nil
+   ""
+```
+
+### def readchar    -> String
+
+IO ポートから 1 文字読み込んで返します。
+EOF に到達した時には EOFError が発生します。
+
+テキスト読み込みメソッドとして動作します。
+
+[m:IO#getc] との違いは EOF での振る舞いのみです。
+
+- **raise** `EOFError` -- EOF に到達した時に発生します。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby
+f = File.new("testfile")
+p f.readchar                   # => "い"
+p f.readchar                   # => "ろ"
+p f.readchar                   # => "は"
+f.read
+f.readchar                   # ~> EOFError
+```
+
+- **SEE** [m:IO#getc]
+
+### def readline(rs = $/, chomp: false)   -> String
+### def readline(limit, chomp: false)     -> String
+### def readline(rs, limit, chomp: false) -> String
+
+一行読み込んで、読み込みに成功した時にはその文字列を返します。
+EOF に到達した時には EOFError が発生します。
+
+テキスト読み込みメソッドとして動作します。
+
+読み込んだ文字列を変数 [m:$_] にセットします。[m:IO#gets] との違いは EOF での振る舞いのみです。
+
+limit で最大読み込みバイト数を指定します。ただしマルチバイト文字が途中で切れないように余分に読み込む場合があります。
+
+- **param** `rs` -- 行の区切りを文字列で指定します。rs に nil を指定すると行区切りなしとみなします。空文字列 "" を指定すると連続する改行を行の区切りとみなします(パラグラフモード)。
+- **param** `limit` -- 最大の読み込みバイト数
+- **param** `chomp` -- true を指定すると各行の末尾から "\n", "\r", または "\r\n" を取り除きます。
+
+- **raise** `EOFError` -- EOF に到達した時に発生します。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby
+f = File.new("oneline_file")
+p f.readline                    # => "This is line one\n"
+p $_                            # => "This is line one\n"
+f.readline                      # ~> EOFError
+p $_                            # => nil
+```
+
+- **SEE** [m:$/], [m:IO#gets]
+
+### def readlines(rs = $/, chomp: false)    -> [String]
+### def readlines(limit, chomp: false)      -> [String]
+### def readlines(rs, limit, chomp: false)  -> [String]
+
+データを全て読み込んで、その各行を要素としてもつ配列を返します。
+既に EOF に達していれば空配列 [] を返します。
+
+テキスト読み込みメソッドとして動作します。
+
+limit で最大読み込みバイト数を指定します。ただしマルチバイト文字が途中で切れないように余分に読み込む場合があります。
+
+- **param** `rs` -- 行の区切りを文字列で指定します。rs に nil を指定すると行区切りなしとみなします。
+          空文字列 "" を指定すると連続する改行を行の区切りとみなします(パラグラフモード)。
+- **param** `limit` -- 最大の読み込みバイト数
+- **param** `chomp` -- true を指定すると各行の末尾から rs を取り除きます。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+```ruby title="例"
+IO.write("testfile", "line1,\nline2,\nline3,\n")
+p File.open("testfile") { |f| p f.readlines }    # => ["line1,\n", "line2,\n", "line3,\n"]
+p File.open("testfile") { |f| p f.readlines(3) } # => ["lin", "e1,", "\n", "lin", "e2,", "\n", "lin", "e3,", "\n"]
+p File.open("testfile") { |f| p f.readlines(",") } # => ["line1,", "\nline2,", "\nline3,", "\n"]
+```
+
+```ruby title="例: rsを取り除く（chomp = true）"
+IO.write("testfile", "line1,\rline2,\r\nline3,\n")
+p File.open("testfile") { |f| p f.readlines(chomp: true) }     # => ["line1,\rline2,", "line3,"]
+p File.open("testfile") { |f| p f.readlines("\r", chomp: true) } # => ["line1,", "line2,", "\nline3,\n"]
+```
+
+- **SEE** [m:$/], [m:IO#gets]
+
+### def read_nonblock(maxlen, outbuf = nil, exception: true) -> String | Symbol | nil
+
+IO をノンブロッキングモードに設定し、その後で [man:read(2)] システムコールにより長さ maxlen を上限として読み込み、文字列として返します。
+EAGAIN, EINTR などは [c:Errno::EXXX] 例外として呼出元に報告されます。
+
+発生した例外 がErrno::EAGAIN、 Errno::EWOULDBLOCK である場合は、その例外オブジェクトに [c:IO::WaitReadable] が [m:Object#extend]
+されます。
+
+なお、バッファが空でない場合は、read_nonblock はバッファから読み込みます。この場合、read(2) システムコールは呼ばれません。
+
+このメソッドはノンブロッキングモードにする点を除いて [m:IO#readpartial] と同じであることに注意してください。
+
+バイナリ読み込みメソッドとして動作します。
+
+既に EOF に達していれば EOFError が発生します。ただし、maxlen に 0 が指定されている場合は、空文字列 "" を返します。
+
+- **param** `maxlen` -- 読み込む長さの上限を整数で指定します。
+
+- **param** `outbuf` -- 文字列で指定します。IO#read_nonblock は読み込んだデータを outbuf に破壊的に格納し、返り値は outbuf となります。outbuf は一旦 maxlen 長に拡張(あるいは縮小)されたあと、実際に読み込んだデータのサイズになります。read(2) システムコールが 0 を返した場合は、空文字列になります。
+
+- **param** `exception` -- 読み込み時に [c:Errno::EAGAIN]、
+                 [c:Errno::EWOULDBLOCK] が発生する代わりに
+                 :wait_readable を返すかどうかを指定します。また、false
+                 を指定した場合は既に EOF に達していれば
+                 [c:EOFError] の代わりに nil を返します。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- read(2) システムコールの結果としてエラーが起きた場合に発生します。
+
+- **raise** `EOFError` -- read(2) システムコールが 0 を返した場合に発生します。これは、IO が既に EOF に達していることを意味します。
+
+### def readpartial(maxlen, outbuf = "")    -> String
+
+IO から長さ maxlen を上限として読み込み、文字列として返します。
+即座に得られるデータが存在しないときにはブロックしてデータの到着を待ちます。
+即座に得られるデータが 1byte でも存在すればブロックしません。
+
+バイナリ読み込みメソッドとして動作します。
+
+既に EOF に達していれば EOFError が発生します。
+ただし、maxlen に 0 が指定されている場合は、空文字列 "" を返します。
+
+readpartial はブロックを最小限に抑えることによって、パイプ、ソケット、端末などのストリームに対して適切に動作するよう設計されています。
+readpartial がブロックするのは次の全ての条件が満たされたときだけです。
+  - IO オブジェクト内のバッファが空
+  - ストリームにデータが到着していない
+  - ストリームが EOF になっていない
+これらの条件が満たされる場合、何らかのデータが到着するか EOF になるまで readpartial はブロックします。
+
+readpartial の結果は以下のようになります。
+  1. バッファが空でなければ、そのバッファのデータを読み込んで返します。
+  2. ストリームにデータがあれば、ストリームからデータを読み込んで返します。
+  3. ストリームが EOF になっていれば、例外 [c:EOFError] を発生させます。
+
+例えば、パイプに対しては次のように動作します。
+
+```ruby
+r, w = IO.pipe           #               buffer          pipe content
+w << "abc"               #               ""              "abc".
+p r.readpartial(4096)    # => "abc"       ""              ""
+r.readpartial(4096)      # バッファにもパイプにもデータがないのでブロックする
+  
+r, w = IO.pipe           #               buffer          pipe content
+w << "abc"               #               ""              "abc"
+w.close                  #               ""              "abc" EOF
+p r.readpartial(4096)    # => "abc"       ""              EOF
+r.readpartial(4096)      # ~> EOFError
+  
+r, w = IO.pipe           #               buffer          pipe content
+w << "abc\ndef\n"        #               ""              "abc\ndef\n"
+p r.gets                 # => "abc\n"     "def\n"         ""
+w << "ghi\n"             #               "def\n"         "ghi\n"
+p r.readpartial(4096)    # => "def\n"     ""              "ghi\n"
+p r.readpartial(4096)    # => "ghi\n"     ""              ""
+```
+
+なお、readpartial は nonblock フラグに影響されません。
+つまり、nonblock フラグが設定されていて sysread であれば Errno::EAGAIN になる場合でもブロックします。
+
+また、readpartial の挙動は sysread によく似ています。
+とくに、バッファが空の場合には同じ挙動を示します。
+ただし、EAGAIN および EINTR エラーは内部で発生したとしても通知されず、データが到着するまでブロックし続けます。
+
+- **param** `maxlen` -- 読み込む長さの上限を整数で指定します。
+
+- **param** `outbuf` -- 文字列で指定します。IO#readpartial は読み込んだデータを outbuf に破壊的に格納し、返り値は outbuf となります。outbuf は一旦 maxlen 長に拡張(あるいは縮小)されたあと、実際に読み込んだデータのサイズになります。IO が既に EOF に達していれば、空文字列になります。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+- **raise** `EOFError` -- IO が既に EOF に達していれば発生します。
+
+### def reopen(io)                   -> self
+
+自身を指定された io に繋ぎ換えます。
+
+クラスも io に等しくなることに注意してください。
+[m:IO#pos], [m:IO#lineno] などは指定された io と等しくなります。
+
+- **param** `io` -- 自身を繋ぎ換えたい IO オブジェクトを指定します。
+
+- **raise** `IOError` -- 指定された io が close されている場合に発生します。
+
+### def reopen(path)                 -> self
+### def reopen(path, mode)     -> self
+
+path で指定されたファイルにストリームを繋ぎ換えます。
+
+第二引数を省略したとき self のモードをそのまま引き継ぎます。
+[m:IO#pos], [m:IO#lineno] などはリセットされます。
+
+- **param** `path` -- パスを表す文字列を指定します。
+
+- **param** `mode` -- パスを開く際のモードを文字列で指定します。
+
+- **raise** `Errno::EXXX` -- 失敗した場合に発生します。
+
+```ruby title="例"
+IO.write("testfile", "This is line one\nThis is line two\n")
+f1 = File.new("testfile", "a+")
+f2 = File.new("testfile")
+f1.print("This is line three\n")
+p f2.readlines              # => ["This is line one\n", "This is line two\n"]
+f1.close
+p f2.reopen("testfile", "r")  # => #<File:testfile>
+p f2.readlines              # => ["This is line one\n", "This is line two\n", "This is line three\n"]
+f2.close
+```
+
+- **SEE** [m:Kernel?.open]
+
+### def rewind    -> 0
+
+ファイルポインタを先頭に移動します。[m:IO#lineno] は 0 になります。
+
+- **raise** `IOError` -- 既に close されている場合に発生します。
+
+```ruby
+f = File.new("testfile")
+p f.readline             # => "This is line one\n"
+p f.rewind               # => 0
+p f.lineno               # => 0
+p f.readline             # => "This is line one\n"
+```
+
+### def seek(offset, whence = IO::SEEK_SET)    -> 0
+
+ファイルポインタを whence の位置から offset だけ移動させます。
+offset 位置への移動が成功すれば 0 を返します。
+
+- **param** `offset` -- ファイルポインタを移動させるオフセットを整数で指定します。
+
+- **param** `whence` -- 値は以下のいずれかです。
+              それぞれ代わりに :SET、:CUR、:END、:DATA、:HOLE を指定する事も可能です。
+
+  - IO::SEEK_SET: ファイルの先頭から (デフォルト)
+  - IO::SEEK_CUR: 現在のファイルポインタから
+  - IO::SEEK_END: ファイルの末尾から
+  - IO::SEEK_DATA: offset 以降の次にデータがある位置へ(lseek の man ページ参照。Linux 3.1 以降のみ)
+  - IO::SEEK_HOLE: offset 以降の次にホールがある位置へ(同上)
+
+- **raise** `Errno::EXXX` -- ファイルポインタの移動に失敗した場合に発生します。
+
+- **raise** `IOError` -- 既に close されていた場合に発生します。 
+
+```ruby
+f = File.new("testfile")
+p f.seek(-13, IO::SEEK_END) # => 0
+p f.readline                # => "And so on...\n"
+```
+
+- **SEE** [m:IO#sysseek]
+
+### def stat    -> File::Stat
+
+ファイルのステータスを含む [c:File::Stat] オブジェクトを生成して返します。
+
+- **raise** `Errno::EXXX` -- ステータスの読み込みに失敗した場合に発生します。
+
+- **raise** `IOError` -- 既に close されていた場合に発生します。 
+
+```ruby title="例"
+IO.write("testfile", "This is line one\nThis is line two\n")
+File.open("testfile") do |f|
+  s = f.stat
+  p "%o" % s.mode # => "100644"
+  p s.blksize     # => 4096
+  p s.atime       # => 2018-03-01 23:19:59 +0900
+end
+```
+
+- **SEE** [m:File#lstat], [m:File.stat], [m:File.lstat]
+
+### def sync    -> bool
+
+現在の出力が同期モードならば true を返します。そうでない場合は false を返します。
+
+- **raise** `IOError` -- 既に close されていた場合に発生します。 
+
+```ruby title="例"
+File.open("testfile", "w") do |f|
+  p f.sync    # => false
+  f.sync = true
+  p f.sync    # => true
+end
+```
+
+### def sync=(newstate)
+
+自身を同期モードに設定すると、出力関数の呼出毎にバッファがフラッシュされます。
+
+- **param** `newstate` -- 自身を同期モードに設定するかを boolean で指定します。
+
+- **raise** `IOError` -- 既に close されていた場合に発生します。 
+
+- **SEE** [m:IO#sync]
+
+### def sysread(maxlen, outbuf = "")   -> String
+
+[man:read(2)] を用いて入力を行ない、入力されたデータを含む文字列を返します。stdio を経由しないので gets や getc や eof? などと混用すると思わぬ動作をすることがあります。
+
+バイナリ読み込みメソッドとして動作します。
+
+既に EOF に達していれば EOFError が発生します。ただし、maxlen に 0 が指定されている場合は、空文字列 "" を返します。
+
+- **param** `maxlen` -- 入力のサイズを整数で指定します。
+
+- **param** `outbuf` -- 出力用のバッファを文字列で指定します。IO#sysread は読み込んだデータをその文字列オブジェクトに上書きして返します。指定した文字列オブジェクトがあらかじめ maxlen 長の領域であれば、余計なメモリの割当てが行われません。
+              指定した文字列の長さが maxlen と異なる場合、その文字列は一旦 maxlen 長に拡張(あるいは縮小)されたあと、実際に読み込んだデータのサイズになります。
+
+- **raise** `IOError` -- 自身が読み込み用にオープンされていなければ発生します。
+
+- **raise** `EOFError` -- IO が既に EOF に達していれば発生します。
+
+- **raise** `Errno::EXXX` -- データの読み込みに失敗した場合に発生します。
+
+第二引数を指定した sysread の呼び出しでデータが空であった場合(sysread が例外 [c:EOFError] を発生させる場合)、
+outbuf は空文字列になります。
+
+```text
+outbuf = "x" * 20;
+io = File.open("/dev/null")
+p((io.sysread(10,outbuf) rescue nil))
+p outbuf
+=> nil
+   ""
+```
+
+### def sysseek(offset, whence = IO::SEEK_SET)    -> Integer
+
+[man:lseek(2)] と同じです。[m:IO#seek] では、
+[m:IO#sysread], [m:IO#syswrite] と併用すると正しく動作しないので代わりにこのメソッドを使います。
+位置 offset への移動が成功すれば移動した位置(ファイル先頭からのオフセット)を返します。
+
+書き込み用にバッファリングされた IO に対して実行すると警告が出ます。
+
+```ruby
+File.open("/dev/zero") {|f|
+  buf = f.read(3)
+  f.sysseek(0)
+}
+#%since 3.4
+# => -:3:in 'sysseek': sysseek for buffered IO (IOError)
+#%else
+# => -:3:in `sysseek': sysseek for buffered IO (IOError)
+#%end
+  
+File.open("/dev/null", "w") {|f|
+  f.print "foo"
+  f.sysseek(0)
+}
+# => -:3: warning: sysseek for buffered IO
+```
+
+- **param** `offset` -- ファイルポインタを移動させるオフセットを整数で指定します。
+
+- **param** `whence` -- 値は以下のいずれかです。
+              それぞれ代わりに :SET、:CUR、:END、:DATA、:HOLE を指定する事も可能です。
+
+  - IO::SEEK_SET: ファイルの先頭から (デフォルト)
+  - IO::SEEK_CUR: 現在のファイルポインタから
+  - IO::SEEK_END: ファイルの末尾から
+  - IO::SEEK_DATA: offset 以降の次にデータがある位置へ(lseek の man ページ参照。Linux 3.1 以降のみ)
+  - IO::SEEK_HOLE: offset 以降の次にホールがある位置へ(同上)
+
+- **raise** `IOError` -- 読み込み用にバッファリングされた IO に対して実行すると発生します。
+               既に close されていた場合にも発生します。
+
+- **raise** `Errno::EXXX` -- 移動に失敗した場合に発生します。
+
+- **SEE** [m:IO#seek]
+
+### def syswrite(string)    -> Integer
+
+[man:write(2)] を用いて string を出力します。
+string が文字列でなければ to_s による文字列化を試みます。
+実際に出力できたバイト数を返します。
+
+stdio を経由しないので他の出力メソッドと混用すると思わぬ動作をすることがあります。
+
+- **param** `string` -- 自身に書き込みたい文字列を指定します。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+```ruby title="例"
+File.open("testfile", "w+") do |f|
+  p f.syswrite("ABCDE") # => 5
+  p f.syswrite(:ABC)  # => 3
+end
+p File.read("testfile") # => "ABCDEABC"
+```
+
+### def to_io    -> self
+
+self を返します。
+
+#%#noexample
+
+### def ungetc(char)     -> nil
+
+指定された char を読み戻します。
+
+- **param** `char` -- 読み戻したい1文字かそのコードポイントを指定します。
+
+- **raise** `IOError` -- 読み戻しに失敗した場合に発生します。また、自身が読み込み用にオープンされていない時、自身がまだ一度も read されていない時に発生します。
+
+```ruby
+f = File.new("testfile")   # => #<File:testfile>
+c = f.getc                 # => "い"
+p f.ungetc(c)              # => nil
+p f.getc                   # => "い"
+```
+
+### def write(*str)     -> Integer
+
+IOポートに対して str を出力します。str が文字列でなければ to_s による文字列化を試みます。
+実際に出力できたバイト数を返します。
+
+[m:IO#syswrite] を除く全ての出力メソッドは、最終的に
+"write" という名のメソッドを呼び出すので、このメソッドを置き換えることで出力関数の挙動を変更できます。
+#%##@since 1.8.0
+#%#以前は [[m:Kernel?.putc]],
+#%#[[m:IO#putc]] に対してだけこのことは適用されませんでした
+#%#([[ruby-dev:16305]])が、修正されました([[ruby-dev:18038]])。
+#%##@end
+
+- **param** `str` -- 自身に書き込みたい文字列を指定します。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- 出力に失敗した場合に発生します。
+
+```ruby title="例"
+File.open("textfile", "w+") do |f|
+  p f.write("This is")  # => 7
+end
+p File.read("textfile") # => "This is"
+```
+
+```ruby title="複数引数の例"
+File.open("textfile", "w+") do |f|
+  p f.write("This is", " a test\n")  # => 15
+end
+p File.read("textfile")            # => "This is a test\n"
+```
+
+### def write_nonblock(string, exception: true) -> Integer | :wait_writable
+
+IO をノンブロッキングモードに設定し、string を [man:write(2)] システムコールで書き出します。
+
+write(2) が成功した場合、書き込んだ長さを返します。
+EAGAIN, EINTR などは例外 [c:Errno::EXXX] として呼出元に報告されます。
+
+書き込んだバイト数(つまり返り値)は [m:String#bytesize] の値より小さい可能性があります。
+
+発生した例外 がErrno::EAGAIN、 Errno::EWOULDBLOCK である場合は、その例外オブジェクトに [c:IO::WaitWritable] が [m:Object#extend]
+されます。よって IO::WaitWritable を write_nonblock のリトライが必要かの判定に用いることができます。
+
+- **param** `string` -- 自身に書き込みたい文字列を指定します。
+
+- **param** `exception` -- false を指定すると、書き込み時に [c:Errno::EAGAIN]、[c:Errno::EWOULDBLOCK] が発生する代わりに :wait_writable を返します。
+
+- **raise** `IOError` -- 自身が書き込み用にオープンされていなければ発生します。
+
+- **raise** `Errno::EXXX` -- [man:write(2)] が失敗した場合に発生します。
+
+### def pread(maxlen, offset, outbuf = "")    -> string
+
+[man:pread(2)] システムコールを使ってファイルポインタを変更せずに、また現在のファイルポインタに依存せずにmaxlenバイト読み込みます。
+
+[m:IO#seek]と[m:IO#read]の組み合わせと比べて、アトミックな操作になるという点が優れていて、複数スレッド/プロセスから同じIOオブジェクトを様々な位置から読み込むことを許します。
+どのユーザー空間のIO層のバッファリングもバイパスします。
+
+- **param** `maxlen` -- 読み込むバイト数を指定します。
+- **param** `offset` -- 読み込み開始位置のファイルの先頭からのオフセットを指定します。
+- **param** `outbuf` -- データを受け取る String を指定します。
+
+- **raise** `Errno::EXXX` -- シークまたは書き込みが失敗した場合に発生します。
+- **raise** `EOFError` -- EOF に到達した時に発生します。
+- **raise** `NotImplementedError` -- システムコールがサポートされていない OS で発生します。
+
+```ruby title="例"
+File.write("testfile", "This is line one\nThis is line two\n")
+File.open("testfile") do |f|
+  p f.read           # => "This is line one\nThis is line two\n"
+  p f.pread(12, 0)   # => "This is line"
+  p f.pread(9, 8)    # => "line one\n"
+end
+```
+
+### def pwrite(string, offset) -> Integer
+
+string を offset の位置に [man:pwrite(2)] システムコールを使って書き込みます。
+
+[m:IO#seek]と[m:IO#write]の組み合わせと比べて、アトミックな操作になるという点が優れていて、複数スレッド/プロセスから同じIOオブジェクトを様々な位置から読み込むことを許します。
+どのユーザー空間のIO層のバッファリングもバイパスします。
+
+- **param** `string` -- 書き込む文字列を指定します。
+- **param** `offset` -- ファイルポインタを変えずに書き込む位置を指定します。
+
+- **return** -- 書き込んだバイト数を返します。
+
+- **raise** `Errno::EXXX` -- シークまたは書き込みが失敗した場合に発生します。
+- **raise** `NotImplementedError` -- システムコールがサポートされていない OS で発生します。
+
+```ruby title="例"
+File.open("testfile", "w") do |f|
+  p f.pwrite("ABCDEF", 3) # => 6
+end
+
+p File.read("testfile")   # => "\u0000\u0000\u0000ABCDEF"
+```
+
+### def getbyte   -> Integer | nil
+
+IO から1バイトを読み込み整数として返します。
+既に EOF に達していれば nil を返します。
+
+```ruby
+f = File.new("testfile")
+p f.getbyte # => 84
+p f.getbyte # => 104
+```
+
+### def readbyte   -> Integer
+
+IO から1バイトを読み込み整数として返します。
+既に EOF に達していれば EOFError が発生します。
+
+- **raise** `EOFError` -- 既に EOF に達している場合に発生します。
+
+```ruby title="例"
+IO.write("testfile", "123")
+File.open("testfile") do |f|
+  begin
+    p f.readbyte  # => 49
+    p f.readbyte  # => 50
+    p f.readbyte  # => 51
+    f.readbyte  # ~> EOFError
+  rescue => e
+    p e.class # => EOFError
+  end
+end
+```
+
+### def each_char{|c| ... }     -> self
+### def each_char               -> Enumerator
+
+self に含まれる文字を一文字ずつブロックに渡して評価します。
+
+self は読み込み用にオープンされていなければなりません。
+
+ブロックを省略した場合は各文字について繰り返す [c:Enumerator] を返します。
+
+- **raise** `IOError` -- self が読み込み用にオープンされていない場合に発生します。
+
+```ruby
+f = File.new("testfile")
+p f.each_char {|c| print c, ' ' } # => #<File:testfile>
+```
+
+### def ungetbyte(c) -> nil
+
+指定したバイト列を書き戻します。
+
+2バイト以上の書き戻しは仕様として保証しません。
+
+このメソッドはバッファを経由しない読み出し([m:IO#sysread] など)
+には影響しません。
+
+- **param** `c` -- バイト列(文字列)、もしくは0から255までの整数
+
+```ruby title="例"
+f = File.new("testfile")   # => #<File:testfile>
+b = f.getbyte              # => 0x38
+p f.ungetbyte(b)           # => nil
+p f.getbyte                # => 0x38
+```
+
+### def binmode? -> bool
+
+自身がバイナリモードなら true を返します。そうでない場合、false を返します。
+
+#%#noexample binmode を参照
+
+- **SEE** [ref:c:IO#io_binmode], [m:IO#binmode]
+
+### def close_on_exec=(bool)
+
+自身に close-on-exec フラグを設定します。
+
+このフラグをセットすると [man:exec(2)] 時にそのファイルデスクリプタを
+close します。
+
+- **SEE** [man:fcntl(2)]
+- **param** `bool` -- 自身の close-on-exec フラグを true か false で指定します。
+
+```ruby
+f = open("/dev/null")
+f.close_on_exec = true
+system("cat", "/proc/self/fd/#{f.fileno}") # cat: /proc/self/fd/3: No such file or directory
+p f.closed?              # => false
+```
+
+- **SEE** [m:IO#close_on_exec?]
+
+### def close_on_exec?   -> bool
+
+自身に close-on-exec フラグが設定されていた場合 true を返します。
+そうでない場合に false を返します。
+
+```ruby
+f = open("/dev/null")
+p f.close_on_exec?               # => true
+f.close_on_exec = false
+p f.close_on_exec?               # => false
+f.close_on_exec = true
+p f.close_on_exec?               # => true
+```
+
+- **SEE** [m:IO#close_on_exec=]
+
+### def external_encoding   -> Encoding | nil
+
+IO の外部エンコーディングを返します。
+外部エンコーディングが指定されていない場合は nil を返します。
+ただし読み込み専用モードの場合は [m:Encoding.default_external] になります。
+
+```ruby title="例"
+IO.write("testfile", "abcde")
+p File.open("testfile") { |f| p f.external_encoding } # => #<Encoding:UTF-8>
+```
+
+### def internal_encoding   -> Encoding | nil
+
+IO の内部エンコーディングを返します。
+内部エンコーディングが指定されていない場合は nil を返します。
+
+```ruby title="例"
+IO.write("testfile", "abcde")
+File.open("testfile") do |f|
+  p f.internal_encoding  # => nil
+  f.set_encoding("ASCII-8BIT", "EUC-JP")
+  p f.internal_encoding  # => #<Encoding:EUC-JP>
+end
+```
+
+### def set_encoding(enc_str, **opts)           -> self
+### def set_encoding(ext_enc)           -> self
+### def set_encoding(ext_enc, int_enc, **opts)  -> self
+
+IO のエンコーディングを設定します。
+
+引数が "A:B" のようにコロンで区切られた文字列の場合は、
+A を外部エンコーディング、 B を内部エンコーディングに指定します。
+
+引数が一つで、上のような形式でない場合には、それが外部エンコーディングと見なされます。
+
+引数が2つの場合はそのそれぞれを外部エンコーディング、内部エンコーディングに設定します。
+
+キーワード引数で外部エンコーディングを内部エンコーディングに変換する際のオプションを指定します。
+詳しくは [m:String#encode] を参照してください。
+
+- **param** `enc_str` -- エンコーディングを表す文字列を指定します。"A:B" のようにコロンで区切られた文字列を指定した場合 A が外部エンコーディング、B が内部エンコーディングを表します。
+
+- **param** `ext_enc` -- 外部エンコーディングを表す文字列か [c:Encoding] オブジェクトを指定します。
+
+- **param** `int_enc` -- 内部エンコーディングを表す文字列か [c:Encoding] オブジェクトを指定します。
+- **param** `opts` -- エンコーディング変換のオプション
+例:
+
+```ruby
+io = File.open(file)
+io.set_encoding("ASCII-8BIT", "EUC-JP")
+```
+
+### def set_encoding_by_bom -> Encoding | nil
+
+BOM から IO のエンコーディングを設定します。
+
+自身が BOM から始まる場合、BOM を読み進めて外部エンコーディングをセットし、セットしたエンコーディングを返します。
+BOM が見つからなかった場合は nil を返します。
+
+自身がバイナリモードでないかすでにエンコーディングがセットされている場合、例外が発生します。
+
+```ruby title="例"
+File.write("bom.txt", "\u{FEFF}abc")
+File.open("bom.txt", "rb") do |io|
+  p io.set_encoding_by_bom    # =>  #<Encoding:UTF-8>
+  str = io.read
+  p str                       # =>  "abc"
+  p str.encoding              # =>  #<Encoding:UTF-8>
+end
+
+File.write("nobom.txt", "abc")
+File.open("nobom.txt", "rb") do |io|
+  p io.set_encoding_by_bom    # =>  nil
+end
+```
+
+### def autoclose=(bool)
+
+auto-close フラグを設定します。
+
+フラグが設定されているオブジェクトは
+close時/GCでのファイナライザ呼出時にファイルデスクリプタを close します。
+偽を設定すると close しません。
+
+- **param** `bool` -- 真偽値でフラグを設定します
+- **SEE** [m:IO#autoclose?]
+
+```ruby
+f = open("/dev/null")
+IO.for_fd(f.fileno)
+# ...
+f.gets # may cause Errno::EBADF
+
+f = open("/dev/null")
+IO.for_fd(f.fileno).autoclose = false
+# ...
+f.gets # won't cause Errno::EBADF
+```
+
+### def autoclose? -> bool
+
+auto-close フラグを返します。
+
+```ruby title="例"
+IO.open(IO.sysopen("testfile")) do |io|
+  p io.autoclose?       # => true
+  io.autoclose = false
+  p io.autoclose?       # => false
+end
+```
+
+- **SEE** [m:IO#autoclose=]
+
+### def each_codepoint{|c| ... }     -> self
+### def each_codepoint               -> Enumerator
+
+IO の各コードポイントに対して繰り返しブロックを呼びだします。
+
+ブロックの引数にはコードポイントを表す整数が渡されます。
+
+ブロックを省略した場合には、[c:Enumerator] を返します。
+
+```ruby title="例"
+IO.write("testfile", "abcdeあ")
+File.open("testfile") do |f|
+  f.each_codepoint { |i| p i }
+end
+# => 97
+# 98
+# 99
+# 100
+# 101
+# 12354
+```
+
+### def fdatasync -> 0
+
+IO のすべてのバッファされているデータを直ちにディスクに書き込みます。
+
+[man:fdatasync(2)] をサポートしていない OS 上では代わりに
+[m:IO#fsync] を呼びだします。
+
+[m:IO#fsync] との違いは [man:fdatasync(2)] を参照してください。
+
+- **raise** `NotImplementedError` -- [man:fdatasync(2)] も [man:fsync(2)] もサポートされていない OS で発生します。
+
+```ruby title="例"
+require "tempfile"
+
+Tempfile.open("testtmpfile") do |f|
+  f.print "test"
+  p File.read(f.path) # => ""
+  f.fdatasync
+  p File.read(f.path) # => "test"
+end
+```
+
+### def advise(advice, offset=0, len=0) -> nil
+
+[man:posix_fadvise(2)] を呼びだし、ファイルへのアクセスパターンをOSに知らせます。
+
+advice には以下のいずれかのシンボルを指定します。
+  - :normal - デフォルト
+  - :sequential - データは前から順にアクセスされる
+  - :random - データはランダムアクセスされる
+  - :willneed - データはこの直後にアクセスされる
+  - :dontneed - データは直後にはアクセスしない
+  - :noreuse - データは一度しかアクセスされない
+これらの advice が具体的に何をするのかはプラットフォーム依存です。
+
+ここでいう「データ」は offset と len で特定できます。
+len が 0 ならば、offset からファイル末尾までを指定したことになります。
+デフォルトでは offset と len がともに 0 なので、ファイル全体を指定したことになります。
+
+posix_fadvise をサポートしていないプラットフォーム上では何もしません。
+
+- **param** `advice` -- アクセスパターンを表すシンボル
+- **param** `offset` -- パターンを指定するデータの先頭位置
+- **param** `len` -- パターンを指定するデータの長さ
+
+- **raise** `IOError` -- ストリームが既に閉じられているときに発生する例外
+- **raise** `Errno::EBADF` -- ファイルデスクリプタが不正であるときに発生する例外
+- **raise** `Errno::EINVAL` -- advice が不正
+- **raise** `Errno::ESPIPE` -- ファイルデスクリプタが FIFO か pipe を指している場合に発生する例外(Linux はこの場合には Errno::EINVAL を発生する)
+- **raise** `RangeError` -- offset,lenが有効範囲から出ている場合に発生する例外
+
+```ruby title="例"
+p File.open("testfile") { |f| p f.advise(:sequential) } # => nil
+```
+
+#%since 3.2
+### def path -> String | nil
+### def to_path -> String | nil
+
+IO に関連付けられたパスを返します。IO がパスに関連付けられていない場合は nil を返します。
+
+このメソッドが返すパスがファイルシステム上に存在することは保証されていません。
+
+```ruby title="例"
+p STDIN.path                                 # => "<STDIN>"
+p IO.new(IO.sysopen("/")).path               # => "/"
+p IO.new(IO.sysopen("/"), path: "foo").path  # => "foo"
+```
+
+### def timeout -> Numeric | nil
+
+self に設定されている入出力のタイムアウトを返します。
+設定されていない場合は nil を返します。
+
+タイムアウトの設定については [m:IO#timeout=] を参照してください。
+
+```ruby title="例"
+r, w = IO.pipe
+p r.timeout      # => nil
+r.timeout = 0.5
+p r.timeout      # => 0.5
+```
+
+- **SEE** [m:IO#timeout=]
+
+### def timeout=(numeric) -> Numeric
+### def timeout=(nil) -> nil
+
+self に入出力のタイムアウトを秒単位で設定します。
+
+設定すると、可能な限りすべてのブロッキング操作にこのタイムアウトが適用されます。
+操作が設定した時間を超えると [c:IO::TimeoutError] が発生します。
+
+影響を受けるのは [m:IO#gets]、[m:IO#puts]、[m:IO#read]、[m:IO#write]、
+[m:IO#wait_readable]、[m:IO#wait_writable] などです
+([c:Socket] のブロッキング操作にも影響します)。
+
+- **param** `numeric` -- タイムアウトの秒数を数値で指定します。
+             nil を指定するとタイムアウトを解除します。
+
+```ruby title="例"
+r, w = IO.pipe
+r.timeout = 0.1
+
+r.read # ~> IO::TimeoutError
+```
+
+- **SEE** [m:IO#timeout], [c:IO::TimeoutError]
+
+### def wait(events, timeout)              -> Integer | nil
+### def wait(*mode, timeout = nil)          -> self | true | nil
+
+`self` が指定したイベント(読み込み可能・書き込み可能・優先データの受信)の準備ができるまでブロックします。
+
+第 1 の形式では、待つイベントを `IO::READABLE`・`IO::WRITABLE`・`IO::PRIORITY` のビット OR で指定します。
+準備ができたイベントのビットマスクを [c:Integer] で返し、`timeout` 秒待っても準備できなかった場合は nil を返します。
+`IO::READABLE` を含む場合、内部のバッファにデータがあればブロックせずに `IO::READABLE` を返します。
+
+第 2 の形式では、待つイベントをシンボルで指定します。`:read`(`:r`・`:readable`)・`:write`(`:w`・`:writable`)・
+`:read_write`(`:rw`・`:readable_writable`)を 1 つ以上指定でき、省略した場合は `:read` です。
+`timeout` とシンボルは任意の順序で指定できます。
+準備ができたら `self` を返し、内部のバッファにデータがあればブロックせずに true を返します。
+`timeout` 秒待っても準備できなかった場合は nil を返します。
+
+- **param** `events` -- 待つイベントを `IO::READABLE`・`IO::WRITABLE`・`IO::PRIORITY` のビット OR で指定します。
+- **param** `mode` -- 待つイベントを `:read`・`:write`・`:read_write` などのシンボルで指定します。
+- **param** `timeout` -- タイムアウトまでの秒数を指定します。nil を指定すると準備ができるまで待ち続けます。第 1 の形式では省略できません。
+- **raise** `ArgumentError` -- `events` が正の整数でない場合や、`mode` に未対応のシンボルを指定した場合に発生します。
+
+```ruby title="例"
+r, w = IO.pipe
+
+p r.wait(IO::READABLE, 0)                 # => nil
+p w.wait(IO::WRITABLE, 0) == IO::WRITABLE # => true
+p r.wait(:read, 0)                        # => nil
+
+w.write("x")
+p r.wait(IO::READABLE, 0) == IO::READABLE # => true
+p r.wait(:read, 0).equal?(r)              # => true
+```
+
+- **SEE** [m:IO#wait_readable], [m:IO#wait_writable], [m:IO#wait_priority]
+
+### def wait_readable(timeout = nil) -> self | true | nil
+
+`self` が読み込み可能になるまでブロックし、読み込み可能になったら真値を返します。
+
+一度ブロックしてから読み込み可能になった場合には `self` を返します。
+内部のバッファにデータがある場合にはブロックせずに true を返します。
+内部のバッファとは Ruby の処理系が保持管理しているバッファのことです。
+つまり、読み込み可能である場合には true を返す場合と `self` を返す場合があることに注意してください。
+`self` が EOF に達している場合も読み込み可能として扱われます。
+
+`timeout` を指定した場合は、指定秒数経過するまでブロックし、タイムアウトした場合は nil を返します。
+
+- **param** `timeout` -- タイムアウトまでの秒数を指定します。nil を指定すると読み込み可能になるまで待ち続けます。
+
+```ruby title="例"
+r, w = IO.pipe
+
+p r.wait_readable(0)           # => nil
+w.write("x")
+p r.wait_readable(0).equal?(r) # => true
+```
+
+- **SEE** [m:IO#wait], [m:IO#wait_writable]
+
+### def wait_writable(timeout = nil) -> self | nil
+
+`self` が書き込み可能になるまでブロックし、書き込み可能になったら `self` を返します。
+
+`timeout` を指定した場合は、指定秒数経過するまでブロックし、タイムアウトした場合は nil を返します。
+
+- **param** `timeout` -- タイムアウトまでの秒数を指定します。nil を指定すると書き込み可能になるまで待ち続けます。
+
+```ruby title="例"
+r, w = IO.pipe
+
+p w.wait_writable(0).equal?(w) # => true
+```
+
+- **SEE** [m:IO#wait], [m:IO#wait_readable]
+
+### def wait_priority(timeout = nil) -> self | true | false | nil
+
+`self` が優先データを受信して読み込み可能になるまでブロックし、読み込み可能になったら真値を返します。
+
+優先データ(緊急データ)は [m:Socket::Constants::MSG_OOB] フラグを用いて送受信され、通常はストリーム型のソケットに限られます。
+
+一度ブロックしてから読み込み可能になった場合には `self` を返します。
+内部のバッファにデータがある場合にはブロックせずに true を返します。
+`timeout` 秒待っても優先データを受信しなかった場合は偽の値(false または nil)を返します。
+
+- **param** `timeout` -- タイムアウトまでの秒数を指定します。nil を指定すると読み込み可能になるまで待ち続けます。
+
+- **SEE** [m:IO#wait], [m:IO#wait_readable], [m:IO#wait_writable]
+
+#%end
+
+## Constants
+
+### const READABLE -> Integer
+
+[m:IO#wait] で「読み込み可能」のイベントを表すビットです。
+
+### const WRITABLE -> Integer
+
+[m:IO#wait] で「書き込み可能」のイベントを表すビットです。
+
+### const PRIORITY -> Integer
+
+[m:IO#wait] で「優先データを受信して読み込み可能」のイベントを表すビットです。
+
+### const SEEK_CUR -> Integer
+
+[m:IO#seek] を参照してください。
+
+### const SEEK_END -> Integer
+
+[m:IO#seek] を参照してください。
+
+### const SEEK_SET -> Integer
+
+[m:IO#seek] を参照してください。
+
+### const SEEK_DATA -> Integer
+
+[m:IO#seek] を参照してください。
+
+Linux 3.1 以降で利用可能です。
+
+### const SEEK_HOLE -> Integer
+
+[m:IO#seek] を参照してください。
+
+Linux 3.1 以降で利用可能です。

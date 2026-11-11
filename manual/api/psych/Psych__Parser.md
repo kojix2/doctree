@@ -1,0 +1,130 @@
+---
+library: psych
+---
+# class Psych::Parser
+
+YAML のパーサ。
+
+このクラスは YAML ドキュメントをパースし、コンストラクタに渡されたハンドラにイベントを通知(呼び出し)します。
+このイベントを使って YAML の AST を構築したり YAML ドキュメントを別のフォーマット変換したりします。
+[c:Psych::Emitter] を使うとパースしたドキュメントを元通りに出力することもできます。
+
+[c:Psych::Parser] が生成するイベントは [c:Psych::Handler]
+を見てください。
+
+以下の例では YAML ドキュメント に含まれているスカラー値を表示します。
+
+```ruby
+require 'psych'
+
+# Handler for detecting scalar values
+class ScalarHandler < Psych::Handler
+  def scalar value, anchor, tag, plain, quoted, style
+    puts value
+  end
+end
+
+parser = Psych::Parser.new(ScalarHandler.new)
+parser.parse(yaml_document)
+```
+
+次の例は [c:Psych::Emitter] にパースの結果を戻しています。
+STDIN からの入力をパース→YAMLフォーマットで STDERR に出力という流れになっています。
+
+```ruby
+require 'psych'
+
+parser = Psych::Parser.new(Psych::Emitter.new($stderr))
+parser.parse($stdin)
+```
+
+[c:Psych::Parser] と [c:Psych::TreeBuilder] を組み合わせると
+YAML の AST を構築できます。
+
+## Constants
+
+### const ANY -> Integer
+
+「任意の」エンコーディングを意味します。
+
+### const UTF8 -> Integer
+
+UTF-8 エンコーディングを表します。
+
+- **SEE** [m:Psych::Handler#start_stream]
+
+### const UTF16LE -> Integer
+
+UTF-16LE エンコーディングを表します。
+
+- **SEE** [m:Psych::Handler#start_stream]
+
+### const UTF16BE -> Integer
+
+UTF-16BE エンコーディングを表します。
+
+- **SEE** [m:Psych::Handler#start_stream]
+
+## Class Methods
+
+### def Psych::Parser.new(handler = Handler.new) -> Psych::Parser
+
+新たなパーサオブジェクトを生成して返します。
+
+handler で YAML のイベントを処理するハンドラを指定します。
+詳しくは [c:Psych::Parser] を参照してください。
+
+- **param** `handler` -- YAML のイベントを処理するハンドラ
+
+## Instance Methods
+
+### def parse(yaml) -> self
+### def parse(yaml, path) -> self
+
+YAML ドキュメントをパースし、イベントハンドラにイベントを逐次通知します。
+
+`path` はパース中に発生した例外 [c:Psych::SyntaxError] のメッセージと [m:Psych::SyntaxError#file] に用います。
+省略した場合は、`yaml` が `path` メソッドを持つ([c:File] オブジェクトなど)ときはその値を、そうでなければ `"<unknown>"` を用います。
+
+- **param** `yaml` -- YAML ドキュメント(文字列 or [c:IO] オブジェクト)
+- **param** `path` -- [c:Psych::SyntaxError] 発生時にファイル名として表示する文字列
+- **raise** `Psych::SyntaxError` -- YAMLドキュメントに文法エラーが発見されたときに発生します
+- **SEE** [m:Psych::Parser.new], [c:Psych::Handler], [m:Psych::Parser#handler]
+
+### def mark -> Psych::Parser::Mark
+
+パーサが現在読み込んでいる入力上の位置を [c:Psych::Parser::Mark] オブジェクトで返します。
+
+#%# This function have no effect
+#%# --- external_encoding=(encoding)
+
+### def handler -> Psych::Handler
+
+セットされているイベントハンドラを返します。
+
+- **SEE** [m:Psych::Parser#handler=]
+
+### def handler=(val)
+
+イベントハンドラをセットします。
+
+- **param** `val` -- セットするハンドラ
+- **SEE** [m:Psych::Parser#handler=]
+
+# class Psych::Parser::Mark < Struct
+
+YAML document の位置を表現するクラスです。
+
+## Instance Methods
+
+### def index -> Integer
+
+先頭からの文字数。
+
+### def line -> Integer
+
+先頭からの行数。
+
+### def column -> Integer
+
+行の先頭からの文字数。

@@ -1,0 +1,77 @@
+---
+library: fiddle/import
+---
+# class Fiddle::CStruct
+
+C の構造体を表すクラスです。
+
+このクラスは直接は使わず、[m:Fiddle::Importer#struct] を用いてこのクラスを継承したクラスを生成し、それを利用します。
+
+[m:Fiddle::Importer#struct] が生成するクラスには構造体の各メンバへのアクセサが定義されています。
+このアクセサはシグネチャの型とメンバ名に従って定義されます。
+例えば
+
+```ruby
+require 'fiddle/import'
+include Fiddle::Importer
+S = struct(["long foo", "void* bar"])
+```
+
+とすると、 S#foo, S#foo= というアクセサが Integer とやりとりするように定義され、 S#bar, S#bar= というアクセサが Fiddle::Pointer
+でやりとりするように定義されます。
+
+このクラスは実際にはこのドキュメントに書かれているメソッドを保持していません。
+[m:Fiddle::Importer#struct] によって動的にメソッドが定義されます。
+このドキュメントは説明の便宜のためだと考えてください。
+
+## Class Methods
+### def Fiddle::CStruct.new(addr) -> Fiddle::CStruct
+
+addr のアドレスが指すメモリを構造体のアドレスとみなし、構造体を作ります。
+
+C におけるキャストと似ています。
+
+```c
+return (struct foo*)addr;
+```
+
+というコードと対応していると言えます。
+
+- **param** `addr` -- アドレス
+
+### def Fiddle::CStruct.malloc -> Fiddle::CStruct
+
+構造体のためのメモリを確保し、Fiddle::CStruct の(子孫クラスの)
+オブジェクトで返します。
+
+C における
+
+```c
+return (struct foo*)malloc(sizeof(struct foo));
+```
+
+というコードと対応していると言えます。
+
+### def Fiddle::CStruct.size -> Integer
+
+構造体のサイズをバイト数で返します。
+
+このメソッドが返す値は C の構造体としてのサイズです。
+Ruby のオブジェクトとしてはより大きなメモリを消費しています。
+
+## Instance Methods
+### def to_i -> Integer
+
+保持している構造体の先頭アドレスを整数で返します。
+
+### def to_ptr -> Fiddle::Pointer
+
+保持している構造体へのポインタを返します。
+
+# class Fiddle::CUnion
+
+C の共用体を表すクラスです。
+
+このクラスは直接は使わず、[m:Fiddle::Importer#union] を用いてこのクラスを継承したクラスを生成し、それを利用します。
+
+[c:Fiddle::CStruct] と同様の構造をしています。詳しくはそちらを見てください。

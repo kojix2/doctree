@@ -1,0 +1,265 @@
+---
+library: _builtin
+---
+# class Binding < Object
+
+ローカル変数のテーブルと self、モジュールのネストなどの情報を保持するオブジェクトのクラスです。
+
+組み込み関数 [m:Kernel?.binding] と [m:Proc#binding] によってのみ生成され、[m:Kernel?.eval] の第 2 引数に使用します。
+またトップレベルの Binding オブジェクトとして組み込み定数
+[m:Object::TOPLEVEL_BINDING] が用意されています。
+
+## Instance Methods
+
+### def eval(expr, fname = __FILE__, lineno = 1)    -> object
+
+自身をコンテキストとし文字列 expr を
+Ruby プログラムとして評価しその結果を返します。
+組み込み関数 [m:Kernel?.eval] を使って
+eval(expr, self, fname, lineno) とするのと同じです。
+
+- **param** `expr` --  評価したい式を文字列で与えます。
+
+- **param** `fname` -- ファイル名を文字列で与えます。式 expr が fname というファイル名にあるかのように実行されます。
+
+- **param** `lineno` -- 行番号を整数で与えます。式 expr の先頭行の行番号が lineno であるかのように実行されます。
+
+```ruby title="例"
+def get_binding(str)
+  binding
+end
+str = "hello"
+p eval("str + ' Fred'")                      # => "hello Fred"
+p get_binding("bye").eval("str + ' Fred'")   # => "bye Fred"
+```
+
+- **SEE** [m:Kernel?.eval]
+
+### def local_variable_get(symbol) -> object
+
+引数 symbol で指定した名前のローカル変数に設定された値を返します。
+
+- **param** `symbol` -- ローカル変数名を [c:Symbol] オブジェクトで指定します。
+
+- **raise** `NameError` -- 引数 symbol で指定したローカル変数が未定義の場合に発生します。
+#%since 4.0
+- **raise** `NameError` -- 番号指定パラメータ（_1 など）を指定した場合に発生します。
+#%end
+
+```ruby title="例"
+def foo
+  a = 1
+  p binding.local_variable_get(:a) # => 1
+  binding.local_variable_get(:b) # ~> NameError
+end
+```
+
+このメソッドは以下のコードの短縮形です。
+
+```ruby
+binding.eval("#{symbol}")
+```
+
+- **SEE** [m:Binding#local_variable_set], [m:Binding#local_variable_defined?]
+
+### def local_variable_set(symbol, obj)
+
+引数 symbol で指定した名前のローカル変数に引数 obj を設定します。
+
+- **param** `symbol` -- ローカル変数名を [c:Symbol] オブジェクトで指定します。
+
+- **param** `obj` -- 引数 symbol で指定したローカル変数に設定するオブジェクトを指定します。
+#%since 4.0
+- **raise** `NameError` -- 番号指定パラメータ（_1 など）を symbol に指定した場合に発生します。
+#%end
+
+```ruby title="例"
+def foo
+  a = 1
+  bind = binding
+  bind.local_variable_set(:a, 2) # set existing local variable `a'
+  bind.local_variable_set(:b, 3) # create new local variable `b'
+                                 # `b' exists only in binding
+  p bind.local_variable_get(:a)  # => 2
+  p bind.local_variable_get(:b)  # => 3
+  p a                            # => 2
+  b                               # ~> NameError
+end
+```
+
+このメソッドは以下のコード(ただし、obj が Ruby のコードで出力される場合)と同様の動作をします。
+
+```ruby
+binding.eval("#{symbol} = #{obj}")
+```
+
+- **SEE** [m:Binding#local_variable_get], [m:Binding#local_variable_defined?]
+
+### def local_variable_defined?(symbol) -> bool
+
+引数 symbol で指定した名前のローカル変数が定義されている場合に true を、そうでない場合に false を返します。
+
+- **param** `symbol` -- ローカル変数名を [c:Symbol] オブジェクトで指定します。
+#%since 4.0
+- **raise** `NameError` -- 番号指定パラメータ（_1 など）を指定した場合に発生します。
+#%end
+
+```ruby title="例"
+def foo
+  a = 1
+  p binding.local_variable_defined?(:a) # => true
+  p binding.local_variable_defined?(:b) # => false
+end
+```
+
+このメソッドは以下のコードの短縮形です。
+
+```ruby
+binding.eval("defined?(#{symbol}) == 'local-variable'")
+```
+
+- **SEE** [m:Binding#local_variable_get], [m:Binding#local_variable_set]
+
+### def local_variables -> [Symbol]
+
+ローカル変数の一覧を [c:Symbol] の配列で返します。
+
+```ruby title="例"
+def foo
+  a = 1
+  2.times do |n|
+    p binding.local_variables # => [:a, :n]
+  end
+end
+```
+
+#%since 4.0
+番号指定パラメータ（_1 など）は Ruby 4.0 からローカル変数として扱われなくなり、返り値に含まれなくなりました。
+
+```ruby
+[1].each do
+  p _1                      # => 1
+  p binding.local_variables # => []（Ruby 3.4 までは [:_1]）
+end
+```
+
+番号指定パラメータ自体は従来どおり参照できます（[ref:d:spec/call#numbered_parameters]）。
+[c:Binding] から番号指定パラメータを扱うには [m:Binding#implicit_parameters] を使用してください。
+#%end
+
+このメソッドは以下のコードと同様の動作をします。
+
+```ruby
+binding.eval("local_variables")
+```
+
+#%# https://bugs.ruby-lang.org/issues/8779 を参照。
+#%since 4.0
+### def implicit_parameters -> [Symbol]
+
+self のスコープで定義されている番号指定パラメータおよび it パラメータの名前を
+[c:Symbol] の配列で返します。定義されていない場合は空の配列を返します。
+
+これらは [m:Binding#local_variables] の返り値には含まれません。
+
+```ruby
+[42].each do
+  it
+  p binding.implicit_parameters # => [:it]
+end
+
+{ k: 42 }.each do
+  _2
+  p binding.implicit_parameters # => [:_1, :_2]
+end
+
+# どちらも使っていない場合
+p binding.implicit_parameters   # => []
+```
+
+- **SEE** [m:Binding#implicit_parameter_get], [m:Binding#implicit_parameter_defined?], [m:Binding#local_variables]
+
+### def implicit_parameter_get(symbol) -> object
+
+引数 symbol で指定した番号指定パラメータまたは it パラメータの値を返します。
+
+- **param** `symbol` -- 番号指定パラメータまたは it パラメータの名前を [c:Symbol] で指定します。
+
+- **raise** `NameError` -- 指定した名前が番号指定パラメータでも it パラメータでもない場合に発生します。
+
+- **raise** `NameError` -- 指定したパラメータが self のスコープで定義されていない場合に発生します。
+
+```ruby
+[42].each do
+  it
+  p binding.implicit_parameter_get(:it) # => 42
+end
+
+{ k: 42 }.each do
+  _2
+  p binding.implicit_parameter_get(:_1) # => :k
+  p binding.implicit_parameter_get(:_2) # => 42
+end
+```
+
+- **SEE** [m:Binding#implicit_parameters], [m:Binding#implicit_parameter_defined?]
+
+### def implicit_parameter_defined?(symbol) -> bool
+
+引数 symbol で指定した番号指定パラメータまたは it パラメータが self のスコープで定義されている場合に true を、そうでない場合に false を返します。
+
+定義されていない場合に false を返すのは、symbol が番号指定パラメータまたは
+it パラメータの名前である場合だけです。それ以外の名前を指定した場合は
+[c:NameError] が発生します。
+
+- **param** `symbol` -- 番号指定パラメータまたは it パラメータの名前を [c:Symbol] で指定します。
+
+- **raise** `NameError` -- 指定した名前が番号指定パラメータでも it パラメータでもない場合に発生します。
+
+```ruby
+[42].each do
+  it
+  p binding.implicit_parameter_defined?(:it) # => true
+  p binding.implicit_parameter_defined?(:_1) # => false
+end
+
+{ k: 42 }.each do
+  _2
+  p binding.implicit_parameter_defined?(:_1) # => true
+  p binding.implicit_parameter_defined?(:_3) # => false
+  p binding.implicit_parameter_defined?(:it) # => false
+end
+```
+
+- **SEE** [m:Binding#implicit_parameters], [m:Binding#implicit_parameter_get]
+
+#%end
+
+### def receiver -> object
+
+保持するコンテキスト内での self を返します。
+
+このメソッドは以下のコードと同様の動作をします。
+
+```ruby
+binding.eval("self")
+```
+
+### def irb -> object
+{: since="2.5.0"}
+
+REPLのセッションを開始します。
+
+Ruby 2.5 からは require 'irb' せずに直接 binding.irb を呼び出しても使えるようになりました。
+
+- **SEE** [lib:irb]
+
+### def source_location  -> [String, Integer]
+
+self の Ruby のソースファイル名と行番号を返します。
+
+[ref:d:spec/variables#pseudo] の `__FILE__` と `__LINE__` も参照してください。
+
+```ruby title="例"
+p binding.source_location # => ["test.rb", 1]
+```

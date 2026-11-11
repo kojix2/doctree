@@ -22,7 +22,7 @@ Emacs のようなキー操作などができます。
     print("-> ", buf, "\n")
   end
 
-ユーザが入力した内容を履歴(以下、ヒストリ)として記録することができます。
+ユーザが入力した内容を履歴(以下、ヒストリ)として記録できます。
 定数 [[c:Readline::HISTORY]] を使用して入力履歴にアクセスできます。
 例えば、[[c:Readline::HISTORY]].to_a により、
 全ての入力した内容を文字列の配列として取得できます。
@@ -457,7 +457,6 @@ GNU Readline で定義されている関数を使用してユーザ名の補完�
 @see [[m:Readline.completion_proc=]]
 
 = object Readline::HISTORY
-
 extend Enumerable
 
 Readline::HISTORY を使用してヒストリにアクセスできます。

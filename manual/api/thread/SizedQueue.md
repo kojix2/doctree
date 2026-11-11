@@ -1,0 +1,199 @@
+---
+library:
+  - _builtin
+---
+# class Thread::SizedQueue < Thread::Queue
+
+alias SizedQueue
+
+サイズの最大値を指定できる [c:Thread::Queue] です。
+
+### 例 {#example}
+
+[ruby-list:283] より。q をサイズ 1 の SizedQueue オブジェクトにすることによって、入力される行と出力される行が同じ順序になります。
+q = [] にすると入力と違った順序で行が出力されます。
+
+```ruby
+q = Thread::SizedQueue.new(1)
+
+th = Thread.start {
+  while line = q.pop
+    print line
+  end
+}
+
+while l = gets
+  q.push(l)
+end
+q.push(l)
+
+th.join
+```
+
+## Class Methods
+
+### def Thread::SizedQueue.new(max) -> Thread::SizedQueue
+
+Thread::SizedQueue オブジェクトを生成します。
+
+- **param** `max` -- キューのサイズの最大値です。
+
+#%#noexample 要約の例を参照
+使用例は [ref:c:Thread::SizedQueue#example] を参照してください。
+
+## Instance Methods
+
+### def max -> Integer
+
+キューの最大サイズを返します。
+
+```ruby title="例"
+q = Thread::SizedQueue.new(4)
+p q.max # => 4
+```
+
+### def max=(n)
+
+キューの最大サイズを設定します。
+
+- **param** `n` -- キューの最大サイズを指定します。
+
+```ruby title="例"
+q = Thread::SizedQueue.new(4)
+p q.max # => 4
+q.max = 5
+p q.max # => 5
+```
+
+#%since 3.2
+### def push(obj, non_block = false, timeout: nil) -> self | nil
+### def enq(obj, non_block = false, timeout: nil)  -> self | nil
+#%else
+### def push(obj, non_block = false) -> ()
+### def enq(obj, non_block = false)  -> ()
+#%end
+### def <<(obj)                      -> ()
+
+キューに与えられたオブジェクトを追加します。
+
+キューのサイズが [m:Thread::SizedQueue#max] に達している場合は、
+non_block が真でなければ、キューのサイズが [m:Thread::SizedQueue#max]
+より小さくなるまで他のスレッドに実行を譲ります。
+その後、キューに与えられたオブジェクトを追加します。
+
+#%since 3.2
+`timeout` を指定した場合は、その秒数が経過してもキューが一杯のままであれば、
+オブジェクトを追加せずに `nil` を返します。追加できたときは `self` を返します。
+
+#%end
+- **param** `obj` -- キューに追加したいオブジェクトを指定します。
+- **param** `non_block` -- true を与えると、キューが一杯の時に例外 [c:ThreadError] が発生します。
+#%since 3.2
+- **param** `timeout` -- 待つ秒数を数値で指定します。`nil` の場合は無期限に待ちます。`non_block` が真のときに指定することはできません。
+- **raise** `ArgumentError` -- `non_block` が真のときに `timeout` を指定した場合に発生します。
+#%end
+
+#%#noexample 要約の例を参照
+使用例は [ref:c:Thread::SizedQueue#example] を参照してください。
+
+- **SEE** [m:Thread::Queue#push]
+
+#%since 3.2
+### def pop(non_block = false, timeout: nil)   -> object | nil
+### def shift(non_block = false, timeout: nil) -> object | nil
+### def deq(non_block = false, timeout: nil)   -> object | nil
+#%else
+### def pop(non_block = false)   -> object
+### def shift(non_block = false) -> object
+### def deq(non_block = false)   -> object
+#%end
+
+キューからひとつ値を取り出します。
+キューに push しようと待っているスレッドがあれば、実行を再開させます。
+
+#%since 3.2
+`timeout` を指定した場合は、その秒数が経過してもキューが空のままであれば、`nil` を返します。
+
+#%end
+- **param** `non_block` -- true を与えると、キューが空の時に例外 [c:ThreadError] が発生します。
+#%since 3.2
+- **param** `timeout` -- 待つ秒数を数値で指定します。`nil` の場合は無期限に待ちます。`non_block` が真のときに指定することはできません。
+- **raise** `ArgumentError` -- `non_block` が真のときに `timeout` を指定した場合に発生します。
+#%end
+
+```ruby title="例"
+q = Thread::SizedQueue.new(4)
+
+th1 = Thread.start do
+  while resource = q.pop
+    puts resource
+  end
+end
+
+[:resource1, :resource2, :resource3, nil].each{|r|
+  q.push(r)
+}
+
+p th1.join
+# => resource1
+# resource2
+# resource3
+```
+
+```ruby title="例: nonblock = true"
+q = Thread::SizedQueue.new(4)
+
+th1 = Thread.start do
+  while resource = q.pop
+    puts resource
+  end
+end
+
+[:resource1, :resource2, :resource3, nil].each{|r|
+  q.push(r)
+}
+
+begin
+  th1.join
+  q.pop(true)
+rescue => e
+  p e
+  p e.message
+end
+
+# => resource1
+# resource2
+# resource3
+# => #<ThreadError: queue empty>
+# => "queue empty"
+```
+
+- **SEE** [m:Thread::Queue#pop]
+
+### def close -> self
+
+キューを close します。詳しくは [m:Thread::Queue#close] を参照してください。
+
+[c:Thread::Queue] とはキューにオブジェクトを追加するスレッドの動作が異なります。キューにオブジェクトを追加するスレッドを待機している場合は
+[c:ClosedQueueError] が発生して中断されます。
+
+```ruby title="例"
+q = Thread::SizedQueue.new(4)
+
+[:resource1, :resource2, :resource3, nil].each { |r| q.push(r) }
+
+p q.closed? # => false
+q.close
+p q.closed? # => true
+```
+
+- **SEE** [m:Thread::Queue#close]
+
+### def empty? -> bool
+
+キューが空の時、真を返します。
+
+### def length -> Integer
+### def size -> Integer
+
+キューの長さを返します。

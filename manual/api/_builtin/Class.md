@@ -1,0 +1,208 @@
+---
+library: _builtin
+---
+# class Class < Module
+
+クラスのクラスです。
+
+より正確に言えば、個々のクラスはそれぞれメタクラスと呼ばれる名前のないクラスをクラスとして持っていて、Class はそのメタクラスのクラスです。この関係は少し複雑ですが、Ruby を利用するにあたっては特に重要ではありません。
+
+クラスとモジュールには
+
+  - クラスはインスタンスを作成できるが、モジュールはできない。
+  - モジュールを他のモジュールやクラスにインクルードすることはできるが、クラスをインクルードすることはできない。
+
+という違いがありますが、それ以外のほとんどの機能は [c:Module] から継承されています。Module のメソッドのうち
+
+  - [m:Module#module_function]
+  - [m:Module#extend_object]
+  - [m:Module#append_features]
+  - [m:Module#prepend_features]
+  - [m:Module#refine]
+
+は Class では未定義にされています。
+
+## Class Methods
+
+### def Class.new(superclass = Object)                -> Class
+### def Class.new(superclass = Object) {|klass| ... } -> Class
+
+新しく名前の付いていない superclass のサブクラスを生成します。
+
+名前のないクラスは、最初に名前を求める際に代入されている定数名を検索し、見つかった定数名をクラス名とします。
+
+```ruby title="例"
+p foo = Class.new   # => #<Class:0x401b90f8>
+p foo.name          # => nil
+Foo = foo           # ここで p foo すれば "Foo" 固定
+Bar = foo
+p foo.name          # => "Bar"  ("Foo" になるか "Bar" になるかは不定)
+```
+
+ブロックが与えられた場合、生成したクラスを引数としてクラスのコンテキストでブロックを実行します。以下のコードと同じです。
+
+```ruby title="例"
+klass = Class.new(superclass)
+klass.module_eval {|m|
+  # ...
+}
+klass
+```
+
+この場合も生成したクラスを返します。
+ブロックの実行は Class#initialize が行います。
+
+- **param** `superclass` -- 生成するクラスのスーパークラスを指定します。
+
+```ruby title="例"
+k = Class.new{|c|
+  def initialize
+    p "in initialize"
+  end
+
+  def hoge
+    p "hoge hoge hoge"
+  end
+}
+o = k.new              # => "in initialize"
+p o.hoge               # => "hoge hoge hoge"
+```
+
+## Instance Methods
+
+### def allocate    -> object
+
+自身のインスタンスを生成して返します。生成したオブジェクトは自身のインスタンスであること以外には何も特性を持ちません。
+
+```ruby title="例"
+klass = Class.new do
+  def initialize(*args)
+    @initialized = true
+  end
+
+  def initialized?
+    @initialized || false
+  end
+end
+
+p klass.allocate.initialized? # => false
+```
+
+### def new(*args, &block)    -> object
+
+自身のインスタンスを生成して返します。
+このメソッドの引数はブロック引数も含め [m:Object#initialize] に渡されます。
+
+new は [m:Class#allocate] でインスタンスを生成し、
+[m:Object#initialize] で初期化を行います。
+
+- **param** `args` -- [m:Object#initialize] に渡される引数を指定します。
+
+- **param** `block` -- [m:Object#initialize] に渡されるブロックを指定します。
+
+```ruby title="例"
+# [[c:Class]] クラスのインスタンス、C クラスを生成
+C = Class.new   # => C
+
+# [[c:Class]] クラスのインスタンス、C クラスのインスタンスを生成
+p C.new         # => #<C:0x00005623f8b4e458>
+```
+
+#%since 3.1
+### def subclasses    -> [Class]
+
+自身が直接のスーパークラスになっている(特異クラスを除く)クラスの配列を返します。
+返り値の配列の順序は未定義です。
+
+```ruby title="例"
+class A; end
+class B < A; end
+class C < B; end
+class D < A; end
+
+p A.subclasses      # => [D, B]
+p B.subclasses      # => [C]
+p C.subclasses      # => []
+```
+
+- **SEE** [m:Class#superclass]
+#%end
+### def superclass    -> Class | nil
+
+自身のスーパークラスを返します。
+
+```ruby title="例"
+p File.superclass        # => IO
+p IO.superclass          # => Object
+class Foo; end
+class Bar < Foo; end
+p Bar.superclass         # => Foo
+p Object.superclass      # => BasicObject
+```
+
+ただし [c:BasicObject].superclass は nil を返します。
+
+```ruby title="例"
+p BasicObject.superclass # => nil
+```
+
+#%since 3.1
+- **SEE** [m:Class#subclasses]
+#%end
+
+#%since 3.2
+### def attached_object    -> object
+
+自身が特異クラスであるとき、その特異クラスが属しているオブジェクトを返します。
+
+- **raise** `TypeError` -- 自身が特異クラスでない場合に発生します。
+
+```ruby
+class Foo; end
+
+p Foo.singleton_class.attached_object      # => Foo
+
+obj = Foo.new
+p obj.singleton_class.attached_object.equal?(obj) # => true
+
+# 特異クラスの特異クラスも特異クラスなので、その属するオブジェクトを返す
+p Foo.singleton_class.singleton_class.attached_object # => #<Class:Foo>
+```
+
+```ruby title="例: 特異クラスでない場合"
+class Foo; end
+
+Foo.attached_object       # ~> TypeError
+NilClass.attached_object  # ~> TypeError
+```
+
+- **SEE** [m:Object#singleton_class]
+#%end
+
+### def _load(str)    -> Class
+
+[m:Object#_dump] を参照して下さい。
+
+- **param** `str` -- Ruby のオブジェクトがダンプされた文字列を指定します。
+
+## Private Instance Methods
+
+### def inherited(subclass)     -> ()
+
+クラスのサブクラスが定義された時、新しく生成されたサブクラスを引数にインタプリタから呼び出されます。このメソッドが呼ばれるタイミングはクラス定義文の実行直前です。
+
+- **param** `subclass` -- プログラム内で新たに定義された自身のサブクラスです。
+
+```ruby title="例"
+class Foo
+  def Foo.inherited(subclass)
+    puts "class \"#{self}\" was inherited by \"#{subclass}\""
+  end
+end
+class Bar < Foo
+  puts "executing class body"
+end
+
+# => class "Foo" was inherited by "Bar"
+#    executing class body
+```

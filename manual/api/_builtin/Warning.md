@@ -1,0 +1,105 @@
+---
+library: _builtin
+since: "2.4.0"
+---
+# module Warning
+
+警告を出力するためのモジュールです。
+
+本モジュールは warn インスタンスメソッドのみで構成されます。しかし、本モジュールは自身を extend するため、.warn メソッドも利用可能です。warn メソッドは Ruby が出力する全ての警告に対して呼び出されます。デフォルトでは全ての警告が [m:$stderr] に出力されます。
+
+[m:Warning.warn] をオーバーライドする事で Ruby から出力される警告の動作を変更する事ができます。例えばエラーメッセージのフィルタリングや、[m:$stderr] 以外に警告を出力といった変更が可能です。[m:Warning.warn] をオーバーライドする際は super を呼び出すとデフォルトの動作である [m:$stderr] への出力ができます。
+
+## Class Methods
+
+### def Warning.[](category) -> bool
+
+category の種類の警告を表示するかどうかのフラグを返します。
+
+- **param** `category` -- 警告の種類を指定します。
+
+サポートされている category は以下の通りです。
+
+- **`:deprecated`**:
+  非推奨の警告。
+  例: nil ではない値を [m:$,] や [m:$;] に設定する、キーワード引数、ブロックなしで proc / lambda を呼び出す、等
+
+- **`:experimental`**:
+  実験的な機能。
+
+    例: パターンマッチング
+
+#%since 3.3
+- **`:performance`**:
+  パフォーマンスに関する警告。
+#%end
+
+#%since 3.4
+- **`:strict_unused_block`**:
+  ブロックを使わないメソッドに渡される無駄なブロックを、
+  「別クラスの同名メソッドがブロックを使う」場合を含めて、常に警告します。
+#%end
+
+### def Warning.[]=(category, flag)
+
+category の警告を表示するかどうかのフラグを設定します。
+サポートされている category については [m:Warning.\[\]] を参照してください。
+
+- **param** `category` -- 警告の種類を指定します。
+- **param** `flag` -- 真、または偽を指定します。
+
+- **SEE** [m:Warning.\[\]]
+
+### def Warning.warn(message, category: nil) -> nil
+
+引数 message を標準エラー出力 [m:$stderr] に出力します。
+
+本メソッドはRubyが出力する全ての警告に対して呼び出されます。
+そのため本メソッドをオーバーライドすることで Ruby から出力される警告の動作を変更できます。
+またオーバーライドしたメソッドからは super を呼び出すことで、デフォルトの動作である [m:$stderr] への出力ができます。
+
+```ruby
+module Warning
+  # 警告メッセージに category を表示し、message 末尾に !!! を追加する
+  def self.warn(message, category: nil)
+    super("#{category} warning : #{message.chomp}!!!\n")
+  end
+end
+
+warn("hoge", category: :deprecated)
+# => deprecated warning : hoge!!!
+```
+
+- **param** `message` -- 出力するオブジェクトを指定します。
+
+- **param** `category` -- 警告のカテゴリを指定します。サポートされている category については [m:Warning.\[\]] を参照してください。
+
+- **SEE** [m:Kernel?.warn], [m:Warning#warn]
+
+#%since 3.4
+### def Warning.categories -> Array
+
+警告カテゴリの一覧を返します。
+
+```ruby
+p Warning.categories # => [:deprecated, :experimental, :performance, :strict_unused_block]
+```
+
+#%end
+
+## Public Instance Methods
+
+### def warn(message, category: nil) -> nil
+
+引数 message を標準エラー出力 [m:$stderr] に出力します。
+
+[m:Kernel?.warn]の挙動を変更する際は、このメソッドではなくクラスメソッドである[m:Warning.warn]をオーバーライドする必要があります。
+
+- **param** `message` -- 出力するオブジェクトを指定します。
+
+- **param** `category` -- 警告のカテゴリを指定します。サポートされている category については [m:Warning.\[\]] を参照してください。
+
+#%# TODO: messageに改行を渡さないとそのまま出力されるように見えるため、確認してから記載する。
+#%# Writes warning message msg to $stderr, followed by a newline if the message does not end in a newline.
+
+- **SEE** [m:Kernel?.warn], [m:Warning.warn]

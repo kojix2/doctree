@@ -1,0 +1,4439 @@
+---
+library: _builtin
+include:
+  - Comparable
+---
+# class String < Object
+
+文字列のクラスです。
+ヌル文字を含む任意のバイト列を扱うことができます。
+文字列の長さにはメモリ容量以外の制限はありません。
+
+文字列は通常、文字列リテラルを使って生成します。
+以下に文字列リテラルの例をいくつか示します。
+
+```ruby title="文字列リテラルの例"
+'str\\ing'   # シングルクオート文字列 (エスケープシーケンスがほぼ無効)
+"string\n"   # ダブルクオート文字列 (エスケープシーケンスがすべて有効)
+%q(str\\ing) # 「%q」文字列 (エスケープシーケンスがほぼ無効、デリミタが変えられる)
+%Q(string\n) # 「%Q」文字列 (エスケープシーケンスがすべて有効、デリミタが変えられる)
+
+# ヒアドキュメント
+<<End
+この行はヒアドキュメント
+End
+
+# ダブルクオートヒアドキュメント (クオートなしの場合と同じ)
+<<"End"
+この行はヒアドキュメント
+End
+
+# シングルクオートヒアドキュメント (一切のエスケープシーケンスが無効)
+<<'End'
+この行はヒアドキュメント
+End
+
+# 終端記号がインデントされたヒアドキュメント
+# シングルクオート、ダブルクオートとの併用も可能
+<<-End
+この行はヒアドキュメント (終端記号をインデントできる)
+   End
+
+# 中身がインデントされたヒアドキュメント
+# シングルクオート、ダブルクオートとの併用も可能
+<<~End
+  この行のインデントは無視される
+End
+```
+
+### 破壊的な変更 {#mutable}
+
+Ruby の String クラスは mutable です。
+つまり、オブジェクト自体を破壊的に変更できます。
+
+「破壊的な変更」とは、あるオブジェクトの内容自体を変化させることです。
+例えば文字列のすべての文字を破壊的に大文字へ変更する
+[m:String#upcase!] メソッドの使用例を以下に示します。
+
+```ruby title="例:String#upcase!"
+a = "string"
+b = a
+a.upcase!
+p a   # => "STRING"
+p b   # => "STRING"
+```
+
+この例では、a に対してメソッドを呼んだにも関わらず b も変更されています。
+これは、変数 a と b が一つの文字列オブジェクトを指していて、
+upcase! メソッドでそのオブジェクト自体が変更されたからです。
+
+upcase! の非破壊版である [m:String#upcase] を使った例を以下に示します。
+こちらでは a の変更が b に波及しません。
+
+```ruby title="例:String#upcase"
+a = "string"
+b = a
+a = a.upcase
+p a   # => "STRING"
+p b   # => "string"
+```
+
+一般には、破壊的「ではない」メソッドを中心に使っていくほうがバグが出にくくなります。
+
+String クラスのメソッドには破壊的なメソッドも非破壊的なメソッドもあります。
+破壊的なメソッドの例としては concat, sub!, upcase! などが挙げられます。
+非破壊的なメソッドの例としては index, sub, upcase などが挙げられます。
+
+同じ動作で破壊的なメソッドと非破壊的なメソッドの両方が定義されているときは、破壊的なバージョンには名前の最後に「!」が付いています。
+例えば upcase メソッドは非破壊的で、upcase! メソッドは破壊的です。
+
+ただし、この命名ルールを「破壊的なメソッドにはすべて『!』が付いている」と解釈しないでください。
+例えば concat には「!」が付いていませんが、破壊的です。あくまでも、「『!』が付いているメソッドと付いていないメソッドの両方があるときは、『!』が付いているほうが破壊的」というだけです。
+「『!』が付いているならば破壊的」は常に成立しますが、逆は必ずしも成立しません。
+
+### 多言語化と文字列のエンコーディング {#m17n}
+
+String オブジェクトは自身のエンコーディング情報を持ちます。
+インスタンスメソッドはエンコーディングに従い、1バイトではなく1文字を単位として動作します。
+エンコーディングの変換にはメソッド [m:String#encode] を使います。
+
+```ruby title="例:エンコーディングの変換"
+p "いろは".size      # => 3
+p "漢字"[0]          # => "漢"
+p "山本山".reverse   # => "山本山" (回文なので分からないですね)
+p "ループ".reverse   # => "プール"
+
+s = "ruビー"
+s[0..1] = "ル"
+p s                  # => "ルビー"
+
+e = "言語".encode("EUC-JP")
+u = "言語".encode("UTF-8")
+p e.encoding                   # => Encoding::EUC_JP
+p u.encoding                   # => Encoding::UTF_8
+```
+
+より詳しく知りたい場合は、[d:spec/m17n] を参照してください。
+
+#### 文字列同士の比較・結合
+
+文字列同士の比較・結合などでは両者のエンコーディングを意識する必要があります。
+例えば [m:String#==] や [m:String#eql?] は両者のエンコーディングが等しくバイト列表現が等しい場合にのみ true を返します。
+このときエンコーディングが UTF-8 であっても正規化せずに比較します。
+文字列の結合も同様です。異なるエンコーディング同士の文字列を結合する時は明示的にエンコーディングを変換する必要があります。
+
+```ruby title="例:文字列の結合"
+s = "いろは"
+a = s.encode("EUC-JP")
+b = s.encode("UTF-8")
+p a == b                            # => false
+
+s = "合".encode("EUC-JP")
+p s + "\u{4f53}".encode("EUC-JP")   # => "合体"
+s + "\u{4f53}"                      # ~> Encoding::CompatibilityError
+```
+
+[m:String#eql?] はハッシュのキーの比較に使われますので、ハッシュのキーに非 ASCII 文字列を使う場合には注意が必要です。
+
+```ruby title="動作例"
+h = {}
+s = "いろは"
+s.force_encoding("EUC-JP")
+h[s] = 1
+s.force_encoding("ASCII-8BIT")
+p h[s]                             # => nil
+```
+
+#### 7bit クリーンな文字列
+
+ASCII 互換エンコーディングをもつ 7bit クリーンな文字列はエンコーディングに関わらず ASCII として扱うことができます。
+例えば [m:String#==] は両者の文字エンコーディングが異なっていても
+true を返します。
+ASCII 互換エンコーディングをもつ文字列にエンコーディングの変換なしで結合できます。
+
+```ruby title="例:"
+s = "abc"
+a = s.encode("EUC-JP")
+b = s.encode("UTF-8")
+p a == b                           # => true
+p a + b                            # => "abcabc"
+```
+
+ここで言う「ASCII互換エンコーディング」とは、コードポイントが同一という意味ではなくバイト列が同じことを意味します。従って UTF-16 はASCII互換ではありません。
+また厳密性を追求せず、おおむね互換なら互換と呼びます。よって Shift_JIS は ASCII 互換です。
+
+#### バイト列を表す文字列
+
+文字列ではない単なるバイト列も String オブジェクトで表されます。
+その時のエンコーディングは ASCII-8BIT です。
+
+## Class Methods
+
+### def String.try_convert(obj) -> String | nil
+
+obj を String に変換しようと試みます。変換には [m:Object#to_str] メソッドが使われます。変換後の文字列を返すか、何らかの理由により変換できなかった場合は nil が返されます。
+
+- **param** `obj` --   変換する任意のオブジェクト
+- **return** --      変換後の文字列または nil
+
+```ruby title="例"
+p String.try_convert("str")   # => "str"
+p String.try_convert(/re/)    # => nil
+```
+
+### def String.new(string = "")                -> String
+### def String.new(string = "", encoding: string.encoding, capacity: Integer) -> String
+
+string と同じ内容の新しい文字列を作成して返します。
+引数を省略した場合は空文字列を生成して返します。
+
+- **param** `string` --   文字列
+- **param** `encoding` -- 作成する文字列のエンコーディングを文字列か
+                [c:Encoding] オブジェクトで指定します(変換は行われません)。省略した場合は引数 string のエンコーディングと同じになります(ただし、string が指定されていなかった場合は
+                [m:Encoding::ASCII_8BIT]になります)。
+- **param** `capacity` -- 内部バッファのサイズを指定します。
+                指定することで、なんども文字列連結する
+                (そしてreallocがなんども呼ばれる)ときのパフォーマンスが改善されるかもしれません。
+                capacity を指定しても文字列の内容や
+                [m:String#bytesize] が変わるわけではありません。
+                内部バッファの実際の確保方法は実装依存です。
+                特に短い文字列はオブジェクトに直接埋め込まれる表現になって独立したバッファを持たないなど、指定が反映されない場合もあります。
+- **return** --         引数 string と同じ内容の文字列オブジェクト
+
+```ruby title="例"
+text = "hoge".encode("EUC-JP")
+no_option = String.new(text)                             # => "hoge"
+p no_option.encoding == Encoding::EUC_JP                 # => true
+with_encoding = String.new(text, encoding: "UTF-8")      # => "hoge"
+p with_encoding.encoding == Encoding::UTF_8              # => true
+p String.new("test", encoding: "UTF-8", capacity: 100_000) # => "test"
+```
+
+## Instance Methods
+
+### def +@ -> String | self
+
+self が freeze されている文字列の場合、元の文字列の複製を返します。
+freeze されていない場合は self を返します。
+
+```ruby title="例"
+# frozen_string_literal: false
+
+original_text = "text"
+unfrozen_text = +original_text
+p unfrozen_text.frozen?               # => false
+p original_text == unfrozen_text      # => true
+p original_text.equal?(unfrozen_text) # => true
+
+original_text = "text".freeze
+unfrozen_text = +original_text
+p unfrozen_text.frozen?               # => false
+p original_text == unfrozen_text      # => true
+p original_text.equal?(unfrozen_text) # => false
+```
+
+- **SEE** [m:String#-@]
+
+### def -@ -> String | self
+#%since 3.2
+### def dedup -> String | self
+#%end
+
+self が freeze されている文字列の場合、self を返します。
+freeze されていない場合は元の文字列の freeze された (できる限り既存の) 複製を返します。
+
+```ruby title="例"
+# frozen_string_literal: false
+
+original_text = "text"
+frozen_text = -original_text
+p frozen_text.frozen?               # => true
+p original_text == frozen_text      # => true
+p original_text.equal?(frozen_text) # => false
+
+original_text = "text".freeze
+frozen_text = -original_text
+p frozen_text.frozen?               # => true
+p original_text == frozen_text      # => true
+p original_text.equal?(frozen_text) # => true
+```
+
+- **SEE** [m:String#+@]
+
+### def +(other) -> String
+
+文字列と other を連結した新しい文字列を返します。
+
+- **param** `other` --    文字列
+- **return** --         self と other を連結した文字列
+
+```ruby title="例"
+p "str" + "ing"   # => "string"
+
+a = "abc"
+b = "def"
+p a + b   # => "abcdef"
+p a       # => "abc"  (変化なし)
+p b       # => "def"
+```
+
+### def *(times) -> String
+
+文字列の内容を times 回だけ繰り返した新しい文字列を作成して返します。
+
+- **param** `times` --    整数
+- **return** --         self を times 回繰り返した新しい文字列
+
+- **raise** `ArgumentError` -- 引数に負数を指定したときに発生します。
+
+```ruby title="例"
+p "str" * 3   # => "strstrstr"
+
+str = "abc"
+p str * 4   # => "abcabcabcabc"
+p str * 0   # => ""
+p str       # => "abc"  (変化なし)
+```
+
+### def %(args) -> String
+
+printf と同じ規則に従って args をフォーマットします。
+
+args が配列であれば [m:Kernel?.sprintf](self, *args) と同じです。
+それ以外の場合は [m:Kernel?.sprintf](self, args) と同じです。
+
+- **param** `args` --     フォーマットする値、もしくはその配列
+- **return** --         フォーマットされた文字列
+
+```ruby title="例"
+p "i = %d" % 10       # => "i = 10"
+p "i = %x" % 10       # => "i = a"
+p "i = %o" % 10       # => "i = 12"
+
+p "i = %#d" % 10      # => "i = 10"
+p "i = %#x" % 10      # => "i = 0xa"
+p "i = %#o" % 10      # => "i = 012"
+
+p "%d" % 10           # => "10"
+p "%d,%o" % [10, 10]  # => "10,12"
+```
+
+#%include(printf-format)
+
+### def <=>(other) -> -1 | 0 | 1 | nil
+
+self と other をバイト列として辞書式に比較して、
+self が大きい時には 1、等しい時には 0、小さい時には -1 を返します。
+このメソッドは Comparable モジュールのメソッドを実装するために使われます。
+
+other が文字列でない場合、
+other.to_str と other.<=> が定義されていれば
+0 - (other <=> self) の結果を返します。
+そうでなければ nil を返します。
+
+- **param** `other` --    文字列
+- **return** --         比較結果の整数か nil
+
+```ruby title="例"
+p "aaa" <=> "xxx"   # => -1
+p "aaa" <=> "aaa"   # => 0
+p "xxx" <=> "aaa"   # => 1
+
+p "string" <=> "stringAA"  # => -1
+p "string" <=> "string"    # => 0
+p "stringAA" <=> "string"  # => 1
+```
+
+### def ==(other) -> bool
+### def ===(other) -> bool
+{: since=""}
+
+other が文字列の場合、[m:String#eql?] と同様に文字列の内容を比較します。
+
+other が文字列でない場合、
+other.to_str が定義されていれば
+other == self の結果を返します。(ただし、 other.to_str は実行されません。)
+そうでなければ false を返します。
+
+- **param** `other` --    任意のオブジェクト
+- **return** --         true か false
+
+```ruby title="例"
+stringlike = Object.new
+
+def stringlike.==(other)
+  "string" == other
+end
+
+p "string".eql?(stringlike) # => false
+p "string" == stringlike    # => false
+
+def stringlike.to_str
+  raise
+end
+
+p "string".eql?(stringlike) # => false
+p "string" == stringlike    # => true
+```
+
+- **SEE** [m:String#eql?]
+
+### def <<(other) -> self
+
+self に文字列 other を破壊的に連結します。
+other が 整数である場合は other.chr(self.encoding) 相当の文字を末尾に追加します。
+
+self を返します。
+
+- **param** `other` --    文字列もしくは 0 以上の整数
+
+```ruby title="例"
+str = "string"
+str << "YYY"
+p str    # => "stringYYY"
+
+str << 65  # 文字AのASCIIコード
+p str    # => "stringYYYA"
+```
+
+- **SEE** [m:String#concat]
+
+### def concat(other) -> self
+### def concat(*arguments) -> self
+
+self に複数の文字列を破壊的に連結します。
+
+引数の値が整数である場合は [m:Integer#chr] の結果に相当する文字を末尾に追加します。追加する文字のエンコーディングは self.encoding です。
+
+self を返します。
+
+- **param** `other` -- 連結する文字列もしくは 0 以上の整数
+- **param** `arguments` -- 複数の文字列もしくは 0 以上の整数
+
+```ruby title="例"
+str = "foo"
+str.concat
+p str    # => "foo"
+
+str = "foo"
+str.concat "bar", "baz"
+p str    # => "foobarbaz"
+
+str = "foo"
+str.concat("!", 33, 33)
+p str    # => "foo!!!"
+```
+
+#%since 3.4
+- **SEE** [m:String#append_as_bytes]
+#%end
+
+#%since 3.4
+### def append_as_bytes(*objects) -> self
+
+引数で与えたオブジェクトをバイト列として、self に破壊的に連結します。
+
+このメソッドはエンコーディングの検査や変換を一切行いません。
+
+引数が整数である場合は、その数をバイトの値とみなして連結します。
+その数が1バイトの範囲を越える場合は、最下位のバイトのみを使用します。
+
+```ruby title="例"
+s = "あ".b                # => "\xE3\x81\x82"
+p s.encoding              # => #<Encoding:BINARY (ASCII-8BIT)>
+p s.append_as_bytes("い") # => "\xE3\x81\x82\xE3\x81\x84"
+
+# s << "い" では連結できない
+s << "い" # => "incompatible character encodings: BINARY (ASCII-8BIT) and UTF-8 (Encoding::CompatibilityError)
+```
+
+```ruby title="引数で整数を渡す例"
+t = ""
+p t.append_as_bytes(0x61) # => "a"
+p t.append_as_bytes(0x3062) # => "ab"
+```
+
+- **SEE** [m:String#<<], [m:String#concat]
+
+#%end
+
+### def =~(other) -> Integer | nil
+
+正規表現 other とのマッチを行います。
+マッチが成功すればマッチした位置のインデックスを、そうでなければ nil を返します。
+
+other が正規表現でも文字列でもない場合は
+other =~ self を行います。
+
+このメソッドが実行されると、組み込み変数 [m:$~], [m:$1], ...
+にマッチに関する情報が設定されます。
+
+- **param** `other` --        正規表現もしくは =~ メソッドを持つオブジェクト
+- **raise** `TypeError` --    other が文字列の場合に発生します。
+
+```ruby title="例"
+p "string" =~ /str/   # => 0
+p "string" =~ /not/   # => nil
+p "abcfoo" =~ /foo/   # => 3
+```
+
+### def [](nth) -> String | nil
+### def slice(nth) -> String | nil
+
+nth 番目の文字を返します。
+nth が負の場合は文字列の末尾から数えます。
+つまり、 self.size + nth 番目の文字を返します。
+
+nth が範囲外を指す場合は nil を返します。
+
+- **param** `nth` -- 文字の位置を表す整数
+- **return** -- 指定した位置の文字を表す String オブジェクト
+
+```ruby title="例"
+p 'bar'[2]       # => "r"
+p 'bar'[2] == ?r # => true
+p 'bar'[-1]      # => "r"
+p 'bar'[3]       # => nil
+p 'bar'[-4]      # => nil
+```
+
+このメソッドの仕様は Ruby 1.8 までのものから大きく変更されていますので注意が必要です。
+
+### def [](nth, len) -> String | nil
+### def slice(nth, len) -> String | nil
+
+nth 文字目から長さ len 文字の部分文字列を新しく作って返します。
+nth が負の場合は文字列の末尾から数えます。
+
+- **param** `nth` --    取得したい文字列の開始インデックスを整数で指定します。
+- **param** `len` --    取得したい文字列の長さを正の整数で指定します。
+
+- **return** -- nth が範囲外を指す場合は nil を返します。
+
+```ruby title="例"
+str0 = "bar"
+p str0[2, 1]       # => "r"
+p str0[2, 0]       # => ""
+p str0[2, 100]     # => "r"  (右側を超えても平気)
+p str0[-1, 1]      # => "r"
+p str0[-1, 2]      # => "r"  (右に向かって len 文字)
+
+p str0[3, 1]       # => ""
+p str0[4, 1]       # => nil
+p str0[-4, 1]      # => nil
+str1 = str0[0, 2]    # (str0 の「一部」を str1 とする)
+p str1             # => "ba"
+str1[0] = "XYZ"
+p str1             # => "XYZa" (str1 の内容が破壊的に変更された)
+p str0             # => "bar" (str0 は無傷、 str1 は str0 と内容を共有していない)
+```
+
+### def [](substr) -> String | nil
+### def slice(substr) -> String | nil
+
+self が substr を含む場合、一致した文字列を新しく作って返します。
+substr を含まなければ nil を返します。
+
+- **param** `substr` --    取得したい文字列のパターン。文字列
+
+```ruby title="例"
+substr = "bar"
+result = "foobar"[substr]
+p result   # => "bar"
+p substr.equal?(result)   # => false
+```
+
+### def [](regexp, nth = 0) -> String
+### def slice(regexp, nth = 0) -> String
+
+正規表現 regexp の nth 番目の括弧にマッチする最初の部分文字列を返します。
+nth を省略したときや 0 の場合は正規表現がマッチした部分文字列全体を返します。
+正規表現が self にマッチしなかった場合や nth に対応する括弧がないときは nil を返します。
+
+このメソッドを実行すると、マッチ結果に関する情報が組み込み変数 [m:$~] に設定されます。
+
+- **param** `regexp` --    取得したい文字列のパターンを示す正規表現
+- **param** `nth` --       取得したい正規表現レジスタのインデックス。整数
+
+```ruby title="例"
+p "foobar"[/bar/]  # => "bar"
+p $~.begin(0)      # => 3
+p "def getcnt(line)"[ /def\s+(\w+)/, 1 ]   # => "getcnt"
+```
+
+### def [](regexp, name) -> String
+### def slice(regexp, name) -> String
+
+正規表現 regexp の name で指定した名前付きキャプチャにマッチする最初の部分文字列を返します。正規表現が self にマッチしなかった場合は nil を返します。
+
+- **param** `regexp` -- 正規表現を指定します。
+- **param** `name` -- 取得したい部分文字列のパターンを示す正規表現レジスタを示す名前
+
+- **raise** `IndexError` -- name に対応する括弧がない場合に発生します。
+
+```ruby title="例"
+s = "FooBar"
+p s[/(?<foo>[A-Z]..)(?<bar>[A-Z]..)/]      # => "FooBar"
+p s[/(?<foo>[A-Z]..)(?<bar>[A-Z]..)/, "foo"] # => "Foo"
+p s[/(?<foo>[A-Z]..)(?<bar>[A-Z]..)/, "bar"] # => "Bar"
+s[/(?<foo>[A-Z]..)(?<bar>[A-Z]..)/, "baz"] # ~> IndexError
+```
+
+### def [](range) -> String
+### def slice(range) -> String
+
+rangeで指定したインデックスの範囲に含まれる部分文字列を返します。
+
+- **param** `range` --   取得したい文字列の範囲を示す Range オブジェクト
+
+### rangeオブジェクトが終端を含む場合
+
+インデックスと文字列の対応については以下の対照図も参照してください。
+
+```text
+  0   1   2   3   4   5   (インデックス)
+ -6  -5  -4  -3  -2  -1   (負のインデックス)
+| a | b | c | d | e | f |
+|<--------->|                'abcdef'[0..2]  # => 'abc'
+                |<----->|    'abcdef'[4..5]  # => 'ef'
+        |<--------->|        'abcdef'[2..4]  # => 'cde'
+```
+
+range.last が文字列の長さ以上のときは
+(文字列の長さ - 1) を指定したものとみなされます。
+
+range.first が 0 より小さいか文字列の長さより大きいときは nil を返します。ただし range.first および range.last のどちらかまたは両方が負の数のときは一度だけ文字列の長さを足して再試行します。
+
+```ruby title="例"
+p 'abcd'[ 2 ..  1] # => ""
+p 'abcd'[ 2 ..  2] # => "c"
+p 'abcd'[ 2 ..  3] # => "cd"
+p 'abcd'[ 2 ..  4] # => "cd"
+
+p 'abcd'[ 2 .. -1] # => "cd"   # str[f..-1] は「f 文字目から
+p 'abcd'[ 3 .. -1] # => "d"    # 文字列の最後まで」を表す慣用句
+
+p 'abcd'[ 1 ..  2] # => "bc"
+p 'abcd'[ 2 ..  2] # => "c"
+p 'abcd'[ 3 ..  2] # => ""
+p 'abcd'[ 4 ..  2] # => ""
+p 'abcd'[ 5 ..  2] # => nil
+
+p 'abcd'[-3 ..  2] # => "bc"
+p 'abcd'[-4 ..  2] # => "abc"
+p 'abcd'[-5 ..  2] # => nil
+```
+
+### rangeオブジェクトが終端を含まない場合
+
+文字列と「隙間」の関係については以下の模式図を参照してください。
+
+```text
+ 0   1   2   3   4   5   6  (隙間番号)
+-6  -5  -4  -3  -2  -1      (負の隙間番号)
+ | a | b | c | d | e | f |
+ |<--------->|                'abcdef'[0...3]  # => 'abc'
+                 |<----->|    'abcdef'[4...6]  # => 'ef'
+         |<--------->|        'abcdef'[2...5]  # => 'cde'
+```
+
+range.last が文字列の長さよりも大きいときは文字列の長さを指定したものとみなされます。
+
+range.first が 0 より小さいか文字列の長さより大きいときは nil を返します。
+ただし range.first と range.last のどちらかまたは両方が負の数であるときは一度だけ文字列の長さを足して再試行します。
+
+```ruby title="例"
+p 'abcd'[ 2 ... 3] # => "c"
+p 'abcd'[ 2 ... 4] # => "cd"
+p 'abcd'[ 2 ... 5] # => "cd"
+
+p 'abcd'[ 1 ... 2] # => "b"
+p 'abcd'[ 2 ... 2] # => ""
+p 'abcd'[ 3 ... 2] # => ""
+p 'abcd'[ 4 ... 2] # => ""
+p 'abcd'[ 5 ... 2] # => nil
+
+p 'abcd'[-3 ... 2] # => "b"
+p 'abcd'[-4 ... 2] # => "ab"
+p 'abcd'[-5 ... 2] # => nil
+```
+
+### def []=(nth, val)
+
+nth 番目の文字を文字列 val で置き換えます。
+
+- **param** `nth` -- 置き換えたい文字の位置を指定します。
+- **param** `val` -- 置き換える文字列を指定します。
+
+- **return** -- val を返します。
+
+```ruby title="例"
+buf = "string"
+buf[1] = "!!"
+p buf   # => "s!!ring"
+```
+
+### def []=(nth, len, val)
+
+nth 番目の文字から len 文字の部分文字列を文字列 val で置き換えます。
+
+len が0 の場合は、単にnthの位置から文字列の追加が行われます。
+nth が負の場合は文字列の末尾から数えます。
+
+- **param** `nth` --    置き換えたい部分文字列の開始インデックス
+- **param** `len` --    置き換えたい部分文字列の長さ
+- **param** `val` --    指定範囲の部分文字列と置き換える文字列
+
+- **return** -- val を返します。
+
+```ruby title="例"
+buf = "string"
+buf[1, 4] = "!!"
+p buf   # => "s!!g"
+
+buf = "string"
+buf[1, 0] = "!!"
+p buf   # => "s!!tring"
+```
+
+### def []=(substr, val)
+
+文字列中の substr に一致する最初の部分文字列を文字列 val で置き換えます。
+
+- **param** `substr` --    置き換えたい部分文字列のパターンを示す文字列
+- **param** `val` --       指定範囲の部分文字列と置き換える文字列
+
+- **return** -- val を返します。
+
+- **raise** `IndexError` --    self が部分文字列 substr を含まない場合に発生します。
+
+```ruby title="例"
+buf = "string"
+buf["trin"] = "!!"
+p buf   # => "s!!g"
+
+buf = "string"
+buf["nosuchstring"] = "!!"   # IndexError
+```
+
+### def []=(regexp, nth, val)
+
+正規表現 regexp の nth 番目の括弧にマッチする最初の部分文字列を文字列 val で置き換えます。
+
+nth が 0 の場合は、マッチした部分文字列全体を val で置き換えます。
+
+- **param** `regexp` --    置き換えたい部分文字列のパターンを示す正規表現
+- **param** `nth` --       置き換えたい部分文字列のパターンを示す正規表現レジスタの番号
+- **param** `val` --       指定範囲の部分文字列と置き換えたい文字列
+
+- **return** -- val を返します。
+
+- **raise** `IndexError` -- 正規表現がマッチしなかった場合に発生します。
+
+```ruby title="例"
+buf = "def exec(cmd)"
+buf[/def\s+(\w+)/, 1] = "preprocess"
+p buf    # => "def preprocess(cmd)"
+```
+
+### def []=(regexp, name, val)
+
+正規表現 regexp の name で指定した名前付きキャプチャにマッチする最初の部分文字列を文字列 val で置き換えます。
+
+- **param** `regexp` --    置き換えたい部分文字列のパターンを示す正規表現
+- **param** `name` --      置き換えたい部分文字列のパターンを示す正規表現レジスタを示す名前
+- **param** `val` --       指定範囲の部分文字列と置き換えたい文字列
+
+- **return** -- val を返します。
+
+- **raise** `IndexError` -- name で指定した名前付きキャプチャが存在しない場合に発生します。
+
+```ruby title="例"
+s = "FooBar"
+s[/(?<foo>[A-Z]..)(?<bar>[A-Z]..)/, "foo"] = "Baz"
+p s # => "BazBar"
+```
+
+### def []=(regexp, val)
+
+正規表現 regexp にマッチした部分文字列全体を val で置き換えます。
+
+- **param** `regexp` --    置き換えたい部分文字列のパターンを示す正規表現
+- **param** `val` --       置き換えたい文字列
+
+- **return** -- val を返します。
+
+- **raise** `IndexError` -- 正規表現がマッチしなかった場合に発生します。
+
+```ruby title="例"
+buf = "string"
+buf[/tr../] = "!!"
+p buf   # => "s!!g"
+```
+
+### def []=(range, val)
+
+rangeで指定したインデックスの範囲に含まれる部分文字列を文字列 val で置き換えます。
+
+- **param** `range` --   置き換えたい範囲を示す [c:Range] オブジェクト
+
+- **return** -- val を返します。
+
+### def capitalize(*options) -> String
+
+文字列先頭の文字を大文字に、残りを小文字に変更した文字列を返します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+
+```ruby title="例"
+p "foobar--".capitalize   # => "Foobar--"
+p "fooBAR--".capitalize   # => "Foobar--"
+p "FOOBAR--".capitalize   # => "Foobar--"
+```
+
+- **SEE** [m:String#capitalize!], [m:String#upcase],
+     [m:String#downcase], [m:String#swapcase]
+
+### def capitalize!(*options) -> self | nil
+
+文字列先頭の文字を大文字に、残りを小文字に破壊的に変更します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+
+- **return** -- capitalize! は self を変更して返しますが、変更が起こらなかった場合は nil を返します。
+
+```ruby title="例"
+str = "foobar"
+str.capitalize!
+p str   # => "Foobar"
+
+str = "fooBAR"
+str.capitalize!
+p str   # => "Foobar"
+```
+
+- **SEE** [m:String#capitalize], [m:String#upcase!],
+     [m:String#downcase!], [m:String#swapcase!]
+
+### def casecmp(other) -> -1 | 0 | 1 | nil
+
+[m:String#<=>] と同様に文字列の順序を比較しますが、アルファベットの大文字小文字の違いを無視します。
+
+このメソッドの動作は組み込み変数 [m:$=] には影響されません。
+
+[m:String#casecmp?] と違って大文字小文字の違いを無視するのは
+Unicode 全体ではなく、A-Z/a-z だけです。
+
+- **param** `other` --    self と比較する文字列
+
+```ruby title="例"
+p "aBcDeF".casecmp("abcde")   # => 1
+p "aBcDeF".casecmp("abcdef")  # => 0
+p "aBcDeF".casecmp("abcdefg") # => -1
+p "abcdef".casecmp("ABCDEF")  # => 0
+```
+
+nil は文字列のエンコーディングが非互換の時に返されます。
+
+```ruby
+p "\u{e4 f6 fc}".encode("ISO-8859-1").casecmp("\u{c4 d6 dc}") # => nil
+```
+
+- **SEE** [m:String#<=>], [m:Encoding.compatible?]
+
+### def casecmp?(other) -> bool | nil
+
+大文字小文字の違いを無視し文字列を比較します。
+文字列が一致する場合には true を返し、一致しない場合には false を返します。
+
+- **param** `other` --    self と比較する文字列
+
+```ruby title="例"
+p "abcdef".casecmp?("abcde")   # => false
+p "aBcDeF".casecmp?("abcdef")  # => true
+p "abcdef".casecmp?("abcdefg") # => false
+p "abcdef".casecmp?("ABCDEF")  # => true
+p "\u{e4 f6 fc}".casecmp?("\u{c4 d6 dc}") # => true
+```
+
+nil は文字列のエンコーディングが非互換の時に返されます。
+
+```ruby
+p "\u{e4 f6 fc}".encode("ISO-8859-1").casecmp?("\u{c4 d6 dc}") # => nil
+```
+
+- **SEE** [m:String#casecmp]
+
+### def center(width, padding = ' ') -> String
+
+長さ width の文字列に self を中央寄せした文字列を返します。
+self の長さが width より長い時には元の文字列の複製を返します。
+また、第 2 引数 padding を指定したときは空白文字の代わりに padding を詰めます。
+
+- **param** `width` --      返り値の文字列の最小の長さ
+- **param** `padding` --    長さが width になるまで self の両側に詰める文字
+
+```ruby title="例"
+p "foo".center(10)       # => "   foo    "
+p "foo".center(9)        # => "   foo   "
+p "foo".center(8)        # => "  foo   "
+p "foo".center(7)        # => "  foo  "
+p "foo".center(3)        # => "foo"
+p "foo".center(2)        # => "foo"
+p "foo".center(1)        # => "foo"
+p "foo".center(10, "*")  # => "***foo****"
+```
+
+- **SEE** [m:String#ljust], [m:String#rjust]
+
+### def ljust(width, padding = ' ') -> String
+
+長さ width の文字列に self を左詰めした文字列を返します。
+self の長さが width より長い時には元の文字列の複製を返します。
+また、第 2 引数 padding を指定したときは空白文字の代わりに padding を詰めます。
+
+- **param** `width` --      返り値の文字列の最小の長さ
+- **param** `padding` --    長さが width になるまで self の右側に詰める文字
+
+```ruby title="例"
+p "foo".ljust(10)        # => "foo       "
+p "foo".ljust(9)         # => "foo      "
+p "foo".ljust(8)         # => "foo     "
+p "foo".ljust(2)         # => "foo"
+p "foo".ljust(1)         # => "foo"
+p "foo".ljust(10, "*")   # => "foo*******"
+```
+
+- **SEE** [m:String#center], [m:String#rjust]
+
+### def rjust(width, padding = ' ') -> String
+
+長さ width の文字列に self を右詰めした文字列を返します。
+self の長さが width より長い時には元の文字列の複製を返します。
+また、第 2 引数 padding を指定したときは空白文字の代わりに padding を詰めます。
+
+- **param** `width` --      返り値の文字列の最小の長さ
+- **param** `padding` --    長さが width になるまで self の左側に詰める文字
+
+```ruby title="例"
+p "foo".rjust(10)        # => "       foo"
+p "foo".rjust(9)         # => "      foo"
+p "foo".rjust(8)         # => "     foo"
+p "foo".rjust(2)         # => "foo"
+p "foo".rjust(1)         # => "foo"
+p "foo".rjust(10, "*")   # => "*******foo"
+```
+
+- **SEE** [m:String#center], [m:String#ljust]
+
+### def chomp(rs = $/) -> String
+
+self の末尾から rs で指定する改行コードを取り除いた文字列を生成して返します。
+ただし、rs が "\n" ($/ のデフォルト値) のときは、実行環境によらず "\r", "\r\n", "\n" のすべてを改行コードとみなして取り除きます。
+
+rs に nil を指定した場合、このメソッドは何もしません。
+
+rs に空文字列 ("") を指定した場合は「パラグラフモード」になり、実行環境によらず末尾の連続する改行コード("\r\n", "\n")をすべて取り除きます。
+
+```ruby title="例"
+p "foo\n".chomp             # => "foo"
+p "foo\n".chomp("\n")       # => "foo"
+p "foo\r\n".chomp("\r\n")   # => "foo"
+
+$/ = "\n"   # デフォルト値と同じ
+p "foo\r".chomp    # => "foo"
+p "foo\r\n".chomp  # => "foo"
+p "foo\n".chomp    # => "foo"
+p "foo\n\r".chomp  # => "foo\n"
+
+p "string\n".chomp(nil)  # => "string\n"
+
+p "foo\r\n\n".chomp("")  # => "foo"
+p "foo\n\r\n".chomp("")  # => "foo"
+p "foo\n\r\r".chomp("")  # => "foo\n\r\r"
+```
+
+- **SEE** [m:String#chomp!]
+- **SEE** [m:String#chop]
+- **SEE** [m:String#delete_suffix]
+
+### def chomp!(rs = $/) -> self | nil
+
+self の末尾から rs で指定する改行コードを取り除きます。
+ただし rs が "\n" ($/ のデフォルト値) のときは、実行環境によらず "\r", "\r\n", "\n" のすべてを改行コードとみなして取り除きます。
+
+rs に nil を指定した場合、このメソッドは何もしません。
+
+rs に空文字列 ("") を指定した場合は「パラグラフモード」になり、実行環境によらず末尾の連続する改行コード("\r\n", "\n")をすべて取り除きます。
+
+- **return** -- chomp! は通常 self を返しますが、取り除く改行がなかった場合は nil を返します。
+
+```ruby title="例"
+buf = "string\n"
+p buf.chomp!  # => "string"
+p buf       # => "string"
+
+$/ = "\n"   # デフォルトと同じ
+p "foo\r".chomp!    # => "foo"
+p "foo\r\n".chomp!  # => "foo"
+p "foo\n".chomp!    # => "foo"
+p "foo\n\r".chomp!  # => "foo\n"
+
+buf = "string\n"
+p buf.chomp!(nil)  # => nil
+p buf            # => "string\n"
+
+p "foo\r\n\n".chomp!("")  # => "foo"
+p "foo\n\r\n".chomp!("")  # => "foo"
+p "foo\n\r\r".chomp!("")  # => nil
+```
+
+- **SEE** [m:String#chomp]
+- **SEE** [m:String#chop!]
+- **SEE** [m:String#delete_suffix!]
+
+### def chop -> String
+
+文字列の最後の文字を取り除いた新しい文字列を生成して返します。
+ただし、文字列の終端が "\r\n" であればその 2 文字を取り除きます。
+
+```ruby title="例"
+p "string\n".chop    # => "string"
+p "string\r\n".chop  # => "string"
+p "string".chop      # => "strin"
+p "strin".chop       # => "stri"
+p "".chop            # => ""
+```
+
+- **SEE** [m:String#chomp]
+- **SEE** [m:String#chop!]
+- **SEE** [m:String#delete_suffix]
+
+### def chop! -> self | nil
+
+文字列の最後の文字を取り除きます。
+ただし、終端が "\r\n" であればその 2 文字を取り除きます。
+
+- **return** -- chop! は self を変更して返しますが、取り除く文字がなかった場合は nil を返します。
+
+```ruby title="例"
+str = "string\r\n"
+ret = str.chop!
+p ret                # => "string"
+p str                # => "string"
+p str.chop!          # => "strin"
+p "".chop!           # => nil
+```
+
+- **SEE** [m:String#chomp!]
+- **SEE** [m:String#chop]
+- **SEE** [m:String#delete_suffix!]
+
+### def clear -> self
+
+文字列の内容を削除して空にします。
+self を返します。
+
+```ruby title="例"
+str = "abc"
+str.clear
+p str     # => ""
+
+str = ""
+str.clear
+p str   # => ""
+```
+
+#%#--- clone
+#%#--- dup
+#%#
+#%#文字列と同じ内容を持つ新しい文字列を返します。
+#%#フリーズ [[m:Object#freeze]] した文字列の
+#%#clone はフリーズされた文字列を返しますが、
+#%#dup は内容の等しいフリーズされていない文字列を返します。
+#%#すなわち dup と [[m:String#new]] は等価です。
+#%#
+#%# [[m:Object#clone]],[[m:Object#dup]]を参照するべき
+
+### def count(*chars) -> Integer
+
+chars で指定された文字が文字列 self にいくつあるか数えます。
+
+検索する文字を示す引数 chars の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `chars` --    出現回数を数える文字のパターン
+
+```ruby title="例"
+p 'abcdefg'.count('c')               # => 1
+p '123456789'.count('2378')          # => 4
+p '123456789'.count('2-8', '^4-6')   # => 4
+
+# ファイルの行数を数える
+n_lines = File.read("foo").count("\n")
+
+# ファイルの末尾に改行コードがない場合にも対処する
+buf = File.read("foo")
+n_lines = buf.count("\n")
+n_lines += 1 if /[^\n]\z/ =~ buf
+           # if /\n\z/ !~ buf だと空ファイルを 1 行として数えてしまうのでダメ
+```
+
+### def crypt(salt) -> String
+
+self と salt から暗号化された文字列を生成して返します。
+salt には英数字、ドット (「.」)、スラッシュ (「/」) から構成される、
+2 バイト以上の文字列を指定します。
+
+暗号化された文字列から暗号化前の文字列 (self) を求めることは一般に困難で、
+self を知っている者のみが同じ暗号化された文字列を生成できます。
+このことから self を知っているかどうかの認証に使うことが出来ます。
+
+salt には、以下の様になるべくランダムな文字列を選ぶべきです。
+他にも [ruby-list:29297] などがあります。
+
+注意:
+
+  - Ruby 2.6 から非推奨になったため、引き続き必要な場合は
+    string-crypt gem の使用を検討してください。
+  - crypt の処理は [man:crypt(3)] の実装に依存しています。
+    従って、crypt で処理される内容の詳細や salt の与え方については、
+    利用環境の [man:crypt(3)] 等を見て確認してください。
+  - crypt の結果は利用環境が異なると変わる場合があります。
+    crypt の結果を、異なる利用環境間で使用する場合には注意して下さい。
+  - 典型的な DES を使用した [man:crypt(3)] の場合、
+    self の最初の 8 バイト、salt の最初の 2 バイトだけが使用されます。
+
+- **param** `salt` --    文字列を暗号化するための鍵となる文字列。
+             英数字・「.」・「/」のいずれかで構成される 2 バイト以上の文字列
+
+```ruby title="例"
+# パスワードの暗号化
+salt = [rand(64),rand(64)].pack("C*").tr("\x00-\x3f","A-Za-z0-9./")
+passwd.crypt(salt)
+
+# UNIX のログイン認証
+require 'etc'
+
+def valid_login?(user, password)
+  ent = Etc.getpwnam(user)
+  password.crypt(ent.passwd) == ent.passwd
+end
+
+p valid_login?("taro", "password")   # => 真偽値が得られる
+```
+
+### def delete(*strs) -> String
+
+self から strs に含まれる文字を取り除いた文字列を生成して返します。
+
+str の形式は [man:tr(1)] と同じです。
+つまり、`a-c` は a から c を意味し、"^0-9" のように文字列の先頭が `^` の場合は指定文字以外を意味します。
+
+「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+「^」も文字列の先頭にあるときだけ効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」)
+によってエスケープできます。
+
+なお、引数を複数指定した場合は、すべての引数にマッチする文字だけが削除されます。
+
+- **param** `strs` --    削除する文字列を示す文字列 (のリスト)
+
+```ruby title="例"
+p "123456789".delete("2378")         # => "14569"
+p "123456789".delete("2-8", "^4-6")  # => "14569"
+```
+
+- **SEE** [m:String#delete!]
+
+### def delete!(*strs) -> self | nil
+
+self から strs に含まれる文字を破壊的に取り除きます。
+
+str の形式は [man:tr(1)] と同じです。
+つまり、「a-c」は a から c を意味し、"^0-9" のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+「^」も文字列先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」)
+によってエスケープできます。
+
+なお、引数を複数指定した場合は、すべての引数にマッチする文字だけが削除されます。
+
+- **return** -- 通常は self を返しますが、何も変更が起こらなかった場合は nil を返します。
+
+- **param** `strs` --    削除する文字列を示す文字列 (のリスト)
+
+```ruby title="例"
+str = "123456789"
+p str.delete!("2378")         # => "14569"
+p str                         # => "14569"
+
+str = "123456789"
+p str.delete!("2-8", "^4-6")  # => "14569"
+p str                         # => "14569"
+
+str = "abc"
+p str.delete!("2378")         # => nil
+p str                         # => "abc"
+```
+
+- **SEE** [m:String#delete]
+
+### def downcase(*options) -> String
+
+全ての大文字を対応する小文字に置き換えた文字列を返します。
+どの文字がどう置き換えられるかは、オプションの有無や文字列のエンコーディングに依存します。
+
+- **param** `options` -- オプションの意味は以下の通りです。
+
+- **オプションなし**:
+  完全な Unicode ケースマッピングに対応し、ほとんどの言語に適しています。(例外は以下の :turkic,
+  :lithuanian オプションを参照)
+  Unicode 標準の表 3-14 で説明されている、コンテキスト依存のケースマッピングは、現在サポートされていません。
+
+- **`:ascii`**:
+  ASCII の範囲内のみ (A-Z, a-z) が影響します。
+  このオプションは他のオプションと組み合わせることはできません。
+
+- **`:turkic`**:
+  チュルク語族 (トルコ語、アゼルバイジャン語など) に適合した完全な Unicode ケースマッピングです。
+  これはたとえば大文字の I は小文字のドットなしの i (ı) にマッピングされることを意味します。
+
+- **`:lithuanian`**:
+  現在は、ただの完全な Unicode ケースマッピングです。
+  将来、リトアニア語に対応した完全な Unicode ケースマッピングです。
+  (上にアクセントがあっても小文字の i のドットを維持します。)
+
+- **`:fold`**:
+  downcase と downcase! のみで使えます。
+  Unicode ケースフォールディングは Unicode ケースマッピングより広範囲です。
+  このオプションは今の所、他のオプションと組み合わせることはできません。
+  (すなわち現在チュルク語族のバリアントはありません。)
+
+ASCII のみの大文字小文字変換で有効ないくつかの仮定は、より一般的なケース変換では成り立たないことに注意してください。例えば、結果の長さは入力の長さと同じとは限りません (文字数でもバイト数でも)。ラウンドトリップできるという仮定も成り立ちません (例えば str.downcase == str.upcase.downcase)。
+そして、Unicode 正規化 (すなわち [m:String#unicode_normalize]) はケースマッピング操作で必ずしも維持されるとは限りません。
+
+現在 ASCII 以外のケースマッピング/フォールディングは、UTF-8, UTF-16BE/LE,
+UTF-32BE/LE, ISO-8859-1~16 の String/Symbol でサポートされています。
+他のエンコーディングもサポートされる予定です。
+
+```ruby title="例"
+p "STRing?".downcase   # => "string?"
+```
+
+- **SEE** [m:String#downcase!], [m:String#upcase], [m:String#swapcase], [m:String#capitalize]
+
+### def downcase!(*options) -> self | nil
+
+全ての大文字を対応する小文字に破壊的に置き換えます。
+どの文字がどう置き換えられるかは、オプションの有無や文字列のエンコーディングに依存します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+- **return** -- self を変更して返します。変更が無かった場合は nil を返します。
+
+```ruby title="例"
+str = "STRing?"
+str.downcase!
+p str   # => "string?"
+```
+
+- **SEE** [m:String#downcase], [m:String#upcase!], [m:String#swapcase!], [m:String#capitalize!]
+
+### def dump -> String
+
+文字列中の非表示文字をバックスラッシュ記法に置き換えた文字列を返します。
+str == eval(str.dump) となることが保証されています。
+
+```ruby title="例"
+# p だとさらにバックスラッシュが増えて見にくいので puts している
+puts "abc\r\n\f\x00\b10\\\"".dump   # => "abc\r\n\f\x00\b10\\\""
+```
+
+- **SEE** [m:String#undump]
+
+### def undump -> String
+
+self のエスケープを戻したものを返します。
+
+[m:String#dump] の逆変換にあたります。
+
+```ruby title="例"
+p "\"hello \\n ''\"".undump # => "hello \n ''"
+```
+
+- **SEE** [m:String#dump]
+
+### def each_line(rs = $/, chomp: false) {|line| ... } -> self
+### def each_line(rs = $/, chomp: false)  -> Enumerator
+
+文字列中の各行に対して繰り返します。
+行の区切りは rs に指定した文字列で、そのデフォルト値は変数 [m:$/] の値です。
+各 line には区切りの文字列も含みます。
+
+rs に nil を指定すると行区切りなしとみなします。
+rs に空文字列 "" を指定すると「パラグラフモード」になり、改行コードが 2 つ以上連続するところで文字列を分割します
+(つまり空行で分割します)。
+
+- **param** `rs` --    行末を示す文字列
+- **param** `chomp` -- true を指定すると各行の末尾から rs を取り除きます。
+
+```ruby title="例"
+"aa\nbb\ncc\n".each_line do |line|
+  p line
+end
+    # => "aa\n"
+    # => "bb\n"
+    # => "cc\n"
+
+p "aa\nbb\ncc\n".lines.to_a   # => ["aa\n", "bb\n", "cc\n"]
+p "aa\n".lines.to_a           # => ["aa\n"]
+p "".lines.to_a               # => []
+
+s = "aa\nbb\ncc\n"
+p s.lines("\n").to_a # => ["aa\n", "bb\n", "cc\n"]
+p s.lines("bb").to_a # => ["aa\nbb", "\ncc\n"]
+```
+
+- **SEE** [m:String#lines]
+
+### def lines(rs = $/, chomp: false)               -> [String]
+### def lines(rs = $/, chomp: false) {|line| ... } -> self
+
+文字列中の各行を文字列の配列で返します。(self.each_line.to_a と同じです)
+
+```ruby
+p "aa\nbb\ncc\n".lines # => ["aa\n", "bb\n", "cc\n"]
+```
+
+行の区切りは rs に指定した文字列で、 そのデフォルト値は変数 $/ の値です。
+各 line には区切りの文字列も含みます。
+
+rs に nil を指定すると行区切りなしとみなします。 rs に空文字列 "" を指定すると「パラグラフモード」になり、 改行コードが 2 つ以上連続するところで文字列を分割します (つまり空行で分割します)。
+
+chomp に true を指定すると、分割した各行の末尾から rs を取り除きます。
+
+```ruby
+p "hello\nworld\n".lines            # => ["hello\n", "world\n"]
+p "hello\nworld\n".lines(chomp: true) # => ["hello", "world"]
+```
+
+- **param** `rs` -- 行末を示す文字列
+
+- **param** `chomp` -- 分割した各行に対して [m:String#chomp] と同等の結果を得る場合は true を、そうでない場合は false で指定します。
+             省略した場合は false を指定したとみなされます。
+
+ブロックが指定された場合は [m:String#each_line] と同じように動作します。
+
+Ruby 2.6 までは deprecated の警告が出ますが、Ruby 2.7 で警告は削除されました。
+
+- **SEE** [m:String#each_line]
+
+### def each_byte {|byte| ... } -> self
+### def each_byte -> Enumerator
+
+文字列の各バイトに対して繰り返します。
+
+```ruby title="例"
+"str".each_byte do |byte|
+  p byte
+end
+    # => 115
+    # => 116
+    # => 114
+
+"あ".each_byte do |byte|
+  p byte
+end
+    # => 227
+    # => 129
+    # => 130
+```
+
+- **SEE** [m:String#bytes]
+
+### def bytes               -> [Integer]
+### def bytes {|byte| ... } -> self
+
+文字列の各バイトを数値の配列で返します。(self.each_byte.to_a と同じです)
+
+```ruby title="例"
+p "str".bytes # => [115, 116, 114]
+```
+
+ブロックが指定された場合は [m:String#each_byte] と同じように動作します。
+
+Ruby 2.6 までは deprecated の警告が出ますが、Ruby 2.7 で警告は削除されました。
+
+- **SEE** [m:String#each_byte]
+
+### def empty? -> bool
+
+文字列が空 (つまり長さ 0) の時、真を返します。
+
+```ruby title="例"
+p "hello".empty? # => false
+p " ".empty?     # => false
+p "".empty?      # => true
+```
+
+### def getbyte(index) -> Integer | nil
+
+index バイト目のバイトを整数で返します。
+
+index に負を指定すると末尾から数えた位置のバイトを取り出します。
+範囲外を指定した場合は nil を返します。
+
+- **param** `index` -- バイトを取り出す位置
+
+```ruby title="例"
+s = "tester"
+p s.bytes           # => [116, 101, 115, 116, 101, 114]
+p s.getbyte(0)      # => 116
+p s.getbyte(1)      # => 101
+p s.getbyte(-1)     # => 114
+p s.getbyte(6)      # => nil
+```
+
+### def setbyte(index, b) -> Integer
+
+index バイト目のバイトを b に変更します。
+
+index に負を指定すると末尾から数えた位置を変更します。
+
+セットした値を返します。
+
+- **param** `index` -- バイトをセットする位置
+- **param** `b` -- セットするバイト(0 から 255 までの整数)
+- **raise** `IndexError` -- 範囲外に値をセットしようとした場合に発生します。
+
+```ruby title="例"
+s = "Sunday"
+s.setbyte(0, 77)
+s.setbyte(-5, 111)
+p s # => "Monday"
+```
+
+### def gsub(pattern, replace) -> String
+
+文字列中で pattern にマッチする部分全てを文字列 replace で置き換えた文字列を生成して返します。
+
+置換文字列 replace 中の `\&` と `\0` はマッチした部分文字列に、
+`\1` ... `\9` は n 番目の括弧の内容に置き換えられます。
+置換文字列内では `` \` ``、`\'`、`\+` も使えます。
+これらは [m:$\`]、[m:$']、[m:$+] に対応します。
+pattern が名前付きキャプチャを含む正規表現である場合は、
+`\k<name>` の形式でその名前に対応する部分文字列に置き換えられます。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **param** `replace` --    pattern で指定した文字列と置き換える文字列
+
+```ruby title="例"
+p 'abcdefg'.gsub(/def/, '!!')          # => "abc!!g"
+p 'abcabc'.gsub(/b/, '<<\&>>')         # => "a<<b>>ca<<b>>c"
+p 'xxbbxbb'.gsub(/x+(b+)/, 'X<<\1>>')  # => "X<<bb>>X<<bb>>"
+p '2.5'.gsub('.', ',') # => "2,5"
+p 'foo'.gsub(/(?<name>fo)/, 'match: \k<name>') # => "match: foo"
+```
+
+注意:
+
+第 2 引数 replace に [m:$1] を埋め込んでも意図した結果にはなりません。
+この文字列が評価される時点ではまだ正規表現マッチが行われておらず、
+$1 がセットされていないからです。
+
+また、gsub では「\」が部分文字列との置き換えという特別な意味を持つため、
+replace に「\」自身を入れたいときは「\」を二重にエスケープしなければなりません。
+
+```ruby title="ひとつめの括弧の内容に置き換えるときによくある間違い"
+p 'xbbb-xbbb'.gsub(/x(b+)/, "#{$1}")   # => "-"        # NG
+p 'xbbb-xbbb'.gsub(/x(b+)/, "\1")      # => "1-1"      # NG
+p 'xbbb-xbbb'.gsub(/x(b+)/, "\\1")     # => "bbb-bbb"  # OK
+p 'xbbb-xbbb'.gsub(/x(b+)/, '\1')      # => "bbb-bbb"  # OK
+p 'xbbb-xbbb'.gsub(/x(b+)/, '\\1')     # => "bbb-bbb"  # OK
+```
+
+```ruby title="バックスラッシュを倍にするときによくある間違い"
+puts '\n'.gsub(/\\/, "\\\\")      # => \n   # NG
+puts '\n'.gsub(/\\/, '\\\\')      # => \n   # NG
+puts '\n'.gsub(/\\/, "\\\\\\\\")  # => \\n  # OK
+puts '\n'.gsub(/\\/, '\\\\\\\\')  # => \\n  # OK
+```
+
+このような間違いを確実に防止し、コードの可読性を上げるには、
+`\&` や `\1` よりも下記のようにブロック付き形式の gsub を使うべきです。
+
+```ruby
+p 'xbbb-xbbb'.gsub(/x(b+)/) { $1 }   # => "bbb-bbb"  # OK
+
+puts '\n'.gsub(/\\/) { '\\\\' }      # => \\n        # OK
+```
+
+- **SEE** [m:String#sub], [m:String#gsub!]
+
+### def gsub(pattern) {|matched| .... } -> String
+### def gsub(pattern) -> Enumerator
+
+文字列中で pattern にマッチした部分を順番にブロックに渡し、その実行結果で置き換えた文字列を生成して返します。
+ブロックなしの場合と違い、ブロックの中からは組み込み変数 [m:$1], $2, $3, ... を問題なく参照できます。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **return** -- 新しい文字列
+
+```ruby title="例"
+p 'abcabc'.gsub(/[bc]/) {|s| s.upcase }  # => "aBCaBC"
+p 'abcabc'.gsub(/[bc]/) { $&.upcase }    # => "aBCaBC"
+```
+
+- **SEE** [m:String#sub], [m:String#scan]
+
+### def gsub(pattern, hash) -> String
+
+文字列中の pattern にマッチした部分をキーにして hash を引いた値で置き換えます。
+
+- **param** `pattern` --    置き換える文字列のパターン
+- **param** `hash` --       置き換える文字列を与えるハッシュ
+
+```ruby title="例"
+hash = {'b'=>'B', 'c'=>'C'}
+p "abcabc".gsub(/[bc]/){hash[$&]} # => "aBCaBC"
+p "abcabc".gsub(/[bc]/, hash)     # => "aBCaBC"
+```
+
+### def gsub!(pattern, replace) -> self | nil
+
+文字列中で pattern にマッチする部分全てを文字列 replace に破壊的に置き換えます。
+
+置換文字列 replace 中の `\&` と `\0` はマッチした部分文字列に、
+`\1` ... `\9` は n 番目の括弧の内容に置き換えられます。
+置換文字列内では `` \` ``、`\'`、`\+` も使えます。
+これらは [m:$\`]、[m:$']、[m:$+] に対応します。
+pattern が名前付きキャプチャを含む正規表現である場合は、
+`\k<name>` の形式でその名前に対応する部分文字列に置き換えられます。
+
+gsub! は通常 self を変更して返しますが、置換が起こらなかった場合は nil を返します。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **param** `replace` --    pattern で指定した文字列と置き換える文字列
+- **return** -- 置換した場合は self、置換しなかった場合は nil
+
+```ruby title="例"
+buf = "String-String"
+buf.gsub!(/in./, "!!")
+p buf   # => "Str!!-Str!!"
+
+buf = "String.String"
+buf.gsub!(/in./, '<<\&>>')
+p buf   # => "Str<<ing>>.Str<<ing>>"
+
+buf = "foo"
+buf.gsub!(/(?<name>fo)/, 'match: \k<name>')
+p buf   # => "match: foo"
+```
+
+注意:
+
+引数 replace の中で [m:$1] を使うことはできません。
+replace は gsub メソッドの呼び出しより先に評価されるので、まだ gsub の正規表現マッチが行われておらず、
+$1 がセットされていないからです。
+
+また、gsub では「\」が部分文字列との置き換えという特別な意味を持つため、
+replace に「\」自身を入れたいときは「\」を二重にエスケープしなければなりません。
+
+```ruby title="ひとつめの括弧にマッチした部分に置き換えるときによくやる間違い"
+'abbbcd'.gsub!(/a(b+)/, "#{$1}")       # NG
+'abbbcd'.gsub!(/a(b+)/, "\1")          # NG
+'abbbcd'.gsub!(/a(b+)/, "\\1")         # OK
+'abbbcd'.gsub!(/a(b+)/, '\\1')         # OK
+'abbbcd'.gsub!(/a(b+)/, '\1')          # OK
+'abbbcd'.gsub!(/a(b+)/) { $1 }         # OK   これがもっとも安全
+```
+
+- **SEE** [m:String#sub], [m:String#gsub]
+
+### def gsub!(pattern) {|matched| .... } -> self | nil
+### def gsub!(pattern) -> Enumerator
+
+文字列中で pattern にマッチする部分全てを順番にブロックに渡し、その評価結果に置き換えます。
+
+また、ブロックなしの場合と違い、ブロックの中からは組み込み変数 [m:$1], $2, $3, ... を問題なく参照できます。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **return** -- 置換した場合は self、置換しなかった場合は nil
+
+```ruby title="例"
+str = 'abcabc'
+str.gsub!(/b/) {|s| s.upcase }
+p str    # => "aBcaBc"
+
+str = 'abcabc'
+str.gsub!(/b/) { $&.upcase }
+p str    # => "aBcaBc"
+```
+
+- **SEE** [m:String#sub]
+
+### def gsub!(pattern, hash) -> self | nil
+
+文字列中の pattern にマッチした部分をキーにして hash を引いた値へ破壊的に置き換えます。
+
+- **param** `pattern` --    置き換える文字列のパターン
+- **param** `hash` --       置き換える文字列を与えるハッシュ
+
+```ruby title="例"
+hash = {'b'=>'B', 'c'=>'C'}
+str = "abcabc"
+str.gsub!(/[bc]/){hash[$&]}
+p str     # => "aBCaBC"
+
+str = "abcabc"
+str.gsub!(/[bc]/, hash)
+p str     # => "aBCaBC"
+```
+
+### def hex -> Integer
+
+文字列に 16 進数で数値が表現されていると解釈して整数に変換します。
+接頭辞 "0x", "0X" とアンダースコアは無視されます。
+文字列が [_0-9a-fA-F] 以外の文字を含むときはその文字以降を無視します。
+
+self が空文字列のときは 0 を返します。
+
+```ruby title="例"
+p "10".hex    # => 16
+p "ff".hex    # => 255
+p "0x10".hex  # => 16
+p "-0x10".hex # => -16
+
+p "xyz".hex   # => 0
+p "10z".hex   # => 16
+p "1_0".hex   # => 16
+
+p "".hex      # => 0
+```
+
+- **SEE** [m:String#oct], [m:String#to_i], [m:String#to_f],
+     [m:Kernel?.Integer], [m:Kernel?.Float]
+
+このメソッドの逆に数値を文字列に変換するには
+[m:Kernel?.sprintf], [m:String#%],
+[m:Integer#to_s]
+などを使ってください。
+
+### def include?(substr) -> bool
+
+文字列中に部分文字列 substr が含まれていれば真を返します。
+
+- **param** `substr` --    検索する文字列
+
+```ruby title="例"
+p "hello".include? "lo" # => true
+p "hello".include? "ol" # => false
+p "hello".include? ?h   # => true
+```
+
+### def index(pattern, pos = 0) -> Integer | nil
+
+文字列のインデックス pos から右に向かって pattern を検索し、最初に見つかった部分文字列の左端のインデックスを返します。
+見つからなければ nil を返します。
+
+引数 pattern は探索する部分文字列または正規表現で指定します。
+
+pos が負の場合、文字列の末尾から数えた位置から探索します。
+
+- **param** `pattern` --    探索する部分文字列または正規表現
+- **param** `pos` --        探索を開始するインデックス
+
+```ruby title="例"
+p "astrochemistry".index("str")         # => 1
+p "regexpindex".index(/e.*x/, 2)        # => 3
+p "character".index(?c)                 # => 0
+
+p "foobarfoobar".index("bar", 6)        # => 9
+p "foobarfoobar".index("bar", -6)       # => 9
+```
+
+- **SEE** [m:String#rindex]
+#%since 3.2
+- **SEE** [m:String#byteindex]
+
+### def byteindex(pattern, offset = 0) -> Integer | nil
+
+文字列の offset から右に向かって pattern を検索し、最初に見つかった部分文字列の左端のバイト単位のインデックスを返します。
+見つからなければ nil を返します。
+
+引数 pattern は探索する部分文字列または正規表現で指定します。
+
+offset が負の場合、文字列の末尾から数えた位置から探索します。
+
+- **param** `pattern` --    探索する部分文字列または正規表現
+- **param** `offset` --     探索を開始するバイト単位のオフセット
+
+- **raise** `IndexError` -- オフセットが文字列の境界以外をさしているときに発生します。
+
+```ruby title="例"
+p 'foo'.byteindex('f') # => 0
+p 'foo'.byteindex('o') # => 1
+p 'foo'.byteindex('oo') # => 1
+p 'foo'.byteindex('ooo') # => nil
+
+p 'foo'.byteindex(/f/) # => 0
+p 'foo'.byteindex(/o/) # => 1
+p 'foo'.byteindex(/oo/) # => 1
+p 'foo'.byteindex(/ooo/) # => nil
+
+p 'foo'.byteindex('o', 1) # => 1
+p 'foo'.byteindex('o', 2) # => 2
+p 'foo'.byteindex('o', 3) # => nil
+
+p 'foo'.byteindex('o', -1) # => 2
+p 'foo'.byteindex('o', -2) # => 1
+p 'foo'.byteindex('o', -3) # => 1
+p 'foo'.byteindex('o', -4) # => nil
+
+p 'あいう'.byteindex('う') # => 6
+p 'あいう'.byteindex('う', 3) # => 6
+p 'あいう'.byteindex('う', -3) # => 6
+'あいう'.byteindex('う', 1) # offset 1 does not land on character boundary (IndexError)
+```
+
+- **SEE** [m:String#index], [m:String#byterindex]
+#%end
+### def insert(pos, other) -> self
+
+文字列 other を self に挿入して self を返します。
+
+pos が正の場合、pos 番目の文字の直前に文字列 other を挿入します。
+self[pos, 0] = other と同じ操作です。
+
+pos が負の場合、self の末尾から逆方向に数えて pos+1 (self[index] の後) に other を挿入します。
+
+- **param** `pos` --      文字列を挿入するインデックス
+- **param** `other` --    挿入する文字列
+
+```ruby title="例"
+# pos が正の場合、String#insert と String#[]= は同じ操作を行う
+p 'foo'.insert(1, 'bar')             # => "fbaroo"
+str = 'foo'; str[1, 0] = 'bar'; str  # => "fbaroo"
+
+# pos が負の場合、String#insert と String#[]= は異なる操作を行う
+p 'foo'.insert(-1, 'bar')            # => "foobar"
+str = 'foo'; str[-1, 0] = 'bar'; str # => "fobaro"
+```
+
+- **SEE** [m:String#\[\]=]
+
+### def intern -> Symbol
+### def to_sym -> Symbol
+
+文字列に対応するシンボル値 [c:Symbol] を返します。
+
+なお、このメソッドの逆にシンボルに対応する文字列を得るには
+[m:Symbol#to_s] または [m:Symbol#id2name] を使います。
+
+シンボル文字列にはヌルキャラクタ("\0")、空の文字列の使用も可能です。
+
+```ruby title="例"
+p "foo".intern                 # => :foo
+p "foo".intern.to_s == "foo"   # => true
+```
+
+### def length -> Integer
+### def size -> Integer
+
+文字列の文字数を返します。バイト数を知りたいときは bytesize メソッドを使ってください。
+
+```ruby title="例"
+p "test".length        # => 4
+p "test".size          # => 4
+p "テスト".length       # => 3
+p "テスト".size         # => 3
+p "\x80\u3042".length  # => 2
+p "\x80\u3042".size    # => 2
+```
+
+ここでの「文字数」は Unicode のコードポイントの数を指しており、見た目上の1文字 (書記素クラスタ) の数とは限りません。たとえば、結合文字 (合成用ダイアクリティカルマーク) を使って NFD (Unicode 正規化形式 D) で表現された文字列は、見た目が同じ NFC (正規化形式 C) の文字列よりも length が大きくなることがあります。また、複数のコードポイントが ZWJ (Zero Width Joiner) で連結されて1つの絵文字として表示される文字列でも、length は連結されたコードポイントの数を返します。
+
+```ruby title="例: コードポイント単位で数えられる例"
+p "\u{1F600}".length                                   # => 1 (絵文字。1コードポイントなら1文字扱い)
+p "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F466}".length # => 5 (ZWJ で連結した家族の絵文字。見た目は1つだが5コードポイント)
+
+p "e\u0301"        # => "é" (NFD: e + 合成用アキュートアクセント。2コードポイント)
+p "e\u0301".length # => 2
+p "\u00E9"         # => "é" (NFC: 合成済みの1コードポイント)
+p "\u00E9".length  # => 1
+```
+
+見た目上の1文字 (書記素クラスタ) 単位で数えたい場合は [m:String#grapheme_clusters] や [m:String#each_grapheme_cluster] を使ってください。
+
+```ruby title="例"
+p "e\u0301".grapheme_clusters        # => ["é"]
+p "e\u0301".grapheme_clusters.length # => 1
+```
+
+- **SEE** [m:String#bytesize], [m:String#grapheme_clusters]
+
+### def match(regexp, pos = 0) -> MatchData | nil
+### def match(regexp, pos = 0) {|m| ... } -> object
+
+regexp.match(self, pos) と同じです。
+regexp が文字列の場合は、正規表現にコンパイルします。
+詳しくは [m:Regexp#match] を参照してください。
+
+```ruby title="例: regexp のみの場合"
+p 'hello'.match('(.)\1')    # => #<MatchData "ll" 1:"l">
+p 'hello'.match('(.)\1')[0] # => "ll"
+p 'hello'.match(/(.)\1/)[0] # => "ll"
+p 'hello'.match('xx')       # => nil
+```
+
+```ruby title="例: regexp, pos を指定した場合"
+p 'hoge hige hege bar'.match('h.ge', 0)   # => #<MatchData "hoge">
+p 'hoge hige hege bar'.match('h.ge', 1)   # => #<MatchData "hige">
+```
+
+```ruby title="例: ブロックを指定した場合"
+p 'hello'.match('(.)\1'){|e|"match #{$1}"}  # => "match l"
+'hello'.match('xx'){|e|"match #{$1}"}     # マッチしないためブロックは実行されない
+```
+
+- **SEE** [m:Regexp#match], [m:Symbol#match]
+
+### def match?(regexp, pos = 0) -> bool
+
+regexp.match?(self, pos) と同じです。
+regexp が文字列の場合は、正規表現にコンパイルします。
+詳しくは [m:Regexp#match?] を参照してください。
+
+```ruby title="例"
+p "Ruby".match?(/R.../)  # => true
+p "Ruby".match?(/R.../, 1) # => false
+p "Ruby".match?(/P.../)  # => false
+p $&                     # => nil
+```
+
+- **SEE** [m:Regexp#match?], [m:Symbol#match?]
+
+### def succ -> String
+### def next -> String
+
+self の「次の」文字列を返します。
+
+「次の」文字列は、対象の文字列の右端からアルファベットなら アルファベット順(aの次はb, zの次はa, 大文字も同様)に、数字なら 10 進数(9 の次は 0)とみなして計算されます。
+
+```ruby
+p "aa".succ        # => "ab"
+p "88".succ.succ   # => "90"
+```
+
+"99" → "100", "AZZ" → "BAA" のような繰り上げも行われます。
+このとき負符号などは考慮されません。
+
+```ruby
+p "99".succ   # => "100"
+p "ZZ".succ   # => "AAA"
+p "a9".succ   # => "b0"
+p "-9".succ   # => "-10"
+```
+
+self にアルファベットや数字とそれ以外の文字が混在している場合、アルファベットと数字だけが「次の」文字になり、残りは保存されます。
+
+```ruby
+p "1.9.9".succ # => # "2.0.0"
+```
+
+逆に self がアルファベットや数字をまったく含まない場合は、単純に文字コードを 1 増やします。
+
+```ruby
+p ".".succ     # => "/"
+```
+
+さらに、self が空文字列の場合は "" を返します。
+このメソッドはエンコーディングを考慮して動作するため、マルチバイト文字であってもアルファベットや数字と同様に「次の」文字が計算されます。
+
+なお、succ と逆の動作をするメソッドはありません。
+また、succ という名前の由来は successor です。
+
+```ruby title="例"
+p "aa".succ   # => "ab"
+
+# 繰り上がり
+p "99".succ   # => "100"
+p "a9".succ   # => "b0"
+p "Az".succ   # => "Ba"
+p "zz".succ   # => "aaa"
+p "-9".succ   # => "-10"
+p "9".succ    # => "10"
+p "09".succ   # => "10"
+
+# アルファベット・数字とそれ以外の混在
+p "1.9.9".succ # => # "2.0.0"
+
+# アルファベット・数字以外のみ
+p ".".succ     # => "/"
+
+# マルチバイト文字にも対応
+p "９９".succ  # => "１００"
+p "ん".succ    # => "ゔ"
+```
+
+このメソッドは文字列の [c:Range] の内部で使用されます。
+
+### def succ! -> String
+### def next! -> String
+
+self を「次の」文字列に置き換えます。
+「次の」文字列は、アルファベットなら 16 進数、数字なら 10 進数とみなして計算されます。
+「次の」文字列の計算では "99" → "100" のように繰り上げも行われます。
+このとき負符号などは考慮されません。
+
+self にアルファベットや数字とそれ以外の文字が混在している場合、アルファベットと数字だけが「次の」文字になり、残りは保存されます。
+逆に self がアルファベットや数字をまったく含まない場合は、単純に文字コードを 1 増やします。
+
+さらに、self が空文字列の場合は "" を返します。
+
+このメソッドはエンコーディングを考慮して動作するため、マルチバイト文字であってもアルファベットや数字と同様に「次の」文字が計算されます。
+
+なお、succ! と逆の動作をするメソッドはありません。
+
+```ruby title="例"
+s = "aa"
+s.succ!
+p s   # => "ab"
+
+# 繰り上がり
+s = "99"
+s.succ!
+p s   # => "100"
+
+# マルチバイト文字にも対応
+s = "９９"
+s.succ!
+p s   # => "１００"
+
+s = "ん"
+s.succ!
+p s   # => "ゔ"
+```
+
+- **SEE** [m:String#succ]
+
+### def oct -> Integer
+
+文字列を 8 進文字列であると解釈して、整数に変換します。
+
+```ruby title="例"
+p "10".oct  # => 8
+p "010".oct # => 8
+p "8".oct   # => 0
+```
+
+oct は文字列の接頭辞 ("0", "0b", "0B", "0x", "0X") に応じて
+8 進以外の変換も行います。
+
+```ruby title="例"
+p "0b10".oct  # => 2
+p "10".oct    # => 8
+p "010".oct   # => 8
+p "0x10".oct  # => 16
+```
+
+整数とみなせない文字があればそこまでを変換対象とします。
+変換対象が空文字列であれば 0 を返します。
+
+符号や _ が含まれる場合も変換対象になります。
+
+```ruby title="例"
+p "-010".oct     # => -8
+p "-0x10".oct    # => -16
+p "-0b10".oct    # => -2
+
+p "1_0_1x".oct   # => 65
+```
+
+- **SEE** [m:String#hex], [m:String#to_i], [m:String#to_f],
+     [m:Kernel?.Integer], [m:Kernel?.Float]
+
+逆に、数値を文字列に変換するには[m:Kernel?.sprintf],
+[m:String#%], [m:Integer#to_s] を使用します。
+
+### def replace(other) -> String
+
+self の内容を other の内容で置き換えます。
+
+```ruby title="例"
+str = "foo"
+str.replace "bar"
+p str   # => "bar"
+```
+
+### def reverse -> String
+
+文字列を文字単位で左右逆転した文字列を返します。
+
+```ruby title="例"
+p "foobar".reverse   # => "raboof"
+p "".reverse         # => ""
+```
+
+### def reverse! -> self
+
+文字列を文字単位で左右逆転します。
+
+```ruby title="例"
+str = "foobar"
+str.reverse!
+p str   # => "raboof"
+```
+
+### def rindex(pattern, pos = self.size) -> Integer | nil
+
+文字列のインデックス pos から左に向かって pattern を探索します。
+最初に見つかった部分文字列の左端のインデックスを返します。
+見つからなければ nil を返します。
+
+引数 pattern は探索する部分文字列または正規表現で指定します。
+
+pos が負の場合は、文字列の末尾から数えた位置から探索します。
+
+rindex と [m:String#index] とでは、探索方向だけが逆になります。
+完全に左右が反転した動作をするわけではありません。
+探索はその開始位置を右から左にずらしながら行いますが、部分文字列の照合はどちらのメソッドも左から右に向かって行います。
+以下の例を参照してください。
+
+```ruby title="String#index の場合"
+p "stringstring".index("ing", 1)    # => 3
+  # ing            # ここから探索を始める
+  #  ing
+  #   ing          # 右にずらしていってここで見つかる
+```
+
+```ruby title="String#rindex の場合"
+p "stringstring".rindex("ing", -1)  # => 9
+  #           ing    # インデックス -1 の文字から探索を始める
+  #          ing
+  #         ing      # 左にずらしていってここで見つかる
+```
+
+- **param** `pattern` --    探索する部分文字列または正規表現
+- **param** `pos` --       探索を始めるインデックス
+
+```ruby title="例"
+p "astrochemistry".rindex("str")        # => 10
+p "character".rindex(?c)                # => 5
+p "regexprindex".rindex(/e.*x/, 2)      # => 1
+
+p "foobarfoobar".rindex("bar", 6)       # => 3
+p "foobarfoobar".rindex("bar", -6)      # => 3
+```
+
+- **SEE** [m:String#index]
+#%since 3.2
+### def byterindex(pattern, offset = self.bytesize) -> Integer | nil
+
+文字列のバイト単位のインデックス offset から左に向かって pattern を探索します。
+最初に見つかった部分文字列の左端のバイト単位のインデックスを返します。
+見つからなければ nil を返します。
+
+引数 pattern は探索する部分文字列または正規表現で指定します。
+
+offset が負の場合は、文字列の末尾から数えた位置から探索します。
+
+byterindex と [m:String#byteindex] とでは、探索方向だけが逆になります。
+完全に左右が反転した動作をするわけではありません。
+探索はその開始位置を右から左にずらしながら行いますが、部分文字列の照合はどちらのメソッドも左から右に向かって行います。
+以下の例を参照してください。
+
+```ruby title="String#byteindex の場合"
+p "stringstring".byteindex("ing", 1)    # => 3
+  # ing            # ここから探索を始める
+  #  ing
+  #   ing          # 右にずらしていってここで見つかる
+```
+
+```ruby title="String#byterindex の場合"
+p "stringstring".byterindex("ing", -1)  # => 9
+  #           ing    # インデックス -1 の文字から探索を始める
+  #          ing
+  #         ing      # 左にずらしていってここで見つかる
+```
+
+- **param** `pattern` --    探索する部分文字列または正規表現
+- **param** `offset` --     探索を始めるバイト単位のインデックス
+
+```ruby title="例"
+p 'foo'.byterindex('f') # => 0
+p 'foo'.byterindex('o') # => 2
+p 'foo'.byterindex('oo') # => 1
+p 'foo'.byterindex('ooo') # => nil
+
+p 'foo'.byterindex(/f/) # => 0
+p 'foo'.byterindex(/o/) # => 2
+p 'foo'.byterindex(/oo/) # => 1
+p 'foo'.byterindex(/ooo/) # => nil
+
+# 右でのマッチが優先
+p 'foo'.byterindex(/o+/) # => 2
+p $~ # => #<MatchData "o">
+
+# 最長にするには否定戻り読み(negative look-behind)と組み合わせる
+p 'foo'.byterindex(/(?<!o)o+/) # => 1
+p $~ # => #<MatchData "oo">
+
+# またはbyteindexを否定先読み(negative look-ahead)
+p 'foo'.byteindex(/o+(?!.*o)/) # => 1
+p $~ # => #<MatchData "oo">
+
+p 'foo'.byterindex('o', 0) # => nil
+p 'foo'.byterindex('o', 1) # => 1
+p 'foo'.byterindex('o', 2) # => 2
+p 'foo'.byterindex('o', 3) # => 2
+
+p 'foo'.byterindex('o', -1) # => 2
+p 'foo'.byterindex('o', -2) # => 1
+p 'foo'.byterindex('o', -3) # => nil
+p 'foo'.byterindex('o', -4) # => nil
+```
+
+- **SEE** [m:String#rindex], [m:String#byteindex]
+#%end
+### def scan(pattern) -> [String] | [[String]]
+
+self に対して pattern を繰り返しマッチし、マッチした部分文字列の配列を返します。
+
+pattern が正規表現で括弧を含む場合は、括弧で括られたパターンにマッチした部分文字列の配列の配列を返します。
+
+- **param** `pattern` -- 探索する部分文字列または正規表現
+
+```ruby title="例"
+p "foobar".scan(/../)               # => ["fo", "ob", "ar"]
+p "foobar".scan("o")                # => ["o", "o"]
+p "foobarbazfoobarbaz".scan(/ba./)  # => ["bar", "baz", "bar", "baz"]
+
+p "foobar".scan(/(.)/) # => [["f"], ["o"], ["o"], ["b"], ["a"], ["r"]]
+
+p "foobarbazfoobarbaz".scan(/(ba)(.)/) # => [["ba", "r"], ["ba", "z"], ["ba", "r"], ["ba", "z"]]
+```
+
+### def scan(pattern) {|s| ... } -> self
+
+pattern がマッチした部分文字列をブロックに渡して実行します。
+pattern が正規表現で括弧を含む場合は、括弧で括られたパターンにマッチした文字列の配列を渡します。
+
+- **param** `pattern` -- 探索する部分文字列または正規表現
+
+```ruby title="例"
+"foobarbazfoobarbaz".scan(/ba./) {|s| p s }
+# "bar"
+# "baz"
+# "bar"
+# "baz"
+
+"foobarbazfoobarbaz".scan("ba") {|s| p s }
+# "ba"
+# "ba"
+# "ba"
+# "ba"
+
+"foobarbazfoobarbaz".scan(/(ba)(.)/) {|s| p s }
+# ["ba", "r"]
+# ["ba", "z"]
+# ["ba", "r"]
+# ["ba", "z"]
+```
+
+### def slice!(nth) -> String
+### def slice!(pos, len) -> String
+### def slice!(substr) -> String
+### def slice!(regexp, nth = 0) -> String
+### def slice!(first..last) -> String
+### def slice!(first...last) -> String
+
+指定した範囲 ([m:String#\[\]] 参照) を文字列から取り除いたうえで取り除いた部分文字列を返します。
+
+引数が範囲外を指す場合は nil を返します。
+
+```ruby title="例"
+string = "this is a string"
+p string.slice!(2)      # => "i"
+p string.slice!(3..6)   # => " is "
+p string.slice!(/s.*t/) # => "sa st"
+p string.slice!("r")    # => "r"
+p string                # => "thing"
+```
+
+### def split(sep = $;, limit = 0) -> [String]
+### def split(sep = $;, limit = 0) {|s| ... } -> self
+
+第 1 引数 sep で指定されたセパレータによって文字列を limit 個まで分割し、結果を文字列の配列で返します。
+ブロックを指定すると、配列を返す代わりに分割した文字列でブロックを呼び出します。
+
+第 1 引数 sep は以下のいずれかです。
+
+- **正規表現**:
+    正規表現にマッチする部分で分割する。
+    特に、括弧によるグルーピングがあればそのグループにマッチした文字列も結果の配列に含まれる (後述)。
+- **文字列**:
+    その文字列自体にマッチする部分で分割する。
+- **1 バイトの空白文字 ' '**:
+    先頭の連続する空白を除いたうえで、連続する空白で分割する。
+- **`nil`**:
+    常に $; で分割する。 $; も nil の場合は、1 バイトの空白文字を指定したのと同じ動作となる。
+- **空文字列 '' あるいは空文字列にマッチする正規表現**:
+    文字列を 1 文字ずつに分割する。マルチバイト文字を認識する。
+
+Ruby 2.7 からは [[m:$;]] を nil 以外の値に変更することは非推奨になっており、
+sep 省略時の挙動を [[m:$;]] に頼るコードは書くべきではありません。
+
+sep が正規表現で、かつその正規表現に括弧が含まれている場合には、各括弧のパターンにマッチした文字列も配列に含まれます。
+括弧が複数ある場合は、マッチしたものだけが配列に含まれます。
+
+第 2 引数 limit は以下のいずれかです。
+
+- **`limit > 0`**:
+     最大 limit 個の文字列に分割する
+- **`limit == 0`**:
+     分割個数制限はなしで、配列末尾の空文字列を取り除く
+- **`limit < 0`**:
+     分割個数の制限はなし
+
+- **param** `sep` --       文字列を分割するときのセパレータのパターン
+- **param** `limit` --     分割する最大個数
+
+- **return** -- ブロックを渡した場合は self、ブロックなしの場合は配列
+
+```ruby title="例"
+p "   a \t  b \n  c".split(/\s+/) # => ["", "a", "b", "c"]
+
+p "   a \t  b \n  c".split(nil)   # => ["a", "b", "c"]
+p "   a \t  b \n  c".split(' ')   # => ["a", "b", "c"]   # split(nil) と同じ
+p "   a \t  b \n  c".split        # => ["a", "b", "c"]   # split(nil) と同じ
+```
+
+```ruby title="括弧を含む正規表現"
+p '1-10,20'.split(/([-,])/)   # => ["1", "-", "10", ",", "20"]
+```
+
+```ruby title="正規表現が空文字列にマッチする場合は 1 文字に分割"
+p 'hi there'.split(/\s*/).join(':')  # => "h:i:t:h:e:r:e"
+```
+
+```ruby title="文字列全体を 1 文字ずつに分割する例"
+p 'hi there'.split(//).join(':')     # => "h:i: :t:h:e:r:e"
+```
+
+```ruby title="limit == 0 だと制限なく分割、配列末尾の空文字列は取り除かれる"
+p "a,b,c,,,".split(/,/, 0)   # => ["a", "b", "c"]
+```
+
+```ruby title="limit 省略時は 0 と同じ (最もよく使われるパターン)"
+p "a,b,c,,,".split(/,/)      # => ["a", "b", "c"]
+```
+
+```ruby title="正の limit 使用例"
+p "a,b,c,d,e".split(/,/, 1)  # => ["a,b,c,d,e"]
+p "a,b,c,d,e".split(/,/, 2)  # => ["a", "b,c,d,e"]
+p "a,b,c,d,e".split(/,/, 3)  # => ["a", "b", "c,d,e"]
+p "a,b,c,d,e".split(/,/, 4)  # => ["a", "b", "c", "d,e"]
+p "a,b,c,d,e".split(/,/, 5)  # => ["a", "b", "c", "d", "e"]
+p "a,b,c,d,e".split(/,/, 6)  # => ["a", "b", "c", "d", "e"]
+p "a,b,c,d,e".split(/,/, 7)  # => ["a", "b", "c", "d", "e"]
+```
+
+```ruby title="limit が負の数の場合は制限なく分割"
+p "a,b,c,,,".split(/,/, -1)    # => ["a", "b", "c", "", "", ""]
+```
+
+```ruby title="1 バイトの空白文字を指定した場合の挙動"
+# まず "   a   b   " から先頭の連続する空白を除き "a   b   " が分割対象となる。
+# これを連続する空白で分割し、["a", "b", ""] となる。
+p "   a   b   ".split(' ', -1) # => ["a", "b", ""]
+
+# limit == -1 の場合と比べると、結果の配列末尾に含まれる空文字列が取り除かれている。
+p "   a   b   ".split(' ', 0)  # => ["a", "b"]
+
+# limit == 1 の場合は元の文字列がそのまま含まれる。
+p "   a   b   ".split(' ', 1)  # => ["   a   b   "]
+```
+
+- **SEE** [m:String#partition], [m:String#rpartition]
+
+### def squeeze(*chars) -> String
+
+chars に含まれる文字が複数並んでいたら 1 文字にまとめます。
+
+chars の形式は [man:tr(1)] と同じです。つまり、
+`a-c` は a から c を意味し、"^0-9" のように文字列の先頭が `^` の場合は指定文字以外を意味します。
+
+`-` は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、`^` もその効果は文字列の先頭にあるときだけです。また、
+`-`, `^`, \`\' はバックスラッシュ(\`\')によりエスケープできます。
+
+引数を 1 つも指定しない場合は、すべての連続した文字を 1 文字にまとめます。
+
+引数を複数指定した場合は、すべての引数にマッチする文字を 1 文字にまとめます。
+
+- **param** `chars` -- 1 文字にまとめる文字。
+
+```ruby title="例"
+p "112233445566778899".squeeze          # =>"123456789"
+p "112233445566778899".squeeze("2-8")   # =>"11234567899"
+
+# 以下の 2 つは同じ意味
+p "112233445566778899".squeeze("2378")          # =>"11234455667899"
+p "112233445566778899".squeeze("2-8", "^4-6")   # =>"11234455667899"
+```
+
+### def squeeze!(*chars) -> self | nil
+
+chars に含まれる文字が複数並んでいたら 1 文字にまとめます。
+
+chars の形式は [man:tr(1)] と同じです。つまり、
+`a-c` は a から c を意味し、"^0-9" のように文字列の先頭が `^` の場合は指定文字以外を意味します。
+
+`-` は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、`^` もその効果は文字列の先頭にあるときだけです。また、
+`-`, `^`, \`\' はバックスラッシュ(\`\')によりエスケープできます。
+
+引数を 1 つも指定しない場合は、すべての連続した文字を 1 文字にまとめます。
+
+引数を複数指定した場合は、すべての引数にマッチする文字を 1 文字にまとめます。
+
+1 文字もまとめられなかった場合は nil を返します。
+
+- **param** `chars` -- 1 文字にまとめる文字。
+
+```ruby title="例"
+str = "112233445566778899"
+str.squeeze!
+p str    # =>"123456789"
+
+str = "112233445566778899"
+str.squeeze!("2-8")
+p str    # =>"11234567899"
+
+str = "123456789"
+p str.squeeze! # => nil
+p str        # =>"123456789"
+```
+
+#%since 4.0
+### def strip(*selectors) -> String
+#%else
+### def strip -> String
+#%end
+
+文字列先頭と末尾の空白文字を全て取り除いた文字列を生成して返します。
+空白文字の定義は " \t\r\n\f\v\0" です。
+
+#%since 4.0
+selectors を与えた場合、空白文字として selectors で指定された文字を取り除きます。
+
+selectors の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `selectors` --    取り除く文字。
+#%end
+
+```ruby title="例"
+p "  abc  \r\n".strip    # => "abc"
+p "abc\n".strip          # => "abc"
+p "  abc".strip          # => "abc"
+p "abc".strip            # => "abc"
+p "  \0  abc  \0".strip  # => "abc"
+
+str = "\tabc\n"
+p str.strip              # => "abc"
+p str                    # => "\tabc\n" (元の文字列は変化しない)
+```
+
+#%since 4.0
+
+```ruby title="取り除く文字を指定"
+p "---abc+++".strip("-+") # => "abc"
+p "---abc+++".strip("+-") # => "abc"
+```
+
+```ruby title="範囲、否定、複数の指定"
+"01234abc56789".strip("0-9") # "abc"
+"01234abc56789".strip("0-9", "^4-6") # "4abc56"
+```
+
+#%end
+
+- **SEE** [m:String#lstrip], [m:String#rstrip]
+
+#%since 4.0
+### def strip!(*selectors) -> self | nil
+#%else
+### def strip! -> self | nil
+#%end
+
+先頭と末尾の空白文字を全て破壊的に取り除きます。
+空白文字の定義は " \t\r\n\f\v\0" です。
+
+strip! は、内容を変更した self を返します。
+ただし取り除く空白がなかったときは nil を返します。
+
+#%since 4.0
+selectors を与えた場合、空白文字として selectors で指定された文字を取り除きます。
+
+selectors の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `selectors` --    取り除く文字。
+#%end
+
+```ruby title="例"
+str = "  abc\r\n"
+p str.strip!     # => "abc"
+p str            # => "abc"
+
+str = "abc"
+p str.strip!     # => nil
+p str            # => "abc"
+
+str = "  \0  abc  \0"
+str.strip!
+p str            # => "abc"
+```
+
+#%since 4.0
+
+```ruby title="取り除く文字を指定"
+p "---abc+++".strip!("-+") # => "abc"
+p "---abc+++".strip!("+-") # => "abc"
+```
+
+```ruby title="範囲、否定、複数の指定"
+"01234abc56789".strip!("0-9") # "abc"
+"01234abc56789".strip!("0-9", "^4-6") # "4abc56"
+```
+
+#%end
+
+- **SEE** [m:String#strip], [m:String#lstrip]
+
+#%since 4.0
+### def lstrip(*selectors) -> String
+#%else
+### def lstrip -> String
+#%end
+
+文字列の先頭にある空白文字を全て取り除いた新しい文字列を返します。
+空白文字の定義は " \t\r\n\f\v\0" です。
+
+#%since 4.0
+selectors を与えた場合、空白文字として selectors で指定された文字を取り除きます。
+
+selectors の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `selectors` --    取り除く文字。
+#%end
+
+```ruby title="例"
+p "  abc\n".lstrip     # => "abc\n"
+p "\t abc\n".lstrip    # => "abc\n"
+p "abc\n".lstrip       # => "abc\n"
+```
+
+#%since 4.0
+
+```ruby title="取り除く文字を指定"
+p "---abc+++".lstrip("-") # => "abc+++"
+```
+
+```ruby title="範囲、否定、複数の指定"
+"01234abc56789".lstrip("0-9") # "abc56789"
+"01234abc56789".lstrip("0-9", "^4-6") # "4abc56789"
+```
+
+#%end
+
+- **SEE** [m:String#strip], [m:String#rstrip]
+
+#%since 4.0
+### def lstrip!(*selectors) -> self | nil
+#%else
+### def lstrip! -> self | nil
+#%end
+
+文字列の先頭にある空白文字を全て破壊的に取り除きます。
+空白文字の定義は " \t\r\n\f\v\0" です。
+
+lstrip! は self を変更して返します。
+ただし取り除く空白がなかったときは nil を返します。
+
+#%since 4.0
+selectors を与えた場合、空白文字として selectors で指定された文字を取り除きます。
+
+selectors の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `selectors` --    取り除く文字。
+#%end
+
+```ruby title="例"
+str = "  abc"
+p str.lstrip!   # => "abc"
+p str           # => "abc"
+
+str = "abc"
+p str.lstrip!   # => nil
+p str           # => "abc"
+```
+
+#%since 4.0
+
+```ruby title="取り除く文字を指定"
+p "---abc+++".lstrip!("-+") # => "abc+++"
+```
+
+```ruby title="範囲、否定、複数の指定"
+"01234abc56789".lstrip!("0-9") # "abc56789"
+"01234abc56789".lstrip!("0-9", "^4-6") # "4abc56789"
+```
+
+#%end
+
+#%since 4.0
+### def rstrip(*selectors) -> String
+#%else
+### def rstrip -> String
+#%end
+
+文字列の末尾にある空白文字を全て取り除いた新しい文字列を返します。
+空白文字の定義は " \t\r\n\f\v\0" です。
+
+#%since 4.0
+selectors を与えた場合、空白文字として selectors で指定された文字を取り除きます。
+
+selectors の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `selectors` --    取り除く文字。
+#%end
+
+```ruby title="例"
+p "  abc\n".rstrip          # => "  abc"
+p "  abc \t\r\n\0".rstrip   # => "  abc"
+p "  abc".rstrip            # => "  abc"
+p "  abc\0 ".rstrip         # => "  abc"
+
+str = "abc\n"
+p str.rstrip    # => "abc"
+p str           # => "abc\n"  (元の文字列は変化しない)
+```
+
+#%since 4.0
+
+```ruby title="取り除く文字を指定"
+p "---abc+++".rstrip("+") # => "---abc"
+```
+
+```ruby title="範囲、否定、複数の指定"
+"01234abc56789".rstrip("0-9") # "01234abc"
+"01234abc56789".rstrip("0-9", "^4-6") # "01234abc56"
+```
+
+#%end
+
+- **SEE** [m:String#lstrip],[m:String#strip]
+
+#%since 4.0
+### def rstrip!(*selectors) -> self | nil
+#%else
+### def rstrip! -> self | nil
+#%end
+
+文字列の末尾にある空白文字を全て破壊的に取り除きます。
+空白文字の定義は " \t\r\n\f\v\0" です。
+
+#%since 4.0
+selectors を与えた場合、空白文字として selectors で指定された文字を取り除きます。
+
+selectors の形式は [man:tr(1)] と同じです。
+つまり、「"a-c"」は文字 a から c を意味し、「"^0-9"」のように文字列の先頭が「^」の場合は指定文字以外を意味します。
+
+文字「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」も文字列の先頭にあるときだけ否定の効果を発揮します。
+また、「-」「^」「\」はバックスラッシュ (「\」) によりエスケープできます。
+
+引数を複数指定した場合は、すべての引数にマッチした文字だけを数えます。
+
+- **param** `selectors` --    取り除く文字。
+#%end
+
+```ruby title="例"
+str = "  abc\n"
+p str.rstrip!   # => "  abc"
+p str           # => "  abc"
+
+str = "  abc \r\n\t\v\0"
+p str.rstrip!   # => "  abc"
+p str           # => "  abc"
+```
+
+#%since 4.0
+
+```ruby title="取り除く文字を指定"
+p "---abc+++".rstrip!("+") # => "---abc"
+```
+
+```ruby title="範囲、否定、複数の指定"
+"01234abc56789".rstrip!("0-9") # "01234abc"
+"01234abc56789".rstrip!("0-9", "^4-6") # "01234abc56"
+```
+
+#%end
+
+- **SEE** [m:String#rstrip], [m:String#lstrip]
+
+### def sub(pattern, replace) -> String
+
+文字列中で pattern にマッチした最初の部分を文字列 replace で置き換えた文字列を生成して返します。
+
+置換文字列 replace 中の `\&` と `\0` はマッチした部分文字列に、
+`\1` ... `\9` は n 番目の括弧の内容に置き換えられます。
+置換文字列内では `` \` ``、`\'`、`\+` も使えます。
+これらは [m:$\`]、[m:$']、[m:$+] に対応します。
+pattern が名前付きキャプチャを含む正規表現である場合は、
+`\k<name>` の形式でその名前に対応する部分文字列に置き換えられます。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **param** `replace` --    pattern で指定した文字列と置き換える文字列
+
+```ruby title="例"
+p 'abcdefg'.sub(/def/, '!!')          # => "abc!!g"
+p 'abcabc'.sub(/b/, '<<\&>>')         # => "a<<b>>cabc"
+p 'xxbbxbb'.sub(/x+(b+)/, 'X<<\1>>')  # => "X<<bb>>xbb"
+p 'foo'.sub(/(?<name>fo)/, 'match: \k<name>') # => "match: foo"
+```
+
+注意:
+
+第 2 引数 replace に [m:$1] を埋め込んでも意図した結果にはなりません。
+この文字列が評価される時点ではまだ正規表現マッチが行われておらず、
+$1 がセットされていないからです。
+
+また、sub では「\」が部分文字列との置き換えという特別な意味を持つため、
+replace に「\」自身を入れたいときは「\」を二重にエスケープしなければなりません。
+
+```ruby title="ひとつめの括弧の内容に置き換えるときによくある間違い"
+p 'xbbb-xbbb'.sub(/x(b+)/, "#{$1}")   # => "-xbbb"     # NG
+p 'xbbb-xbbb'.sub(/x(b+)/, "\1")      # => "1-xbbb"    # NG
+p 'xbbb-xbbb'.sub(/x(b+)/, "\\1")     # => "bbb-xbbb"  # OK
+p 'xbbb-xbbb'.sub(/x(b+)/, '\1')      # => "bbb-xbbb"  # OK
+p 'xbbb-xbbb'.sub(/x(b+)/, '\\1')     # => "bbb-xbbb"  # OK
+```
+
+```ruby title="バックスラッシュを倍にするときによくある間違い"
+puts '\n'.sub(/\\/, "\\\\")      # => \n   # NG
+puts '\n'.sub(/\\/, '\\\\')      # => \n   # NG
+puts '\n'.sub(/\\/, "\\\\\\\\")  # => \\n  # OK
+puts '\n'.sub(/\\/, '\\\\\\\\')  # => \\n  # OK
+```
+
+このような間違いを確実に防止し、コードの可読性を上げるには、
+`\&` や `\1` よりも下記のようにブロック付き形式の sub を使うべきです。
+
+```ruby title="安全な例"
+p 'xbbb-xbbb'.sub(/x(b+)/) { $1 }   # => "bbb-xbbb"  # OK
+
+puts '\n'.sub(/\\/) { '\\\\' }      # => \\n        # OK
+```
+
+- **SEE** [m:String#gsub]
+
+### def sub(pattern) {|matched| .... } -> String
+
+文字列中で pattern にマッチした最初の部分をブロックに渡し、その評価結果で置き換えた新しい文字列を返します。
+ブロックなしの sub と違い、ブロックの中からは組み込み変数 [m:$1], $2, $3, ... を問題なく参照できます。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+
+```ruby title="例"
+p 'abcabc'.sub(/b/) {|s| s.upcase }  # => "aBcabc"
+p 'abcabc'.sub(/b/) { $&.upcase }    # => "aBcabc"
+```
+
+- **SEE** [m:String#gsub]
+
+### def sub(pattern, hash) -> String
+
+文字列中の pattern にマッチした部分をキーにして hash を引いた値で置き換えます。
+
+- **param** `pattern` --    置き換える文字列のパターン
+- **param** `hash` --       置き換える文字列を与えるハッシュ
+
+```ruby title="例"
+hash = {'b'=>'B', 'c'=>'C'}
+p "abcabc".sub(/[bc]/){hash[$&]} # => "aBcabc"
+p "abcabc".sub(/[bc]/, hash)     # => "aBcabc"
+```
+
+### def sub!(pattern, replace) -> self | nil
+
+文字列中で pattern にマッチした最初の部分を文字列 replace へ破壊的に置き換えます。
+
+置換文字列 replace 中の `\&` と `\0` はマッチした部分文字列に、
+`\1` ... `\9` は n 番目の括弧の内容に置き換えられます。
+置換文字列内では `` \` ``、`\'`、`\+` も使えます。
+これらは [m:$\`]、[m:$']、[m:$+] に対応します。
+pattern が名前付きキャプチャを含む正規表現である場合は、
+`\k<name>` の形式でその名前に対応する部分文字列に置き換えられます。
+
+sub! は通常 self を変更して返しますが、置換が起こらなかった場合は nil を返します。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **param** `replace` --    pattern で指定した文字列と置き換える文字列
+- **return** -- 置換した場合は self、置換しなかった場合は nil
+
+```ruby title="例"
+buf = "String-String"
+buf.sub!(/in./, "!!")
+p buf   # => "Str!!-String"
+
+buf = "String.String"
+buf.sub!(/in./, '<<\&>>')
+p buf   # => "Str<<ing>>.String"
+
+buf = "foo"
+buf.sub!(/(?<name>fo)/, 'match: \k<name>')
+p buf   # => "match: foo"
+```
+
+注意:
+
+引数 replace の中で [m:$1] を使うことはできません。
+replace は sub メソッドの呼び出しより先に評価されるので、まだ sub の正規表現マッチが行われておらず、
+$1 がセットされていないからです。
+
+また、sub では「\」が部分文字列との置き換えという特別な意味を持つため、
+replace に「\」自身を入れたいときは「\」を二重にエスケープしなければなりません。
+
+```ruby title="ひとつめの括弧にマッチした部分に置き換えるときによくやる間違いと正しい例"
+'abbbcd'.sub!(/a(b+)/, "#{$1}")       # NG
+'abbbcd'.sub!(/a(b+)/, "\1")          # NG
+'abbbcd'.sub!(/a(b+)/, "\\1")         # OK
+'abbbcd'.sub!(/a(b+)/, '\\1')         # OK
+'abbbcd'.sub!(/a(b+)/, '\1')          # OK
+'abbbcd'.sub!(/a(b+)/) { $1 }         # OK   これがもっとも安全
+```
+
+- **SEE** [m:String#gsub]
+
+### def sub!(pattern) {|matched| .... } -> self | nil
+
+文字列中で pattern にマッチした最初の部分をブロックに渡し、その評価結果へ破壊的に置き換えます。
+
+また、ブロックなしの sub と違い、ブロックの中からは組み込み変数 [m:$1], $2, $3, ... を問題なく参照できます。
+
+- **param** `pattern` --    置き換える文字列のパターンを表す文字列か正規表現。
+                  文字列を指定した場合は全く同じ文字列にだけマッチする
+- **return** -- 置換した場合は self、置換しなかった場合は nil
+
+```ruby title="例"
+str = 'abcabc'
+str.sub!(/b/) {|s| s.upcase }
+p str    # => "aBcabc"
+
+str = 'abcabc'
+str.sub!(/b/) { $&.upcase }
+p str    # => "aBcabc"
+```
+
+- **SEE** [m:String#gsub]
+
+### def sub!(pattern, hash) -> String
+
+文字列中の pattern にマッチした部分をキーにして hash を引いた値で破壊的に置き換えます。
+
+- **param** `pattern` --    置き換える文字列のパターン
+- **param** `hash` --       置き換える文字列を与えるハッシュ
+- **return** -- 置換した場合は self、置換しなかった場合は nil
+
+### def sum(bits = 16) -> Integer
+
+文字列の bits ビットのチェックサムを計算します。
+
+以下と同じです。
+
+```ruby
+def sum(bits)
+  sum = 0
+  each_byte {|c| sum += c }
+  return 0 if sum == 0
+  sum & ((1 << bits) - 1)
+end
+```
+
+例えば以下のコードで UNIX System V の
+[man:sum(1)] コマンドと同じ値が得られます。
+
+```ruby title="例"
+sum = 0
+ARGF.each_line do |line|
+  sum += line.sum
+end
+sum %= 65536
+```
+
+- **param** `bits` --    チェックサムのビット数
+
+### def swapcase(*options) -> String
+
+大文字を小文字に、小文字を大文字に変更した文字列を返します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+
+```ruby title="例"
+p "ABCxyz".swapcase   # => "abcXYZ"
+p "Access".swapcase   # => "aCCESS"
+```
+
+- **SEE** [m:String#swapcase!], [m:String#upcase], [m:String#downcase], [m:String#capitalize]
+
+### def swapcase!(*options) -> self | nil
+
+大文字を小文字に、小文字を大文字に破壊的に変更します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+
+swapcase! は self を変更して返しますが、置換が起こらなかった場合は nil を返します。
+
+このメソッドはマルチバイト文字を認識しません。
+
+```ruby title="例"
+str = "ABCxyz"
+str.swapcase!
+p str   # => "abcXYZ"
+```
+
+- **SEE** [m:String#swapcase], [m:String#upcase!], [m:String#downcase!], [m:String#capitalize!]
+
+### def to_f -> Float
+
+文字列を 10 進数表現と解釈して、浮動小数点数 [c:Float] に変換します。
+
+浮動小数点数とみなせなくなるところまでを変換対象とします。
+途中に変換できないような文字列がある場合、それより先の文字列は無視されます。
+
+```ruby
+p "-10".to_f   # => -10.0
+p "10e2".to_f  # => 1000.0
+p "1e-2".to_f  # => 0.01
+p ".1".to_f    # => 0.1
+
+p "1_0_0".to_f # => 100.0  # 数値リテラルと同じように区切りに _ を使える
+p " \n10".to_f # => 10.0   # 先頭の空白・改行は無視される
+p "7xa.5".to_f # => 7.0
+```
+
+#%since 3.4
+"1." のように小数点以下を省略した表記も浮動小数点数として扱います。
+このため指数付きの表記では Ruby 3.3 までと結果が変わることがあります
+(Ruby 3.3 までは "1." で解釈を打ち切っていましたが、Ruby 3.4 以降は指数まで解釈します)。
+
+```ruby
+p "1.".to_f     # => 1.0
+p "1.e2".to_f   # => 100.0  # Ruby 3.3 までは 1.0
+```
+
+#%end
+
+以下の例は、先頭に浮動小数点数とみなせるものがないため、0.0 を返します。
+変換対象が空文字列のケースでも、0.0 を返します。
+
+```ruby
+p "".to_f      # => 0.0
+p "nan".to_f   # => 0.0
+p "INF".to_f   # => 0.0
+p "-Inf".to_f  # => 0.0
+```
+
+変換後の [c:Float] が有限の値を取れないときは、[m:Float::INFINITY] を用います。
+このとき、全ての警告を有効にすると、警告が表示されます。
+
+```ruby
+#!ruby -W2
+
+p ("10" * 1000).to_f   # => Infinity
+# warning: Float 10101010101010101010... out of range
+```
+
+なお、このメソッドとは逆に、数値を文字列に変換するには
+[m:Kernel?.sprintf], [m:String#%], [m:Integer#to_s]
+を使用します。
+
+- **SEE** [m:String#hex], [m:String#oct], [m:String#to_i],
+     [m:Kernel?.Integer], [m:Kernel?.Float]
+
+### def to_i(base = 10) -> Integer
+
+文字列を 10 進数表現された整数であると解釈して、整数に変換します。
+
+```ruby title="例"
+p " 10".to_i    # => 10
+p "+10".to_i    # => 10
+p "-10".to_i    # => -10
+
+p "010".to_i    # => 10
+p "-010".to_i   # => -10
+```
+
+整数とみなせない文字があればそこまでを変換対象とします。
+変換対象が空文字列であれば 0 を返します。
+
+```ruby title="例"
+p "0x11".to_i   # => 0
+p "".to_i       # => 0
+```
+
+基数を指定することでデフォルトの 10 進以外に 2 〜 36 進数表現へ変換できます。
+それぞれ Ruby の整数リテラルで使用可能なプリフィクスは無視されます。
+また、base に 0 を指定するとプリフィクスから基数を判断します。
+認識できるプリフィクスは、
+0b (2 進数)、0 (8 進数)、0o (8 進数)、0d (10 進数)、0x (16 進数) です。
+
+0, 2 〜 36 以外の引数を指定した場合は例外 [c:ArgumentError] が発生します。
+
+```ruby title="例"
+p "01".to_i(2)    # => 1
+p "0b1".to_i(2)   # => 1
+
+p "07".to_i(8)    # => 7
+p "0o7".to_i(8)   # => 7
+
+p "1f".to_i(16)   # => 31
+p "0x1f".to_i(16) # => 31
+
+p "0b10".to_i(0)  # => 2
+p "0o10".to_i(0)  # => 8
+p "010".to_i(0)   # => 8
+p "0d10".to_i(0)  # => 10
+p "0x10".to_i(0)  # => 16
+```
+
+- **param** `base` --    進数を指定する整数。0 か、2〜36 の整数。
+- **return** --        整数
+
+このメソッドの逆に数値を文字列に変換するには、
+[m:Kernel?.sprintf], [m:String#%], [m:Integer#to_s]
+を使用します。
+
+[m:String#hex], [m:String#oct], [m:String#to_f],
+[m:Kernel?.Integer], [m:Kernel?.Float]
+も参照してください。
+
+### def to_s -> String
+### def to_str -> String
+
+self を返します。
+
+```ruby title="例"
+p "str".to_s     # => "str"
+p "str".to_str   # => "str"
+```
+
+このメソッドは、文字列を他のクラスのインスタンスと混ぜて処理したいときに有効です。
+例えば返り値が文字列か nil であるメソッド some_method があるとき、
+to_s メソッドを使うと以下のように統一的に処理できます。
+
+```ruby title="例"
+# some_method(5).downcase だと返り値が nil のときに
+# エラーになるので to_s をはさむ
+p some_method(5).to_s.downcase
+```
+
+### def tr(pattern, replace) -> String
+#%since 4.1
+### def tr(hash) -> String
+#%end
+
+pattern 文字列に含まれる文字を検索し、それを replace 文字列の対応する文字に置き換えます。
+
+pattern の形式は [man:tr(1)] と同じです。つまり、
+`a-c` は a から c を意味し、"^0-9" のように文字列の先頭が `^` の場合は指定文字以外が置換の対象になります。
+
+replace に対しても `-` による範囲指定が可能です。
+
+`-` は文字列の両端にない場合にだけ範囲指定の意味になります。
+`^` も文字列の先頭にあるときにだけ否定の効果を発揮します。
+また、`-`, `^`, \`\' はバックスラッシュ (\`\') によりエスケープできます。
+
+replace の範囲が pattern の範囲よりも小さい場合は、
+replace の最後の文字が無限に続くものとして扱われます。
+
+#%since 4.1
+Ruby 4.1 から、引数に Hash を 1 つだけ渡す形式も使えます。
+この形式では、`hash` のキー(1 文字の文字列)に一致する文字を、対応する値の文字列に置き換えます。
+値は任意の長さの文字列で、空文字列を指定するとその文字が削除されます。
+文字列に含まれないキーは無視されます。
+置き換えた結果に対して、さらに置き換えが行われることはありません。
+
+`hash` のキーが 1 文字でない文字列(空文字列を含む)の場合は [c:ArgumentError]、
+キーや値が文字列でない場合は [c:TypeError] が発生します。
+`tr("el", {"e" => "EE"})` のように、2 つの引数のどちらかに Hash を渡した場合も [c:TypeError] が発生します。
+
+#%end
+- **param** `pattern` --    置き換える文字のパターン
+- **param** `replace` --    pattern で指定した文字を置き換える文字
+#%since 4.1
+- **param** `hash` --    置き換える文字(キー)と置き換え後の文字列(値)の対応
+#%end
+
+```ruby title="例"
+p "foo".tr("f", "X")      # => "Xoo"
+p "foo".tr('a-z', 'A-Z')  # => "FOO"
+p "FOO".tr('A-Z', 'a-z')  # => "foo"
+
+# シーザー暗号の復号
+p "ORYV".tr("A-Z", "D-ZA-C") # => "RUBY"
+
+# 全角英数字といくつかの記号の半角化
+email = "ｒｕｂｙ−ｌａｎｇ＠ｅｘａｍｐｌｅ．ｃｏｍ"
+p email.tr("０-９ａ-ｚＡ-Ｚ．＠−", "0-9a-zA-Z.@-")
+# => "ruby-lang@example.com"
+```
+
+#%since 4.1
+
+```ruby title="Hash を渡す例"
+p "hello".tr({"e" => "EE", "l" => "L"}) # => "hEELLo"
+p "hello".tr({"e" => ""})               # => "hllo"
+p "hello".tr({"e" => "1", "x" => "2"})  # => "h1llo"
+p "héllo".tr({"é" => "e"})              # => "hello"
+p "hello".tr({"l" => "L", "L" => "z"})  # => "heLLo"
+"hello".tr({"ll" => "L"})               # ~> ArgumentError: keys must be of size 1
+```
+
+#%end
+- **SEE** [m:String#tr!], [m:String#tr_s]
+
+### def tr!(pattern, replace) -> self | nil
+#%since 4.1
+### def tr!(hash) -> self | nil
+#%end
+
+pattern 文字列に含まれる文字を検索し、それを replace 文字列の対応する文字に破壊的に置き換えます。
+
+pattern の形式は [man:tr(1)] と同じです。
+つまり、`a-c` は a から c を意味し、
+"^0-9" のように文字列の先頭が `^` の場合は指定文字以外が置換の対象になります。
+
+replace に対しても `-` による範囲指定が可能です。
+
+`-` は文字列の両端にない場合にだけ範囲指定の意味になります。
+`^` も文字列の先頭にあるときにだけ否定の効果を発揮します。
+また、`-`, `^`, \`\' はバックスラッシュ (\`\') によりエスケープできます。
+
+replace の範囲が pattern の範囲よりも小さい場合は、
+replace の最後の文字が無限に続くものと扱われます。
+
+#%since 4.1
+Ruby 4.1 から、[m:String#tr] と同じく Hash を 1 つだけ渡す形式も使えます。
+
+#%end
+tr! は self を変更して返しますが、置換が起こらなかった場合は nil を返します。
+
+- **param** `pattern` --    置き換える文字のパターン
+- **param** `replace` --    pattern で指定した文字を置き換える文字
+#%since 4.1
+- **param** `hash` --    置き換える文字(キー)と置き換え後の文字列(値)の対応
+#%end
+
+#%since 4.1
+
+```ruby title="例"
+s = "hello"
+p s.tr!({"e" => "EE"}) # => "hEEllo"
+p s                    # => "hEEllo"
+p s.tr!({"z" => "E"})  # => nil
+```
+
+#%end
+- **SEE** [m:String#tr], [m:String#tr_s]
+
+### def tr_s(pattern, replace) -> String
+
+文字列の中に pattern 文字列に含まれる文字が存在したら、
+replace 文字列の対応する文字に置き換えます。さらに、置換した部分内に同一の文字の並びがあったらそれを 1 文字に圧縮します。
+
+pattern の形式は [man:tr(1)] と同じです。
+つまり「a-c」は a から c を意味し、
+"^0-9" のように文字列の先頭が「^」の場合は指定した文字以外が置換の対象になります。
+
+replace でも「-」を使って範囲を指定できます。
+
+「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」もその効果は文字列の先頭にあるときだけです。
+また、「-」、「^」、「\」はバックスラッシュ (「\」) でエスケープできます。
+
+replace の範囲が pattern の範囲よりも小さい場合、
+replace の最後の文字が無限に続くものとして扱われます。
+
+- **param** `pattern` --    置き換える文字のパターン
+- **param** `replace` --    pattern で指定した文字を置き換える文字
+
+```ruby title="例"
+p "gooooogle".tr_s("o", "X")       # => "gXgle"
+p "gooooogle".tr_s("a-z", "A-Z")   # => "GOGLE"
+```
+
+注意:
+一般に、tr_s を tr と squeeze で置き換えることはできません。
+tr と squeeze の組みあわせでは tr の置換後の文字列全体を squeeze しますが、
+tr_s は置換された部分だけを squeeze します。
+以下のコードを参照してください。
+
+```ruby title="例"
+p "foo".tr_s("o", "f")              # => "ff"
+p "foo".tr("o", "f").squeeze("f")   # => "f"
+```
+
+- **SEE** [m:String#tr]
+
+### def tr_s!(pattern, replace) -> self | nil
+
+文字列の中に pattern 文字列に含まれる文字が存在したら、
+replace 文字列の対応する文字に置き換えます。さらに、置換した部分内に同一の文字の並びがあったらそれを 1 文字に圧縮します。
+
+pattern の形式は [man:tr(1)] と同じです。
+つまり「a-c」は a から c を意味し、
+"^0-9" のように文字列の先頭が「^」の場合は指定した文字以外が置換の対象になります。
+
+replace でも「-」を使って範囲を指定できます。
+
+```ruby
+p "gooooogle".tr_s("a-z", "A-Z")   # => "GOGLE"
+```
+
+「-」は文字列の両端にない場合にだけ範囲指定の意味になります。
+同様に、「^」もその効果は文字列の先頭にあるときだけです。
+また、「-」、「^」、「\」はバックスラッシュ (「\」) でエスケープできます。
+
+replace の範囲が search の範囲よりも小さい場合、
+replace の最後の文字が無限に続くものとして扱われます。
+
+tr_s は置換後の文字列を生成して返します。
+tr_s! は self を変更して返しますが、置換が起こらなかった場合は nil を返します。
+
+注意:
+一般に、tr_s! を tr! と squeeze! で置き換えることはできません。
+tr! と squeeze! の組みあわせでは tr! の置換後の文字列全体を squeeze! しますが、
+tr_s! は置換された部分だけを squeeze! します。
+以下のコードを参照してください。
+
+```ruby title="例"
+str = "foo"
+str.tr_s!("o", "f")
+p str   # => "ff"
+
+str = "foo"
+str.tr!("o", "f")
+str.squeeze!("f")
+p str   # => "f"
+```
+
+- **param** `pattern` --    置き換える文字のパターン
+- **param** `replace` --    pattern で指定した文字を置き換える文字
+
+- **SEE** [m:String#tr], [m:String#tr_s]
+
+#%since 3.1
+### def unpack(template, offset: 0) -> Array
+#%else
+### def unpack(template) -> Array
+#%end
+
+[m:Array#pack] で生成された文字列をテンプレート文字列 template にしたがってアンパックし、それらの要素を含む配列を返します。
+
+- **param** `template` --    pack テンプレート文字列
+#%since 3.1
+- **param** `offset` --      `template` に従った展開を始める位置を、文字列の先頭からのバイト数で指定します。デフォルトは 0 です。
+#%end
+- **return** --            オブジェクトの配列
+#%since 3.1
+- **raise** `ArgumentError` -- `offset` が負の場合、または文字列の長さより大きい場合に発生します。
+
+```ruby title="例: offset を指定"
+p "\x01\x02\x03".unpack("C", offset: 1)  # => [2]
+p "abc".unpack("C*", offset: 3)           # => []
+"\x01".unpack("C", offset: 5)             # ~> ArgumentError: offset outside of string
+```
+
+#%end
+
+#%include(pack-template)
+
+- **SEE** [m:String#unpack1], [m:Array#pack]
+
+### def upcase(*options) -> String
+
+全ての小文字を対応する大文字に置き換えた文字列を返します。
+どの文字がどう置き換えられるかは、オプションの有無や文字列のエンコーディングに依存します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+
+```ruby title="例"
+p "stRIng? STring.".upcase   # => "STRING? STRING."
+```
+
+- **SEE** [m:String#upcase!], [m:String#downcase],
+     [m:String#swapcase], [m:String#capitalize]
+
+### def upcase!(*options) -> self | nil
+
+全ての小文字を対応する大文字に破壊的に置き換えます。
+どの文字がどう置き換えられるかは、オプションの有無や文字列のエンコーディングに依存します。
+
+- **param** `options` -- オプションの詳細は [m:String#downcase] を参照してください。
+
+```ruby title="例"
+buf = "stRIng? STring."
+buf.upcase!
+p buf   # => "STRING? STRING."
+```
+
+- **SEE** [m:String#upcase], [m:String#downcase!],
+     [m:String#swapcase!], [m:String#capitalize!]
+
+### def upto(max, exclusive = false) {|s| ... } -> self
+
+self から始めて max まで「次の文字列」を順番にブロックに与えて繰り返します。
+「次」の定義については [m:String#succ] を参照してください。
+
+たとえば以下のコードは a, b, c, ... z, aa, ... az, ..., za を出力します。
+
+```ruby
+("a" .. "za").each do |str|
+  puts str
+end
+'a'.upto('za') do |str|
+  puts str
+end
+```
+
+- **param** `max` --    繰り返しをやめる文字列
+
+- **param** `exclusive` -- max を含むかどうか。false の場合は max を含む。
+
+### def eql?(other) -> bool
+
+文字列の内容が文字列 other の内容と等しいときに true を返します。
+等しくなければ false を返します。
+
+このメソッドは文字列の内容を比較します。
+同一のオブジェクトかどうかを比較するわけではありません。
+つまり、"string".eql?(str) という式を実行した場合には、
+str が "string" という内容の文字列でありさえすれば常に true を返します。
+同一のオブジェクトであるかどうかを判定したいときは
+[m:Object#equal?] を使ってください。
+
+アルファベットの大文字小文字を無視して比較したい場合は
+[m:String#casecmp?] を使ってください。
+
+[c:Hash] クラス内での比較に使われます。
+
+- **param** `other` --    任意のオブジェクト
+- **return** --         true か false
+
+```ruby title="例"
+p "string".eql?("string")  # => true
+p "string".eql?("STRING")  # => false
+p "string".eql?("")        # => false
+p "".eql?("string")        # => false
+
+p "string".eql?("str" + "ing")   # => true   (内容が同じなら true)
+p "string".eql?("stringX".chop)  # => true   (内容が同じなら true)
+```
+
+- **SEE** [c:Hash], [m:String#<=>], [m:String#casecmp], [m:String#==]
+
+### def hash -> Integer
+
+self のハッシュ値を返します。
+eql? で等しい文字列は、常にハッシュ値も等しくなります。
+
+```ruby title="例"
+p "test".hash                      # => 4038258770210371295
+p ("te" + "st").hash == "test".hash  # => true
+```
+
+- **SEE** [c:Hash]
+
+### def inspect -> String
+
+文字列オブジェクトの内容を、出力したときに人間が読みやすいような適当な形式に変換します。
+変換された文字列は印字可能な文字のみによって構成されます
+
+現在の実装では、Ruby のリテラル形式を使って、文字列中の不可視文字をエスケープシーケンスに変換します。
+
+このメソッドは主にデバッグのために用意されています。
+永続化などの目的で文字列をダンプしたいときは、
+[m:String#dump] を使うべきです。
+
+```ruby title="例"
+# p ではないことに注意
+puts "string".inspect    # => "string"
+puts "\t\r\n".inspect    # => "\t\r\n"
+```
+
+- **SEE** [m:String#dump]
+
+### def chr -> String
+
+self の最初の文字だけを含む文字列を返します。
+
+```ruby title="例"
+a = "abcde"
+p a.chr  # => "a"
+```
+
+Ruby 1.9 で IO#getc の戻り値が Integer から String を返すように変更になりました。
+Ruby 1.8 までと Ruby 1.9 以降の互換性を保つために  String#chr が存在します。
+
+```console title="例"
+# Ruby 1.8 系では STDIN.getc が 116 を返すため Integer#chr が呼び出される
+$ echo test | ruby -e "p STDIN.getc.chr" # => "t"
+# Ruby 1.9 系以降では STDIN.getc が "t" を返すため String#chr が呼び出される
+$ echo test | ruby -e "p STDIN.getc.chr" # => "t"
+```
+
+- **SEE** [m:String#ord], [m:Integer#chr]
+
+### def start_with?(*prefixes) -> bool
+
+self の先頭が prefixes のいずれかであるとき true を返します。
+
+- **param** `prefixes` -- パターンを表す文字列または正規表現 (のリスト)
+
+```ruby title="例"
+p "string".start_with?("str")        # => true
+p "string".start_with?("ing")        # => false
+p "string".start_with?("ing", "str") # => true
+p "string".start_with?(/\w/)         # => true
+p "string".start_with?(/\d/)         # => false
+```
+
+- **SEE** [m:String#end_with?]
+- **SEE** [m:String#delete_prefix], [m:String#delete_prefix!]
+
+### def end_with?(*strs) -> bool
+
+self の末尾が strs のいずれかであるとき true を返します。
+
+- **param** `strs` --    パターンを表す文字列 (のリスト)
+
+```ruby title="例"
+p "string".end_with?("ing")        # => true
+p "string".end_with?("str")        # => false
+p "string".end_with?("str", "ing") # => true
+```
+
+- **SEE** [m:String#start_with?]
+- **SEE** [m:String#delete_suffix], [m:String#delete_suffix!]
+
+### def partition(sep) -> [String, String, String]
+
+セパレータ sep が最初に登場する部分で self を 3 つに分割し、
+[最初のセパレータより前の部分, セパレータ, それ以降の部分]
+の 3 要素の配列を返します。
+
+self がセパレータを含まないときは、返り値の第 2 要素と第 3 要素が空文字列になります。
+
+- **param** `sep` --    セパレータを表す文字列か正規表現を指定します。
+
+```ruby title="例"
+p "axaxa".partition("x")   # => ["a", "x", "axa"]
+p "aaaaa".partition("x")   # => ["aaaaa", "", ""]
+p "aaaaa".partition("")    # => ["", "", "aaaaa"]
+```
+
+- **SEE** [m:String#rpartition], [m:String#split]
+
+### def rpartition(sep) -> [String, String, String]
+
+セパレータ sep が最後に登場する部分で self を 3 つに分割し、
+[最後のセパレータより前の部分, セパレータ, それ以降の部分]
+の 3 要素の配列を返します。
+
+self がセパレータを含まないときは、返り値の第 1 要素と第 2 要素が空文字列になります。
+
+- **param** `sep` --    セパレータを表す文字列か正規表現を指定します。
+
+```ruby title="例"
+p "axaxa".rpartition("x")   # => ["axa", "x", "a"]
+p "aaaaa".rpartition("x")   # => ["", "", "aaaaa"]
+```
+
+- **SEE** [m:String#partition], [m:String#split]
+
+### def each_char {|cstr| block } -> self
+### def each_char -> Enumerator
+
+文字列の各文字に対して繰り返します。
+
+たとえば、
+
+```ruby
+"hello世界".each_char {|c| print c, ' ' }
+```
+
+は次のように出力されます。
+
+```text
+h e l l o 世 界
+```
+
+- **SEE** [m:String#chars]
+
+### def chars                 -> [String]
+### def chars {|cstr| block } -> self
+
+文字列の各文字を文字列の配列で返します。(self.each_char.to_a と同じです)
+
+```ruby title="例"
+p "hello世界".chars # => ["h", "e", "l", "l", "o", "世", "界"]
+```
+
+ブロックが指定された場合は [m:String#each_char] と同じように動作します。
+
+Ruby 2.6 までは deprecated の警告が出ますが、Ruby 2.7 で警告は削除されました。
+
+- **SEE** [m:String#each_char]
+
+### def each_codepoint {|codepoint| block } -> self
+### def each_codepoint -> Enumerator
+
+文字列の各コードポイントに対して繰り返します。
+
+UTF-8/UTF-16(BE|LE)/UTF-32(BE|LE) 以外のエンコーディングに対しては各文字のバイナリ表現由来の値になります。
+
+```ruby title="例"
+p "hello わーるど".each_codepoint.to_a
+# => [104, 101, 108, 108, 111, 32, 12431, 12540, 12427, 12393]
+p "hello わーるど".encode('euc-jp').each_codepoint.to_a
+# => [104, 101, 108, 108, 111, 32, 42223, 41404, 42219, 42185]
+```
+
+- **SEE** [m:String#codepoints]
+
+### def codepoints                      -> [Integer]
+### def codepoints {|codepoint| block } -> self
+
+文字列の各コードポイントの配列を返します。(self.each_codepoint.to_a と同じです)
+
+```ruby title="例"
+p "hello わーるど".codepoints
+# => [104, 101, 108, 108, 111, 32, 12431, 12540, 12427, 12393]
+```
+
+ブロックが指定された場合は [m:String#each_codepoint] と同じように動作します。
+
+Ruby 2.6 までは deprecated の警告が出ますが、Ruby 2.7 で警告は削除されました。
+
+- **SEE** [m:String#each_codepoint]
+
+### def bytesize -> Integer
+
+文字列のバイト長を整数で返します。
+
+```ruby title="例"
+# 実行結果は文字コードによって異なります。
+p "いろは".size     # => 3
+p "いろは".bytesize # => 9
+```
+
+- **SEE** [m:String#size]
+
+### def ord -> Integer
+
+文字列の最初の文字の文字コードを整数で返します。
+
+self が空文字列のときは例外を発生します。
+
+- **return** --                 文字コードを表す整数
+- **raise** `ArgumentError` --    self の長さが 0 のとき発生
+
+```ruby title="例"
+p "a".ord   # => 97
+```
+
+- **SEE** [m:Integer#chr], [m:String#chr]
+
+### def encoding   -> Encoding
+
+文字列のエンコーディング情報を表現した Encoding オブジェクトを返します。
+
+```ruby title="例"
+utf8_str = "test"
+euc_str = utf8_str.encode("EUC-JP")
+p utf8_str.encoding # => #<Encoding:UTF-8>
+p euc_str.encoding  # => #<Encoding:EUC-JP>
+```
+
+- **SEE** [c:Encoding]
+
+### def force_encoding(encoding)   -> self
+
+文字列の持つエンコーディング情報を指定された encoding に変えます。
+
+このとき実際のエンコーディングは変換されず、検査もされません。
+[m:Array#pack] などで得られたバイト列のエンコーディングを指定する時に使います。
+
+- **param** `encoding` --   変更するエンコーディング情報を表す文字列か Encoding オブジェクトを指定します。
+
+```ruby title="例"
+s = [164, 164, 164, 237, 164, 207].pack("C*")
+p s.encoding                                  # => ASCII-8BIT
+p s.force_encoding("EUC-JP")                  # => "いろは"
+p s.force_encoding(Encoding::EUC_JP)          # => "いろは"
+
+u = [12411, 12408, 12392].pack("U*")
+p u.force_encoding("UTF-8")                   # => "ほへと"
+p u.force_encoding(Encoding::UTF_8)           # => "ほへと"
+```
+
+### def ascii_only?  -> bool
+
+文字列がASCII文字のみで構成されている場合に true を返します。そうでない場合は
+false を返します。
+
+```ruby title="例"
+'abc123'.ascii_only?        # => true
+''.ascii_only?              # => true
+'日本語'.ascii_only?        # => false
+'日本語abc123'.ascii_only?  # => false
+```
+
+### def valid_encoding?  -> bool
+
+文字列の内容が、現在のエンコーディングに照らしあわせて妥当であれば
+true を返します。そうでない場合は false を返します。
+
+```ruby title="例"
+p "\xc2\xa1".force_encoding("UTF-8").valid_encoding?  # => true
+p "\xc2".force_encoding("UTF-8").valid_encoding?    # => false
+p "\x80".force_encoding("UTF-8").valid_encoding?    # => false
+```
+
+### def encode(encoding, **options) -> String
+### def encode(encoding, from_encoding, **options) -> String
+### def encode(**options) -> String
+
+self を指定したエンコーディングに変換した文字列を作成して返します。引数を2つ与えた場合、第二引数は変換元のエンコーディングを意味します。さもなくば self のエンコーディングが使われます。
+無引数の場合は、[m:Encoding.default_internal] が nil でなければそれが変換先のエンコーディングになり、かつ :invalid => :replace と :undef => :replace が指定されたと見なされ、nil ならば変換は行われません。
+
+- **param** `encoding` --       変換先のエンコーディングを表す文字列か [c:Encoding] オブジェクトを指定します。
+- **param** `from_encoding` --  変換元のエンコーディングを表す文字列か [c:Encoding] オブジェクトを指定します。
+- **param** `options` --        変換オプションをキーワード引数で与えます。
+- **return** --               変換された文字列
+
+変換オプション
+
+- **`:invalid => nil`**:
+  変換元のエンコーディングにおいて不正なバイトがあった場合に、例外 [c:Encoding::InvalidByteSequenceError] を投げます。(デフォルト)
+- **`:invalid => :replace`**:
+  変換元のエンコーディングにおいて不正なバイトがあった場合に、不正なバイトを置換文字で置き換えます。
+- **`:undef => nil`**:
+  変換先のエンコーディングにおいて文字が定義されていない場合に、例外 [c:Encoding::UndefinedConversionError] を投げます。(デフォルト)
+- **`:undef => :replace`**:
+  変換先のエンコーディングにおいて文字が定義されていない場合に、未定義文字を置換文字で置き換えます。
+- **`:replace => string`**:
+  前述の :invalid => :replace や :undef => :replace で用いられる置換文字を指定します。デフォルトは Unicode 系のエンコーディングならば U+FFFD、それ以外では "?" です。
+- **`:fallback => Hash | Proc | Method`**:
+  未定義の文字に対する置換文字を設定します。このオプションに与えられるオブジェクトは [c:Hash], [c:Proc], [c:Method] のいずれかまたは [] メソッドを持つオブジェクトです。
+  キーは現在のトランスコーダのソースエンコーディングで未定義の文字です。値は、変換先のエンコーディングでの変換後の文字です。
+- **`:xml => :text`**:
+  文字列を XML の CharData として適するように処理します。具体的には、'&'、'<'、'>'、をそれぞれ '&amp;'、'&lt;'、'&gt;' に変換し、未定義文字を文字参照 (大文字16進数) に置き換えます。この出力は HTML の #PCDATA として利用することもできます。
+- **`:xml => :attr`**:
+  文字列を XML の AttValue として適するように処理します。具体的には、'&'、'<'、'>'、'"'、をそれぞれ '&amp;'、'&lt;'、'&gt;'、'&quot;' に変換し、未定義文字を文字参照 (大文字16進数) に置き換えます。この出力は HTML の属性値として利用することもできます。
+- **`:universal_newline => true`**:
+  CR 改行および CRLF 改行を LF 改行に置き換えます。
+- **`:cr_newline => true`**:
+  LF 改行を CR 改行に置き換えます。(CRLF は CRCR になります)
+- **`:crlf_newline => true`**:
+  LF 改行を CRLF 改行に置き換えます。(CRLF は CRCRLF になります)
+
+これ以上細かい指定を行いたい場合は、[m:Encoding::Converter#convert] を用いましょう。
+
+```ruby title="例"
+s = "いろは"
+s.encode("EUC-JP")
+s.encode(Encoding::UTF_8)
+
+# U+00B7 MIDDLE DOT, U+2014 EM DASH は対応する文字が Windows-31J には
+# 存在しないのでそのまま変換しようとすると Encoding::UndefinedConversionError が発生する
+str = "\u00b7\u2014"
+str.encode("Windows-31J", fallback: { "\u00b7" => "\xA5".force_encoding("Windows-31J"),
+                                      "\u2014" => "\x81\x5C".force_encoding("Windows-31J") })
+```
+
+- **SEE** [m:String#encode!]
+
+### def encode!(encoding, options = nil)                -> self
+### def encode!(encoding, from_encoding, options = nil) -> self
+
+self を指定したエンコーディングに変換し、自身を置き換えます。引数を2つ与えた場合、第二引数は変換元のエンコーディングを意味します。そうでない場合は
+self のエンコーディングが使われます。変換後の self を返します。
+
+(gsub!などと異なり)変換が行なわれなくても self を返します。
+
+- **param** `encoding` --       変換先のエンコーディングを表す文字列か Encoding オブジェクトを指定します。
+- **param** `from_encoding` --  変換元のエンコーディングを表す文字列か Encoding オブジェクトを指定します。
+- **param** `options` --        [m:String#encode] と同じ変換オプションを指定します。
+- **return** --               変換後のself
+
+```ruby title="例"
+s = "いろは"
+s.encode!("EUC-JP")
+s.encode!(Encoding::UTF_8)
+```
+
+- **SEE** [m:String#encode]
+
+### def to_c -> Complex
+
+自身を複素数 ([c:Complex]) に変換した結果を返します。
+
+以下の形式を解析できます。i、j は大文字、小文字のどちらでも解析できます。
+
+- 実部+虚部i
+- 実部+虚部j
+- 絶対値@偏角
+
+それぞれの数値は以下のいずれかの形式で指定します。先頭の空白文字や複素数値の後にある文字列は無視されます。また、数値オブジェクトと同様に各桁の間に「_」を入れる事ができます。
+
+- "1/3" のような分数の形式
+- "0.3" のような10進数の形式
+- "0.3E0" のような x.xEn の形式
+
+自身が解析できない値であった場合は 0+0i を返します。
+
+```ruby title="例"
+p '9'.to_c         # => (9+0i)
+p '2.5'.to_c       # => (2.5+0i)
+p '2.5/1'.to_c     # => ((5/2)+0i)
+p '-3/2'.to_c      # => ((-3/2)+0i)
+p '-i'.to_c        # => (0-1i)
+p '45i'.to_c       # => (0+45i)
+p '3-4i'.to_c      # => (3-4i)
+p '-4e2-4e-2i'.to_c  # => (-400.0-0.04i)
+p '-0.0-0.0i'.to_c # => (-0.0-0.0i)
+p '1/2+3/4i'.to_c  # => ((1/2)+(3/4)*i)
+p '10@10'.to_c     # => (-8.390715290764524-5.440211108893697i)
+p '-0.3_3'.to_c    # => (-0.33+0i)
+p " \t\r\n5+3i".to_c # => (5+3i)
+p '5+3ix'.to_c     # => (5+3i)
+p 'ruby'.to_c      # => (0+0i)
+```
+
+### def to_r -> Rational
+
+自身を有理数([c:Rational])に変換した結果を返します。
+
+[m:Kernel?.Rational] に文字列を指定した時のように、以下のいずれかの形式で指定します。
+
+- "1/3" のような分数の形式
+- "0.3" のような10進数の形式
+- "0.3E0" のような x.xEn の形式
+- 数字をアンダースコアで繋いだ形式
+
+```ruby title="例"
+p '  2  '.to_r     # => (2/1)
+p '1/3'.to_r       # => (1/3)
+p '-9.2'.to_r      # => (-46/5)
+p '-9.2E2'.to_r    # => (-920/1)
+p '1_234_567'.to_r # => (1234567/1)
+p '1_234/5_678'.to_r # => (617/2839)
+```
+
+[m:Kernel?.Rational] に文字列を指定した時とは異なる点もあります。
+
+途中に変換できないような文字列が入っていた場合は、それより先の文字列は無視されます。
+
+```ruby
+p '21 june 09'.to_r  # => (21/1)
+p '21/06/09'.to_r  # => (7/2)   # 21/6 を約分して 7/2。
+```
+
+変換できないような文字列を指定した場合は 0/1 を返します。
+
+```ruby
+p 'foo'.to_r       # => (0/1)
+p ''.to_r          # => (0/1)
+p 'bwv 1079'.to_r  # => (0/1)
+```
+
+- **SEE** [m:Kernel?.Rational]
+
+### def byteslice(nth)         -> String | nil
+
+nth バイト目の文字を返します。nth が負の場合は文字列の末尾から数えます。
+引数が範囲外を指定した場合は nil を返します。
+
+- **param** `nth` -- 文字の位置を表す整数を指定します。
+
+- **return** -- 切り出した文字列を返します。戻り値の文字エンコーディングは自身と同じです。
+
+```ruby title="例"
+p "hello".byteslice(1)  # => "e"
+p "hello".byteslice(-1) # => "o"
+p "\u3042".byteslice(0) # => "\xE3"
+p "\u3042".byteslice(1) # => "\x81"
+```
+
+- **SEE** [m:String#slice]
+
+### def byteslice(nth, len=1) -> String | nil
+
+nth バイト目から長さ len バイトの部分文字列を新しく作って返します。
+nth が負の場合は文字列の末尾から数えます。引数が範囲外を指定した場合は
+nil を返します。
+
+- **param** `nth` -- 取得したい文字列の開始バイトを整数で指定します。
+
+- **param** `len` -- 取得したい文字列の長さを正の整数で指定します。
+
+- **return** -- 切り出した文字列を返します。戻り値の文字エンコーディングは自身と同じです。
+
+```ruby title="例"
+p "hello".byteslice(1, 2)            # => "el"
+p "\u3042\u3044\u3046".byteslice(0, 3) # => "\u3042"
+```
+
+- **SEE** [m:String#slice]
+#%since 3.2
+- **SEE** [m:String#bytesplice]
+#%end
+### def byteslice(range)          -> String | nil
+
+range で指定したバイトの範囲に含まれる部分文字列を返します。引数が範囲外を指定した場合は nil を返します。
+
+- **param** `range` -- 取得したい文字列の範囲を示す Range オブジェクト
+
+- **return** -- 切り出した文字列を返します。戻り値の文字エンコーディングは自身と同じです。
+
+```ruby title="例"
+p "hello".byteslice(1..2)        # => "el"
+p "\x03\u3042\xff".byteslice(1..3) # => "\u3042"
+```
+
+- **SEE** [m:String#slice]
+#%since 3.2
+- **SEE** [m:String#bytesplice]
+
+### def bytesplice(index, length, str) -> String
+#%since 3.3
+### def bytesplice(index, length, str, str_index, str_length) -> String
+#%end
+### def bytesplice(range, str)         -> String
+#%since 3.3
+### def bytesplice(range, str, str_range) -> String
+#%end
+
+self の一部または全部を str で置き換えて self を返します。
+
+#%since 3.3
+str_index と str_length もしくは str_range が与えられたとき、self の一部または全部を str.byteslice(str_index, str_length) もしくは str.byteslice(str_range) で置き換えます。
+ただし、str の部分文字列は新しい文字列オブジェクトとして生成されません。
+#%end
+
+置き換え範囲の指定は、長さの指定が省略できないこと以外は
+[m:String#byteslice] と同じです。
+置き換え後の文字列の長さが対象の長さと違う場合、適切に長さが調整されます。
+
+- **param** `index` -- 置換したい文字列の範囲の始端
+- **param** `length` -- 置換したい文字列の範囲の長さ
+- **param** `str` -- 置き換える文字列
+#%since 3.3
+- **param** `str_index` -- str の範囲の始端
+- **param** `str_length` -- str の範囲の長さ
+#%end
+- **param** `range` -- 置換したい文字列の範囲を示す Range オブジェクト
+#%since 3.3
+- **param** `str_range` -- str の範囲を示す Range オブジェクト
+#%end
+- **raise** `IndexError` -- index や length が範囲外の場合に発生
+- **raise** `RangeError` -- range が範囲外の場合に発生
+- **raise** `IndexError` -- 指定した始端や終端が文字列の境界と一致しない場合に発生
+
+- **SEE** [m:String#byteslice]
+#%end
+### def prepend(other_str) -> String
+
+文字列 other_str を先頭に破壊的に追加します。
+
+- **param** `other_str` -- 追加したい文字列を指定します。
+
+```ruby title="例"
+a = "world"
+p a.prepend("hello ") # => "hello world"
+p a                 # => "hello world"
+```
+
+### def prepend(*arguments) -> String
+
+複数の文字列を先頭に破壊的に追加します。
+
+- **param** `arguments` -- 追加したい文字列を指定します。
+
+```ruby title="例"
+a = "!!!"
+p a.prepend # => "!!!"
+p a       # => "!!!"
+
+a = "!!!"
+p a.prepend "hello ", "world" # => "hello world!!!"
+p a                         # => "hello world!!!"
+```
+
+### def b -> String
+{: since="2.0.0"}
+
+self の文字エンコーディングを ASCII-8BIT にした文字列の複製を返します。
+
+```ruby title="例"
+p 'abc123'.encoding  # => #<Encoding:UTF-8>
+p 'abc123'.b.encoding  # => #<Encoding:ASCII-8BIT>
+```
+
+### def scrub               -> String
+### def scrub(repl)         -> String
+### def scrub{|bytes| ... } -> String
+
+self が不正なバイト列を含む場合に別の文字列に置き換えた新しい文字列を返します。
+
+- **param** `repl` -- 不正なバイト列を置き換える文字列を指定します。省略した場合は self の文字エンコーディングが [m:Encoding::UTF_16BE],
+            [m:Encoding::UTF_16LE], [m:Encoding::UTF_32BE],
+            [m:Encoding::UTF_32LE], [m:Encoding::UTF_8] のいずれかの場合は "\uFFFD" を表す文字で、それ以外の場合は "?" で置き換えられます。ブロックが指定された場合は不正なバイト列はブロックの戻り値で置き換えられます。
+
+```ruby title="例"
+p "abc\u3042\x81".scrub    # => "abc\u3042\uFFFD"
+p "abc\u3042\x81".scrub("*") # => "abc\u3042*"
+p "abc\u3042\xE3\x80".scrub{|bytes| '<'+bytes.unpack('H*')[0]+'>' } # => "abc\u3042<e380>"
+```
+
+- **SEE** [m:String#scrub!]
+
+### def scrub!               -> String
+### def scrub!(repl)         -> String
+### def scrub!{|bytes| ... } -> String
+
+self が不正なバイト列を含む場合に別の文字列に置き換えます。常に self を返します。
+
+- **param** `repl` -- 不正なバイト列を置き換える文字列を指定します。省略した場合は self の文字エンコーディングが [m:Encoding::UTF_16BE],
+            [m:Encoding::UTF_16LE], [m:Encoding::UTF_32BE],
+            [m:Encoding::UTF_32LE], [m:Encoding::UTF_8] のいずれかの場合は "\uFFFD" を表す文字で、それ以外の場合は "?" で置き換えられます。ブロックが指定された場合は不正なバイト列はブロックの戻り値で置き換えられます。
+
+```ruby title="例"
+p "abc\u3042\x81".scrub!    # => "abc\u3042\uFFFD"
+p "abc\u3042\x81".scrub!("*") # => "abc\u3042*"
+p "abc\u3042\xE3\x80".scrub!{|bytes| '<'+bytes.unpack('H*')[0]+'>' } # => "abc\u3042<e380>"
+```
+
+- **SEE** [m:String#scrub]
+
+### def unicode_normalize(form = :nfc) -> String
+
+self を NFC、NFD、NFKC、NFKD のいずれかの正規化形式で Unicode 正規化した文字列を返します。
+
+- **param** `form` -- 正規化形式を :nfc、:nfd、:nfkc、:nfkd のいずれかで指定します。省略した場合は :nfc になります。
+
+- **raise** `Encoding::CompatibilityError` -- self が Unicode 文字列ではない場合に発生します。
+
+このメソッドでの "Unicode 文字列" とは、UTF-8、UTF-16BE/LE、
+UTF-32BE/LE だけではなく GB18030、UCS_2BE、and UCS_4BE を含みます。
+
+また、self が UTF-8 以外のエンコーディングであった場合は一度 UTF-8 に変換してから正規化されるため、UTF-8 よりも遅くなっています。
+
+```ruby title="例"
+p "a\u0300".unicode_normalize      # => 'à' ("\u00E0" と同じ)
+p "a\u0300".unicode_normalize(:nfc)  # => 'à' ("\u00E0" と同じ)
+p "\u00E0".unicode_normalize(:nfd) # => 'à' ("a\u0300" と同じ)
+"\xE0".force_encoding('ISO-8859-1').unicode_normalize(:nfd)
+                                   # ~> Encoding::CompatibilityError: Unicode Normalization not appropriate for ISO-8859-1
+```
+
+- **SEE** [m:String#unicode_normalize!], [m:String#unicode_normalized?]
+
+### def unicode_normalize!(form = :nfc) -> self
+
+self を NFC、NFD、NFKC、NFKD のいずれかの正規化形式で Unicode 正規化した文字列に置き換えます。
+
+(gsub!などと異なり)変換が行なわれなくても self を返します。
+
+- **param** `form` -- 正規化形式を :nfc、:nfd、:nfkc、:nfkd のいずれかで指定します。省略した場合は :nfc になります。
+
+- **raise** `Encoding::CompatibilityError` -- self が Unicode 文字列ではない場合に発生します。
+
+```ruby title="例"
+text = "a\u0300"
+text.unicode_normalize!(:nfc)
+p text == "\u00E0"            # => true
+text.unicode_normalize!(:nfd)
+p text == "a\u0300"           # => true
+```
+
+- **SEE** [m:String#unicode_normalize], [m:String#unicode_normalized?]
+
+### def unicode_normalized?(form = :nfc) -> bool
+
+self が引数 form で指定された正規化形式で Unicode 正規化された文字列かどうかを返します。
+
+- **param** `form` -- 正規化形式を :nfc、:nfd、:nfkc、:nfkd のいずれかで指定します。省略した場合は :nfc になります。
+
+- **raise** `Encoding::CompatibilityError` -- self が Unicode 文字列ではない場合に発生します。
+
+```ruby title="例"
+p "a\u0300".unicode_normalized?      # => false
+p "a\u0300".unicode_normalized?(:nfd)  # => true
+p "\u00E0".unicode_normalized?       # => true
+p "\u00E0".unicode_normalized?(:nfd) # => false
+"\xE0".force_encoding('ISO-8859-1').unicode_normalized?
+                                     # ~> Encoding::CompatibilityError: Unicode Normalization not appropriate for ISO-8859-1
+```
+
+- **SEE** [m:String#unicode_normalize], [m:String#unicode_normalize!]
+
+#%since 3.1
+### def unpack1(format, offset: 0) -> object
+#%else
+### def unpack1(format) -> object
+#%end
+
+formatにしたがって文字列をデコードし、展開された1つ目の値を返します。
+unpackは配列を返しますがunpack1は配列の1つ目の要素のみを返します。
+
+#%since 3.3
+未知のテンプレート文字を指定すると [c:ArgumentError] が発生します。
+#%end
+
+- **param** `format` -- pack テンプレート文字列
+#%since 3.1
+- **param** `offset` -- `format` に従った展開を始める位置を、文字列の先頭からのバイト数で指定します。デフォルトは 0 です。
+- **raise** `ArgumentError` -- `offset` が負の場合、または文字列の長さより大きい場合に発生します。
+#%end
+
+```ruby title="例"
+p "ABC".unpack1("C*") # => 65
+p "ABC".unpack("C*")  # => [65, 66, 67]
+```
+
+#%since 3.1
+
+```ruby title="例: offset を指定"
+p "\x01\x02\x03".unpack1("C", offset: 2)  # => 3
+p "abc".unpack1("a*", offset: 3)           # => ""
+```
+
+#%end
+
+- **SEE** [m:String#unpack], [m:Array#pack]
+
+### def each_grapheme_cluster {|grapheme_cluster| block } -> self
+### def each_grapheme_cluster -> Enumerator
+
+文字列の書記素クラスタに対して繰り返します。
+
+[m:String#each_char] と違って、
+Unicode Standard Annex #29 (<https://unicode.org/reports/tr29/>)
+で定義された書記素クラスタに対して繰り返します。
+
+```ruby title="例"
+p "a\u0300".each_char.to_a.size # => 2
+p "a\u0300".each_grapheme_cluster.to_a.size # => 1
+```
+
+- **SEE** [m:String#grapheme_clusters]
+
+### def grapheme_clusters                             -> [String]
+### def grapheme_clusters {|grapheme_cluster| block } -> self
+
+文字列の書記素クラスタの配列を返します。(self.each_grapheme_cluster.to_a と同じです)
+
+```ruby title="例"
+p "a\u0300".grapheme_clusters # => ["à"]
+```
+
+ブロックが指定された場合は [m:String#each_grapheme_cluster] と同じように動作します。
+
+Ruby 2.6 までは deprecated の警告が出ますが、Ruby 2.7 で警告は削除されました。
+
+- **SEE** [m:String#each_grapheme_cluster]
+
+### def delete_prefix(prefix) -> String
+
+文字列の先頭から prefix を削除した文字列のコピーを返します。
+
+- **param** `prefix` -- 先頭から削除する文字列を指定します。
+
+- **return** -- 文字列の先頭から prefix を削除した文字列のコピー
+
+```ruby
+p "hello".delete_prefix("hel") # => "lo"
+p "hello".delete_prefix("llo") # => "hello"
+```
+
+- **SEE** [m:String#delete_prefix!]
+- **SEE** [m:String#delete_suffix]
+- **SEE** [m:String#start_with?]
+
+### def delete_prefix!(prefix) -> self | nil
+
+self の先頭から破壊的に prefix を削除します。
+
+- **param** `prefix` -- 先頭から削除する文字列を指定します。
+
+- **return** -- 削除した場合は self、変化しなかった場合は nil
+
+```ruby
+p "hello".delete_prefix!("hel") # => "lo"
+p "hello".delete_prefix!("llo") # => nil
+```
+
+- **SEE** [m:String#delete_prefix]
+- **SEE** [m:String#delete_suffix!]
+- **SEE** [m:String#start_with?]
+
+### def delete_suffix(suffix) -> String
+
+文字列の末尾から suffix を削除した文字列のコピーを返します。
+
+- **param** `suffix` -- 末尾から削除する文字列を指定します。
+
+- **return** -- 文字列の末尾から suffix を削除した文字列のコピー
+
+```ruby
+p "hello".delete_suffix("llo") # => "he"
+p "hello".delete_suffix("hel") # => "hello"
+```
+
+- **SEE** [m:String#chomp]
+- **SEE** [m:String#chop]
+- **SEE** [m:String#delete_prefix]
+- **SEE** [m:String#delete_suffix!]
+- **SEE** [m:String#end_with?]
+
+### def delete_suffix!(suffix) -> self | nil
+
+self の末尾から破壊的に suffix を削除します。
+
+- **param** `suffix` -- 末尾から削除する文字列を指定します。
+
+- **return** -- 削除した場合は self、変化しなかった場合は nil
+
+```ruby
+p "hello".delete_suffix!("llo") # => "he"
+p "hello".delete_suffix!("hel") # => nil
+```
+
+- **SEE** [m:String#chomp!]
+- **SEE** [m:String#chop!]
+- **SEE** [m:String#delete_prefix!]
+- **SEE** [m:String#delete_suffix]
+- **SEE** [m:String#end_with?]
+
+#%since 4.1
+### def bit_get(offset, lsb_first: true) -> Integer | nil
+
+0 から数えたビット位置 `offset` のビットを `0` か `1` の整数で返します。
+
+`offset` が `self` の範囲を超える場合は `nil` を返します。
+
+既定では、各バイト内のビットは最下位ビット(LSB)から最上位ビット(MSB)の順に番号が付きます。`lsb_first` に `false` を指定すると、バイトの並び順はそのままに、各バイト内のビット番号だけが最上位ビット(MSB)から最下位ビット(LSB)の順になります。
+
+- **param** `offset` -- 取得するビットの位置を 0 から数えた整数で指定します。
+- **param** `lsb_first` -- バイト内のビットの番号の付け方を指定します。既定は `true`(最下位ビットが 0 番目)です。`false` を指定すると最上位ビットが 0 番目になります。
+- **return** -- `offset` のビットが立っていれば `1`、立っていなければ `0` を返します。`offset` が `self` の範囲を超える場合は `nil` を返します。
+- **raise** `IndexError` -- `offset` が負の場合に発生します。
+- **raise** `ArgumentError` -- `offset` がビット位置として表現できないほど大きい場合に発生します。
+- **raise** `ArgumentError` -- `lsb_first` に `true`、`false` 以外を指定した場合に発生します。
+
+```ruby title="例"
+s = "\xAA".b # 0b10101010
+p s.bit_get(0) # => 0
+p s.bit_get(1) # => 1
+p s.bit_get(8) # => nil
+p s.bit_get(0, lsb_first: false) # => 1
+p s.bit_get(1, lsb_first: false) # => 0
+```
+
+- **SEE** [m:String#bit_set?], [m:String#getbyte]
+
+### def bit_set?(offset, lsb_first: true) -> bool | nil
+
+0 から数えたビット位置 `offset` のビットが立っているかどうかを真偽値で返します。
+
+`offset` が `self` の範囲を超える場合は `nil` を返します。
+
+既定では、各バイト内のビットは最下位ビット(LSB)から最上位ビット(MSB)の順に番号が付きます。`lsb_first` に `false` を指定すると、バイトの並び順はそのままに、各バイト内のビット番号だけが最上位ビット(MSB)から最下位ビット(LSB)の順になります。
+
+- **param** `offset` -- 調べるビットの位置を 0 から数えた整数で指定します。
+- **param** `lsb_first` -- バイト内のビットの番号の付け方を指定します。既定は `true`(最下位ビットが 0 番目)です。`false` を指定すると最上位ビットが 0 番目になります。
+- **return** -- `offset` のビットが立っていれば `true`、立っていなければ `false` を返します。`offset` が `self` の範囲を超える場合は `nil` を返します。
+- **raise** `IndexError` -- `offset` が負の場合に発生します。
+- **raise** `ArgumentError` -- `offset` がビット位置として表現できないほど大きい場合に発生します。
+- **raise** `ArgumentError` -- `lsb_first` に `true`、`false` 以外を指定した場合に発生します。
+
+```ruby title="例"
+s = "\xAA".b # 0b10101010
+p s.bit_set?(0) # => false
+p s.bit_set?(1) # => true
+p s.bit_set?(8) # => nil
+p s.bit_set?(0, lsb_first: false) # => true
+p s.bit_set?(1, lsb_first: false) # => false
+```
+
+- **SEE** [m:String#bit_get]
+
+### def bit_set(offset, lsb_first: true) -> self
+### def bit_set(offset, length, lsb_first: true) -> self
+### def bit_set(range, lsb_first: true) -> self
+
+0 から数えたビット位置 `offset` のビットを `1` にして `self` を返します。
+
+`length` を指定すると、`offset` から `length` ビット分を連続して `1` にします。`range` を指定すると、`range` が示すビットの範囲を `1` にします。
+
+指定した範囲は全体が `self` の範囲内に収まっていなければなりません。範囲が `self` の末尾を超える場合は、切り詰められるのではなく `IndexError` が発生します。ビット数が 0 の範囲を指定した場合は何もしません(no-op)が、その開始位置が `self` の末尾を超えている場合は、ビット数が 0 であっても `IndexError` が発生します。
+
+既定では、各バイト内のビットは最下位ビット(LSB)から最上位ビット(MSB)の順に番号が付きます。`lsb_first` に `false` を指定すると、バイトの並び順はそのままに、各バイト内のビット番号だけが最上位ビット(MSB)から最下位ビット(LSB)の順になります。
+
+- **param** `offset` -- 変更を開始するビットの位置を 0 から数えた整数で指定します。
+- **param** `length` -- 変更するビット数を指定します。
+- **param** `range` -- 変更するビットの範囲を [c:Range] オブジェクトで指定します。
+- **param** `lsb_first` -- バイト内のビットの番号の付け方を指定します。既定は `true`(最下位ビットが 0 番目)です。`false` を指定すると最上位ビットが 0 番目になります。
+- **return** -- `self` を返します。
+- **raise** `IndexError` -- `offset` が範囲外の場合、または範囲の一部が `self` の外に及ぶ場合に発生します。
+- **raise** `ArgumentError` -- `length` に負の数を指定した場合に発生します。
+- **raise** `ArgumentError` -- ビット位置として表現できないほど大きい値を指定した場合に発生します。
+- **raise** `ArgumentError` -- `lsb_first` に `true`、`false` 以外を指定した場合に発生します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。変更するビット数が 0 の場合でも発生します。
+
+```ruby title="例"
+s = "\x00".b
+p s.bit_set(1) # => "\x02"
+p s            # => "\x02"
+
+s = "\x00\x00".b
+p s.bit_set(4, 8) # => "\xF0\x0F"
+
+s = "\x00\x00".b
+p s.bit_set(4..11) # => "\xF0\x0F"
+```
+
+- **SEE** [m:String#bit_clear], [m:String#bit_flip], [m:String#bit_set?]
+
+### def bit_clear(offset, lsb_first: true) -> self
+### def bit_clear(offset, length, lsb_first: true) -> self
+### def bit_clear(range, lsb_first: true) -> self
+
+0 から数えたビット位置 `offset` のビットを `0` にして `self` を返します。
+
+`length` を指定すると、`offset` から `length` ビット分を連続して `0` にします。`range` を指定すると、`range` が示すビットの範囲を `0` にします。
+
+指定した範囲は全体が `self` の範囲内に収まっていなければなりません。範囲が `self` の末尾を超える場合は、切り詰められるのではなく `IndexError` が発生します。ビット数が 0 の範囲を指定した場合は何もしません(no-op)が、その開始位置が `self` の末尾を超えている場合は、ビット数が 0 であっても `IndexError` が発生します。
+
+既定では、各バイト内のビットは最下位ビット(LSB)から最上位ビット(MSB)の順に番号が付きます。`lsb_first` に `false` を指定すると、バイトの並び順はそのままに、各バイト内のビット番号だけが最上位ビット(MSB)から最下位ビット(LSB)の順になります。
+
+- **param** `offset` -- 変更を開始するビットの位置を 0 から数えた整数で指定します。
+- **param** `length` -- 変更するビット数を指定します。
+- **param** `range` -- 変更するビットの範囲を [c:Range] オブジェクトで指定します。
+- **param** `lsb_first` -- バイト内のビットの番号の付け方を指定します。既定は `true`(最下位ビットが 0 番目)です。`false` を指定すると最上位ビットが 0 番目になります。
+- **return** -- `self` を返します。
+- **raise** `IndexError` -- `offset` が範囲外の場合、または範囲の一部が `self` の外に及ぶ場合に発生します。
+- **raise** `ArgumentError` -- `length` に負の数を指定した場合に発生します。
+- **raise** `ArgumentError` -- ビット位置として表現できないほど大きい値を指定した場合に発生します。
+- **raise** `ArgumentError` -- `lsb_first` に `true`、`false` 以外を指定した場合に発生します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。変更するビット数が 0 の場合でも発生します。
+
+```ruby title="例"
+s = "\xFF".b
+p s.bit_clear(1) # => "\xFD"
+p s              # => "\xFD"
+
+s = "\xFF\xFF".b
+p s.bit_clear(4, 8) # => "\x0F\xF0"
+
+s = "\xFF\xFF".b
+p s.bit_clear(4..11) # => "\x0F\xF0"
+```
+
+- **SEE** [m:String#bit_set], [m:String#bit_flip]
+
+### def bit_flip(offset, lsb_first: true) -> self
+### def bit_flip(offset, length, lsb_first: true) -> self
+### def bit_flip(range, lsb_first: true) -> self
+
+0 から数えたビット位置 `offset` のビットを反転して `self` を返します。
+
+`length` を指定すると、`offset` から `length` ビット分を連続して反転します。`range` を指定すると、`range` が示すビットの範囲を反転します。
+
+指定した範囲は全体が `self` の範囲内に収まっていなければなりません。範囲が `self` の末尾を超える場合は、切り詰められるのではなく `IndexError` が発生します。ビット数が 0 の範囲を指定した場合は何もしません(no-op)が、その開始位置が `self` の末尾を超えている場合は、ビット数が 0 であっても `IndexError` が発生します。
+
+既定では、各バイト内のビットは最下位ビット(LSB)から最上位ビット(MSB)の順に番号が付きます。`lsb_first` に `false` を指定すると、バイトの並び順はそのままに、各バイト内のビット番号だけが最上位ビット(MSB)から最下位ビット(LSB)の順になります。
+
+- **param** `offset` -- 変更を開始するビットの位置を 0 から数えた整数で指定します。
+- **param** `length` -- 変更するビット数を指定します。
+- **param** `range` -- 変更するビットの範囲を [c:Range] オブジェクトで指定します。
+- **param** `lsb_first` -- バイト内のビットの番号の付け方を指定します。既定は `true`(最下位ビットが 0 番目)です。`false` を指定すると最上位ビットが 0 番目になります。
+- **return** -- `self` を返します。
+- **raise** `IndexError` -- `offset` が範囲外の場合、または範囲の一部が `self` の外に及ぶ場合に発生します。
+- **raise** `ArgumentError` -- `length` に負の数を指定した場合に発生します。
+- **raise** `ArgumentError` -- ビット位置として表現できないほど大きい値を指定した場合に発生します。
+- **raise** `ArgumentError` -- `lsb_first` に `true`、`false` 以外を指定した場合に発生します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。変更するビット数が 0 の場合でも発生します。
+
+```ruby title="例"
+s = "\x00".b
+p s.bit_flip(1) # => "\x02"
+p s.bit_flip(1) # => "\x00"
+
+s = "\x00\xFF".b
+p s.bit_flip(4, 8) # => "\xF0\xF0"
+
+s = "\x00\xFF".b
+p s.bit_flip(4..11) # => "\xF0\xF0"
+```
+
+- **SEE** [m:String#bit_set], [m:String#bit_clear]
+
+### def bit_count -> Integer
+### def bit_count(offset, length, lsb_first: true) -> Integer
+### def bit_count(range, lsb_first: true) -> Integer
+
+`self` に含まれる、立っているビット(値が `1` のビット)の数を返します。
+
+ポピュレーションカウント、あるいはハミング重みとも呼ばれます。
+
+引数を指定しない場合は `self` の全バイトを対象に数えます。
+
+`offset` と `length` を指定すると、0 から数えたビット位置 `offset` から `length` ビット分を対象に数えます。`range` を指定すると、`range` が示すビットの範囲を対象に数えます。
+
+対象の範囲が `self` の末尾を超える場合は、実際に存在するビットだけに切り詰めて数えます。範囲の開始位置が `self` の末尾以上の場合は `0` を返します。[m:String#bit_set] などの書き込み系メソッドと異なり、範囲外を指定してもエラーにはなりません。
+
+既定では、各バイト内のビットは最下位ビット(LSB)から最上位ビット(MSB)の順に番号が付きます。`lsb_first` に `false` を指定すると、バイトの並び順はそのままに、各バイト内のビット番号だけが最上位ビット(MSB)から最下位ビット(LSB)の順になります。ビット番号の付け方が結果に影響するのは範囲がバイト境界に揃っていない場合だけで、引数無しの形は `lsb_first` に関係なく同じ結果になります。
+
+- **param** `offset` -- 数える範囲の開始位置を 0 から数えた整数で指定します。
+- **param** `length` -- 数える範囲の長さをビット数で指定します。
+- **param** `range` -- 数える範囲を [c:Range] オブジェクトで指定します。
+- **param** `lsb_first` -- バイト内のビットの番号の付け方を指定します。既定は `true`(最下位ビットが 0 番目)です。`false` を指定すると最上位ビットが 0 番目になります。
+- **return** -- 対象の範囲に含まれる、立っているビットの数を返します。
+- **raise** `IndexError` -- `offset` または `range` の端点に負の値を指定した場合に発生します。
+- **raise** `ArgumentError` -- `length` に負の数を指定した場合に発生します。
+- **raise** `ArgumentError` -- ビット位置として表現できないほど大きい値を指定した場合に発生します。
+- **raise** `ArgumentError` -- `lsb_first` に `true`、`false` 以外を指定した場合に発生します。
+
+```ruby title="例"
+p "\x00".b.bit_count # => 0
+p "\xFF".b.bit_count # => 8
+p "\xAA".b.bit_count # => 4
+
+data = "\xFF\x00\xF0".b
+p data.bit_count(0, 8)   # => 8
+p data.bit_count(8, 8)   # => 0
+p data.bit_count(0..7)   # => 8
+p data.bit_count(8...16) # => 0
+p data.bit_count(16..)   # => 4
+
+p data.bit_count(16, 100) # => 4
+p data.bit_count(100, 8)  # => 0
+
+p "\xF0".b.bit_count(0, 4)                   # => 0
+p "\xF0".b.bit_count(0, 4, lsb_first: false) # => 4
+```
+
+- **SEE** [m:Integer#bit_count], [m:String#bit_get]
+
+### def bitwise_not -> String
+
+`self` の各バイトのビットを反転した新しい文字列を返します。
+
+返される文字列の文字エンコーディングは ASCII-8BIT になります。
+
+- **return** -- ビットを反転した新しい文字列を返します。
+
+```ruby title="例"
+p "\x00\xAA".b.bitwise_not # => "\xFFU"
+```
+
+- **SEE** [m:String#bitwise_not!]
+
+### def bitwise_not! -> self
+
+`self` の各バイトをビット反転した値に破壊的に置き換えます。
+
+`self` を返します。
+
+`self` の文字エンコーディングは変更されません。
+
+- **return** -- `self` を返します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。
+
+```ruby title="例"
+s = "\x00\xAA".b
+p s.bitwise_not! # => "\xFFU"
+p s              # => "\xFFU"
+```
+
+- **SEE** [m:String#bitwise_not]
+
+### def bitwise_and(other) -> String
+
+`self` と `other` の各バイトのビット単位の AND を計算した新しい文字列を返します。
+
+`other` は `to_str` メソッドで文字列に変換されます。返される文字列の文字エンコーディングは ASCII-8BIT になります。
+
+- **param** `other` -- 演算の相手を文字列で指定します。`self` と同じバイト数でなければなりません。
+- **return** -- AND を計算した新しい文字列を返します。
+- **raise** `ArgumentError` -- `self` と `other` の長さ(バイト数)が異なる場合に発生します。
+
+```ruby title="例"
+p "\xF0".b.bitwise_and("\xCC") # => "\xC0"
+```
+
+- **SEE** [m:String#bitwise_and!], [m:String#bitwise_or], [m:String#bitwise_xor]
+
+### def bitwise_and!(other) -> self
+
+`self` の各バイトを、それぞれのバイトと `other` の対応するバイトとのビット単位の AND で破壊的に置き換えます。
+
+`self` を返します。
+
+`other` は `to_str` メソッドで文字列に変換されます。`self` の文字エンコーディングは変更されません。
+
+- **param** `other` -- 演算の相手を文字列で指定します。`self` と同じバイト数でなければなりません。
+- **return** -- `self` を返します。
+- **raise** `ArgumentError` -- `self` と `other` の長さ(バイト数)が異なる場合に発生します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。
+
+```ruby title="例"
+s = "\xF0".b
+p s.bitwise_and!("\xCC") # => "\xC0"
+p s                      # => "\xC0"
+```
+
+- **SEE** [m:String#bitwise_and]
+
+### def bitwise_or(other) -> String
+
+`self` と `other` の各バイトのビット単位の OR を計算した新しい文字列を返します。
+
+`other` は `to_str` メソッドで文字列に変換されます。返される文字列の文字エンコーディングは ASCII-8BIT になります。
+
+- **param** `other` -- 演算の相手を文字列で指定します。`self` と同じバイト数でなければなりません。
+- **return** -- OR を計算した新しい文字列を返します。
+- **raise** `ArgumentError` -- `self` と `other` の長さ(バイト数)が異なる場合に発生します。
+
+```ruby title="例"
+p "\xF0".b.bitwise_or("\x0C") # => "\xFC"
+```
+
+- **SEE** [m:String#bitwise_or!], [m:String#bitwise_and], [m:String#bitwise_xor]
+
+### def bitwise_or!(other) -> self
+
+`self` の各バイトを、それぞれのバイトと `other` の対応するバイトとのビット単位の OR で破壊的に置き換えます。
+
+`self` を返します。
+
+`other` は `to_str` メソッドで文字列に変換されます。`self` の文字エンコーディングは変更されません。
+
+- **param** `other` -- 演算の相手を文字列で指定します。`self` と同じバイト数でなければなりません。
+- **return** -- `self` を返します。
+- **raise** `ArgumentError` -- `self` と `other` の長さ(バイト数)が異なる場合に発生します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。
+
+```ruby title="例"
+s = "\xF0".b
+p s.bitwise_or!("\x0C") # => "\xFC"
+p s                     # => "\xFC"
+```
+
+- **SEE** [m:String#bitwise_or]
+
+### def bitwise_xor(other) -> String
+
+`self` と `other` の各バイトのビット単位の XOR を計算した新しい文字列を返します。
+
+`other` は `to_str` メソッドで文字列に変換されます。返される文字列の文字エンコーディングは ASCII-8BIT になります。
+
+- **param** `other` -- 演算の相手を文字列で指定します。`self` と同じバイト数でなければなりません。
+- **return** -- XOR を計算した新しい文字列を返します。
+- **raise** `ArgumentError` -- `self` と `other` の長さ(バイト数)が異なる場合に発生します。
+
+```ruby title="例"
+p "\xF0".b.bitwise_xor("\xCC") # => "<"
+```
+
+- **SEE** [m:String#bitwise_xor!], [m:String#bitwise_and], [m:String#bitwise_or]
+
+### def bitwise_xor!(other) -> self
+
+`self` の各バイトを、それぞれのバイトと `other` の対応するバイトとのビット単位の XOR で破壊的に置き換えます。
+
+`self` を返します。
+
+`other` は `to_str` メソッドで文字列に変換されます。`self` の文字エンコーディングは変更されません。
+
+- **param** `other` -- 演算の相手を文字列で指定します。`self` と同じバイト数でなければなりません。
+- **return** -- `self` を返します。
+- **raise** `ArgumentError` -- `self` と `other` の長さ(バイト数)が異なる場合に発生します。
+- **raise** `FrozenError` -- `self` が凍結されている場合に発生します。
+
+```ruby title="例"
+s = "\xF0".b
+p s.bitwise_xor!("\xCC") # => "<"
+p s                      # => "<"
+```
+
+- **SEE** [m:String#bitwise_xor]
+
+#%end
+

@@ -10,7 +10,7 @@ category FileFormat
 Psych を用いると YAML のパースと出力ができます。
 これらの機能は libyaml [[url:http://pyyaml.org/wiki/LibYAML]] を用いて
 実装されています。さらに Ruby の大半のオブジェクトと YAML フォーマットの
-データの間を相互に変換することができます。
+データの間を相互に変換できます。
 
 === 基本的な使いかた
 
@@ -34,8 +34,7 @@ Psych は YAML ドキュメントのパースができます。
 ユーザの必要に応じ、高水準な API から低水準な API まで用意されています。
 最も低水準なものは、イベントベースな API です。中程度の水準のものとして
 YAML の AST(Abstract Syntax Tree)にアクセスする APIがあります。
-高水準な API では、YAML のドキュメントを Ruby のオブジェクトに変換する
-ことができます。
+高水準な API では、YAML のドキュメントを Ruby のオブジェクトに変換できます。
 
 ===== 低水準 パース API
 
@@ -53,7 +52,7 @@ Psych には YAML ドキュメントの AST にアクセスする API があり�
 
 ===== 高水準 パース API
 
-YAML ドキュメントをパースして Ruby のオブジェクトに変換することができます。
+YAML ドキュメントをパースして Ruby のオブジェクトに変換できます。
 詳しくは [[m:Psych.load]] を見てください。
 
 
@@ -112,9 +111,13 @@ libyaml のバージョンを返します。
 
 @see [[m:Psych::LIBYAML_VERSION]]
 
-#@since 2.5.0
+#@if("2.6.0" <= version)
+--- load(yaml, filename: nil, fallback: false, symbolize_names: false) -> object
+#@end
+#@if("2.5.0" <= version and version < "3.1")
 --- load(yaml, filename = nil, fallback: false, symbolize_names: false) -> object
-#@else
+#@end
+#@if(version < "2.5.0")
 --- load(yaml, filename = nil, fallback = false) -> object
 #@end
 
@@ -138,6 +141,19 @@ filename はパース中に発生した例外のメッセージに用います�
 @raise Psych::SyntaxError YAMLドキュメントに文法エラーが発見されたときに発生します
 @see [[m:Psych.parse]]
 
+#@since 2.6.0
+#@samplecode 例
+Psych.load("--- a")           # => 'a'
+Psych.load("---\n - a\n - b") # => ['a', 'b']
+
+begin
+  Psych.load("--- `", filename: "file.txt")
+rescue Psych::SyntaxError => ex
+  p ex.file    # => 'file.txt'
+  p ex.message # => "(file.txt): found character that cannot start any token while scanning for the next token at line 1 column 5"
+end
+#@end
+#@else
 #@samplecode 例
 Psych.load("--- a")           # => 'a'
 Psych.load("---\n - a\n - b") # => ['a', 'b']
@@ -148,6 +164,7 @@ rescue Psych::SyntaxError => ex
   p ex.file    # => 'file.txt'
   p ex.message # => "(file.txt): found character that cannot start any token while scanning for the next token at line 1 column 5"
 end
+#@end
 #@end
 
 キーワード引数 symbolize_names に true を指定した場合はハッシュのキー
@@ -161,7 +178,7 @@ Psych.load("---\n foo: bar", symbolize_names: true)  # => {:foo=>"bar"}
 #@end
 
 #@since 2.6.0
-#@since 3.0.0
+#@since 3.0
 --- safe_load(yaml, permitted_classes: [], permitted_symbols: [], aliases: false, filename: nil, fallback: nil, symbolize_names: false, freeze: false) -> object
 --- safe_load(yaml, legacy_permitted_classes=[], legacy_permitted_symbols=[], legacy_aliases=false, legacy_filename=nil) -> object
 #@else
@@ -219,7 +236,7 @@ Psych.safe_load("---\n foo: bar")                         # => {"foo"=>"bar"}
 Psych.safe_load("---\n foo: bar", symbolize_names: true)  # => {:foo=>"bar"}
 #@end
 
-#@since 3.0.0
+#@since 3.0
 キーワード引数 freeze に true を指定した場合は再帰的に
 [[m:Object#freeze]] したオブジェクトを返します。
 
@@ -261,7 +278,7 @@ Psych.safe_load("", [Date])
                        を [[c:Symbol]] に変換するかどうかを指定します。
                        true を指定した場合は変換します。デフォルトでは
                        文字列に変換されます。
-#@since 3.0.0
+#@since 3.0
 @param freeze true を指定すると再帰的に freeze されたオブジェクトを返します。
               デフォルトは false です。
 #@end

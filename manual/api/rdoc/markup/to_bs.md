@@ -1,0 +1,36 @@
+---
+type: library
+---
+RDoc 形式のドキュメントをエスケープシーケンスで太字やアンダーラインの効果を持たせるように見せるサブライブラリです。
+
+```ruby
+require 'rdoc/markup/to_bs'
+
+h = RDoc::Markup::ToBs.new
+puts h.convert(input_string)
+```
+
+変換した結果は文字列で取得できます。実際に効果を確認するためにはページャなどで出力を確認します。
+
+テキスト中の以下のマークアップ記法をエスケープシーケンスの \b と組み合わせる事によって見た目を変更します。
+
+- イタリック体(_word_): word にアンダーラインを付けて表示する("w\b_o\b_r\b_d\b_" に変換されます)
+- ボールド体(*word*): word を太字で表示する("w\bwo\bor\brd\bd" に変換されます)
+
+# class RDoc::Markup::ToBs < RDoc::Markup::ToRdoc
+
+RDoc 形式のドキュメントをエスケープシーケンスで太字やアンダーラインの効果を持たせるように見せるクラスです。
+
+## Class Methods
+
+#%since 4.1
+### def RDoc::Markup::ToBs.new -> RDoc::Markup::ToBs
+#%else
+### def RDoc::Markup::ToBs.new(markup = nil) -> RDoc::Markup::ToBs
+#%end
+
+自身を初期化します。
+
+#%until 4.1
+- **param** `markup` -- [c:RDoc::Markup] オブジェクトを指定します。省略した場合は新しく作成します。
+#%end

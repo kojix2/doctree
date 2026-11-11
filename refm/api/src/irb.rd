@@ -15,7 +15,7 @@ require irb/locale
 require irb/version
 
 irb は Interactive Ruby の略です。
-irb を使うと、Ruby の式を標準入力から簡単に入力・実行することができます。
+irb を使うと、Ruby の式を標準入力から簡単に入力・実行できます。
 
 === irb の使い方
 
@@ -225,7 +225,7 @@ PROMPT_I, PROMPT_S, PROMPT_C にはフォーマット文字列を指定します
 === サブ irb
 
 irb では、起動時の irb インタプリタとは独立した環境を持つ
-「サブ irb」を任意の数だけ起動することができます。
+「サブ irb」を任意の数だけ起動できます。
 サブ irb は、irb 実行中に「irb」と入力すると起動します。
 
 例えば以下の実行例を見てください。
@@ -237,7 +237,7 @@ irb では、起動時の irb インタプリタとは独立した環境を持�
   irb(main):006:0> irb               # サブ irb を起動
   irb#1(main):001:0> x               # x を表示
   NameError: undefined local variable or method `x' for main:Object
-	  from (irb#1):1:in `Kernel#binding'
+          from (irb#1):1:in `Kernel#binding'
 
 起動時のインタプリタでローカル変数 x を定義しましたが、
 「irb」でサブ irb を起動すると、
@@ -269,7 +269,7 @@ conf オブジェクトの値を変更するには、
 IRB.conf[:IRB_RC] に Proc オブジェクトを設定しておくと、
 サブ irb が起動されるたびに、その Proc オブジェクトに
 IRB::Context オブジェクトを渡して実行します。
-これによってサブ irb の設定をまとめて設定することができます。
+これによってサブ irb の設定をまとめて設定できます。
 
 以下に例を示します。
 

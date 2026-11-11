@@ -14,6 +14,67 @@ Ruby の安定版リリースをベースとした、
 * オンライン HTML、静的 HTML、HTML Help、EPUB3、
   ReFe データベースのすべてが用意されている
 
+## ドキュメントの編集
+
+ドキュメント本体は `manual/` 配下の Markdown ファイルです
+（2026年7月に RD ベースの独自記法 RRD から移行しました）。
+
+* `manual/api/` — 組み込みクラス・標準添付ライブラリ（例: `manual/api/_builtin/Array.md`）
+* `manual/doc/` — 言語仕様などの文書
+* `manual/capi/` — C API
+
+https://docs.ruby-lang.org/ja/ の各ページ下部の編集リンクから、
+該当する `manual/` のファイルに直接飛べます。
+
+旧 `refm/` ツリーは凍結されています。編集しても公開サイトには反映されないため、
+編集しないでください（旧バージョン向け情報の回収が終わり次第、削除予定です）。
+
+記法は GitHub Flavored Markdown ベースです。メソッドシグネチャ
+（`### def each {|item| ... } -> self`）やクロスリファレンス（`[m:Array#each]`）
+などの独自拡張の仕様は、bitclust の
+[MARKUP_SPEC.md](https://github.com/rurema/bitclust/blob/master/doc/markdown-samples/MARKUP_SPEC.md)
+を参照してください。バージョン別の記述に使う `#%since` / `#%until` などの
+プリプロセッサ指令は従来どおり使えます（旧 `#@` prefix も後方互換で受理されます）。
+
+なお、GitHub 上の Markdown プレビューは独自拡張を解釈しないため、
+表示が一部崩れます（プリプロセッサ指令がそのまま見える、
+`### def [](nth)` のようなシグネチャ見出しが Markdown のリンクと誤解釈される、など）。
+崩れていてもドキュメントの誤りではありません。正しい表示は
+https://docs.ruby-lang.org/ja/ で確認してください。GitHub 上でソースを確認するには
+ファイル表示の「Code」ボタン、または URL 末尾に `?plain=1` を付けてください。
+
+ローカルでのビルド・確認:
+
+```console
+$ bundle install
+$ bundle exec rake generate:3.4    # BitClust データベース生成
+$ bundle exec rake statichtml:3.4  # 静的 HTML 生成
+```
+
+手を動かしながらの詳しい手順は [docs/Tutorial.md](docs/Tutorial.md) を、
+プロジェクト文書の一覧は [docs/](docs/) を参照してください。
+
+## いろいろな貢献のかたち
+
+ドキュメントの編集以外にも、次のような貢献を歓迎しています。
+資格は特に必要ありません。日本語が扱えると助かります。
+Ruby でプログラミングができるとサンプルの検証などもできて便利ですが、必須ではありません。
+
+* ドキュメントの誤りの指摘（バージョン間違いなど） —
+  [Issue](https://github.com/rurema/doctree/issues/new) を登録してください。
+  最新版で修正済みかどうかを先に確認してもらえると助かります。
+  修正内容がわかっている場合は Pull Request にしていただけると適用が楽になります
+* ドキュメントをよりよくするための提案（説明文の追加など）
+* サンプルコードの提供
+* 既に上がっている Issue へのコメント
+* ブログや勉強会などで「るりま」を紹介する
+
+## 行動規範
+
+本プロジェクトは Ruby コミュニティの
+[行動規範](https://www.ruby-lang.org/ja/conduct/)
+（[Code of Conduct](https://www.ruby-lang.org/en/conduct/)）に従います。
+
 ## 各バージョンの対応方針
 
 以下の方針で対応します。
@@ -24,24 +85,26 @@ Ruby の安定版リリースをベースとした、
 * セキュリティメンテナンス期間が終わってEOLになったもの: そのバージョン特有のものには積極的には対応しないが、既に書いてあるものは消さない。
   * 例: 2.1がEOLになったとき、2.1.x で追加されたけど、2.2.x 以降で消えた機能については残しておく。
 * それ以前: 対応しない(outdatedな記述は消してもよい)
+  * [vars.rb](https://github.com/rurema/generated-documents/blob/main/tool/vars.rb)でFROZEN_VERSIONSに移動したものはdoctreeのmasterから再生成されないので消してよい
   * 例: 2.1がEOLになったとき、2.0.x で追加されたけど、2.1.x 以降で消えた機能については消してもよい。
 * あるバージョンがEOLになったらその時点でタグを打つ
+* **ただし、2026年7月のMarkdown移行から当面の間は3.0以降に対応する**
 
 ### 具体例
 
-例えば2018年9月時点では、
+例えば2026年7月時点では、
 
-* 最新安定版: 2.5 系列
-* 1つ前の安定版: 2.4 系列
-* 2つ前の安定版: 2.3 系列
-* セキュリティメンテナンス期間が終わってEOLになったもの: 2.2 系列
-* それ以前: 2.1 以前
+* 最新安定版: 4.0 系列
+* 1つ前の安定版: 3.4 系列
+* 2つ前の安定版: 3.3 系列
+* セキュリティメンテナンス期間が終わってEOLになったもの: 3.2 系列
+* それ以前: 本来は 3.1 以前だが、当面は 2.7.0 以前
 
 となります。
 
 最新の状況については
 
-* https://bugs.ruby-lang.org/projects/ruby/wiki/ReleaseEngineering
+* https://github.com/ruby/ruby/wiki/Release-Engineering
 * https://github.com/ruby/www.ruby-lang.org/blob/master/_data/branches.yml
 
 などを参照してください。

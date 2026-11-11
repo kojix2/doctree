@@ -18,7 +18,7 @@ require delegate
  * Tempfile オブジェクトは[[c:File]]クラスへのDelegatorとして定義されており、[[c:File]]クラスのオブジェクトと同じように使うことができます。
  * Tempfile#close(true) により、作成したテンポラリファイルは削除されます。
  * スクリプトが終了するときにも削除されます。
- * [[m:Tempfile#open]]により、テンポラリファイルを再オープンすることができます。
+ * [[m:Tempfile#open]]により、テンポラリファイルを再オープンできます。
  * テンポラリファイルのモードは 0600 です。
 
 == Class Methods
@@ -62,27 +62,33 @@ new にブロックを指定した場合は無視されます。
                ます。
 #@end
 
-例:
-   require "tempfile"
-   t = Tempfile.open(['hoge', 'bar'])
-   p t.path                            #=> "/tmp/hoge20080518-6961-5fnk19-0bar"
-   t2 = Tempfile.open(['t', '.xml'])
-   p t2.path                           #=> "/tmp/t20080518-6961-xy2wvx-0.xml"
+#@samplecode 例
+require "tempfile"
+t = Tempfile.open(['hoge', 'bar'])
+p t.path                            #=> "/tmp/hoge20080518-6961-5fnk19-0bar"
+t2 = Tempfile.open(['t', '.xml'])
+p t2.path                           #=> "/tmp/t20080518-6961-xy2wvx-0.xml"
+#@end
 
-例：ブロックを与えた場合
-  require 'tempfile'
+#@samplecode 例：ブロックを与えた場合
+require 'tempfile'
 
-  tf = Tempfile.open("temp"){|fp|
-    fp.puts "hoge"
-    fp
-  }
-  # テンポラリファイルへのパスを表示
-  p tf.path
-  p File.read(tf.path) #=> "hoge\n"
+tf = Tempfile.open("temp"){|fp|
+  fp.puts "hoge"
+  fp
+}
+# テンポラリファイルへのパスを表示
+p tf.path
+p File.read(tf.path) #=> "hoge\n"
+#@end
 
 #@since 2.1.0
 @see [[m:Tempfile.create]]
 
+#@since 3.4
+--- create(basename="", tmpdir=nil, mode: 0, anonymous: false, **options) -> File
+--- create(basename="", tmpdir=nil, mode: 0, anonymous: false, **options){|fp| ...} -> object
+#@else
 #@since 2.4.0
 --- create(basename="", tmpdir=nil, mode: 0, **options) -> File
 --- create(basename="", tmpdir=nil, mode: 0, **options){|fp| ...} -> object
@@ -93,6 +99,7 @@ new にブロックを指定した場合は無視されます。
 #@else
 --- create(basename, *rest) -> File
 --- create(basename, *rest){|fp| ...} -> object
+#@end
 #@end
 #@end
 
@@ -121,6 +128,14 @@ createではファイルのunlinkも自動で行います。
               このデフォルト値は、[[m:Dir.tmpdir]] の値となります。
 @param mode ファイルのモードを定数の論理和で指定します。[[m:IO.open]]
             と同じ([[m:Kernel.#open]]と同じ)ものが指定できます。
+#@end
+
+#@since 3.4
+@param anonymous テンポラリファイルを即時unlinkするかを指定します。
+                 デフォルトは false です。
+#@end
+
+#@since 2.2.0
 @param options ファイルのオプション引数を指定します。[[m:IO.open]] と同
                じものが指定できます。ただし、:permオプションは無視され
                ます。
@@ -129,15 +144,16 @@ createではファイルのunlinkも自動で行います。
 #@end
 @see [[m:Tempfile.open]]
 
-例:
-  require "tempfile"
-  GC.disable
-  path = ""
-  Tempfile.create("foo") do |f|
-    path = f.path
-    p File.exist?(path) #=> true
-  end
-  p File.exist?(path) #=> false
+#@samplecode 例
+require "tempfile"
+GC.disable
+path = ""
+Tempfile.create("foo") do |f|
+  path = f.path
+  p File.exist?(path) #=> true
+end
+p File.exist?(path) #=> false
+#@end
 
 #@end
 
@@ -152,24 +168,27 @@ real が偽ならば、テンポラリファイルはGCによって削除され�
 
 @param real false もしくはそれ以外を指定します。
 
-  require "tempfile"
-  tf = Tempfile.open("bar")
-  tf.close
-  p FileTest.exist?(tf.path) # => true
-
+#@samplecode
+require "tempfile"
+tf = Tempfile.open("bar")
+tf.close
+p FileTest.exist?(tf.path) # => true
+#@end
 --- open -> self
 
 クローズしたテンポラリファイルを再オープンします。
 "r+" でオープンされるので、クローズ前の内容を再度読む
 ことができます。
 
-  require "tempfile"
-  tf = Tempfile.new("foo")
-  tf.print("foobar,hoge\n")
-  tf.print("bar,ugo\n")
-  tf.close
-  tf.open
-  p tf.gets # => "foobar,hoge\n"
+#@samplecode
+require "tempfile"
+tf = Tempfile.new("foo")
+tf.print("foobar,hoge\n")
+tf.print("bar,ugo\n")
+tf.close
+tf.open
+p tf.gets # => "foobar,hoge\n"
+#@end
 
 --- path -> String | nil
 
@@ -177,32 +196,38 @@ real が偽ならば、テンポラリファイルはGCによって削除され�
 
 [[m:Tempfile#close!]] を実行後だった場合にはnilを返します。
 
-  require "tempfile"
-  tf = Tempfile.new("hoo")
-  p tf.path # => "/tmp/hoo.10596.0"
-  tf.close!
-  p tf.path # => nil
+#@samplecode
+require "tempfile"
+tf = Tempfile.new("hoo")
+p tf.path # => "/tmp/hoo.10596.0"
+tf.close!
+p tf.path # => nil
+#@end
 
 --- length -> Integer
 --- size -> Integer
 テンポラリファイルのサイズを返します。
 
-  require "tempfile"
-  tf = Tempfile.new("foo")
-  tf.print("bar,ugo")
-  p tf.size # => 7
-  tf.close
-  p tf.size # => 7
+#@samplecode
+require "tempfile"
+tf = Tempfile.new("foo")
+tf.print("bar,ugo")
+p tf.size # => 7
+tf.close
+p tf.size # => 7
+#@end
 
 --- close! -> nil
 
 テンポラリファイルをクローズし、すぐに削除します。
 
-  require "tempfile"
-  tf = Tempfile.open("bar")
-  path = tf.path
-  tf.close!
-  p FileTest.exist?(path) # => false
+#@samplecode
+require "tempfile"
+tf = Tempfile.open("bar")
+path = tf.path
+tf.close!
+p FileTest.exist?(path) # => false
+#@end
 
 --- delete -> self
 --- unlink -> self
@@ -218,10 +243,12 @@ UNIXライクなシステムでは、
 #@# it, because it leaves other programs zero chance to access the
 #@# file.
 
-  require "tempfile"
-  tf = Tempfile.new("foo")
-  tf.unlink
-  p tf.path # => nil
-  tf.print("foobar,hoge\n")
-  tf.rewind
-  p tf.gets("\n") # => "foobar,hoge\n"
+#@samplecode
+require "tempfile"
+tf = Tempfile.new("foo")
+tf.unlink
+p tf.path # => nil
+tf.print("foobar,hoge\n")
+tf.rewind
+p tf.gets("\n") # => "foobar,hoge\n"
+#@end

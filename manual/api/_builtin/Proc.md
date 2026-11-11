@@ -1,0 +1,546 @@
+---
+library: _builtin
+---
+# class Proc < Object
+
+ブロックをコンテキスト(ローカル変数のスコープやスタックフレーム)とともにオブジェクト化した手続きオブジェクトです。
+
+Proc は ローカル変数のスコープを導入しないことを除いて名前のない関数のように使えます。ダイナミックローカル変数は
+Proc ローカルの変数として使えます。
+
+Proc がローカル変数のスコープを保持していることは以下の例で変数 var を参照できていることからわかります。
+
+```ruby title="例"
+var = 1
+$foo = Proc.new { var }
+var = 2
+
+def foo
+  $foo.call
+end
+
+p foo       # => 2
+```
+
+#%include(lambda_proc)
+
+## Class Methods
+
+### def Proc.new { ... } -> Proc
+
+ブロックをコンテキストとともにオブジェクト化して返します。
+
+- **raise** `ArgumentError` -- ブロックを省略した呼び出しを行ったときに発生します。
+
+```ruby
+pr = Proc.new {|arg| p arg }
+pr.call(1) # => 1
+```
+
+```ruby
+#%since 3.4
+Proc.new # => -e:1:in 'new': tried to create Proc object without a block (ArgumentError)
+#%else
+Proc.new # => -e:1:in `new': tried to create Proc object without a block (ArgumentError)
+#%end
+```
+
+Proc.new は、Proc#initialize が定義されていればオブジェクトの初期化のためにこれを呼び出します。このことを除けば、[m:Kernel?.proc] と同じです。
+
+## Instance Methods
+
+### def [](*arg) -> ()
+### def call(*arg) -> ()
+### def ===(*arg) -> ()
+{: since=""}
+### def yield(*arg) -> ()
+
+手続きオブジェクトを実行してその結果を返します。
+
+引数の渡され方はオブジェクトの生成方法によって異なります。
+詳しくは [m:Proc#lambda?] を参照してください。
+
+「===」は when の所に手続きを渡せるようにするためのものです。
+
+```ruby title="例"
+def sign(n)
+  case n
+  when lambda{|n| n > 0} then 1
+  when lambda{|n| n < 0} then -1
+  else 0
+  end
+end
+
+p sign(-4) # => -1
+p sign(0)  # => 0
+p sign(7)  # => 1
+```
+
+また、以下のような syntactic sugar もあります。
+
+```ruby title="例"
+fib = lambda{|n|
+  case n
+  when 0 then 0
+  when 1 then 1
+  else
+    fib.(n - 2) + fib.(n - 1)
+  end
+}
+p fib.(10) # => 55
+```
+
+- **param** `arg` -- 手続きオブジェクトに与える引数を指定します。
+
+- **raise** `LocalJumpError` -- Procを生成したメソッドからリターンしてしまった場合に発生します。
+
+#%# 2.0 では削除されている事、実装に依存する内容である事から省略。
+#%# 参照: プログラミング言語 Ruby p203
+#%##until 2.0.0
+#%#--- ==(other)   -> bool
+#%##@since 1.9.1
+#%#--- eql?(other) -> bool
+#%##@end
+#%#
+#%# --- clone -> Proc
+#%# nodoc
+#%# --- dup -> Proc
+#%# nodoc
+
+### def <<(callable) -> Proc
+
+self と引数を合成した Proc を返します。
+
+戻り値の Proc は可変長の引数を受け取ります。
+戻り値の Proc を呼び出すと、まず受け取った引数を callable に渡して呼び出し、その戻り値を self に渡して呼び出した結果を返します。
+
+[m:Proc#>>] とは呼び出しの順序が逆になります。
+
+- **param** `callable` -- Proc、Method、もしくは任意の call メソッドを持ったオブジェクト。
+
+```ruby title="例"
+f = proc { |x| x * x }
+g = proc { |x| x + x }
+
+# (3 + 3) * (3 + 3)
+p (f << g).call(3) # => 36
+```
+
+```ruby title="call を定義したオブジェクトを渡す例"
+class WordScanner
+  def self.call(str)
+    str.scan(/\w+/)
+  end
+end
+
+File.write('testfile', <<~TEXT)
+  Hello, World!
+  Hello, Ruby!
+TEXT
+
+pipeline = proc { |data| puts "word count: #{data.size}" } << WordScanner << File.method(:read)
+pipeline.call('testfile') # => word count: 4
+```
+
+- **SEE** [m:Method#<<], [m:Method#>>]
+
+### def >>(callable) -> Proc
+
+self と引数を合成した Proc を返します。
+
+戻り値の Proc は可変長の引数を受け取ります。
+戻り値の Proc を呼び出すと、まず受け取った引数を self に渡して呼び出し、その戻り値を callable に渡して呼び出した結果を返します。
+
+[m:Proc#<<] とは呼び出しの順序が逆になります。
+
+- **param** `callable` -- Proc、Method、もしくは任意の call メソッドを持ったオブジェクト。
+
+```ruby title="例"
+f = proc { |x| x * x }
+g = proc { |x| x + x }
+
+# (3 * 3) + (3 * 3)
+p (f >> g).call(3) # => 18
+```
+
+```ruby title="call を定義したオブジェクトを渡す例"
+class WordScanner
+  def self.call(str)
+    str.scan(/\w+/)
+  end
+end
+
+File.write('testfile', <<~TEXT)
+  Hello, World!
+  Hello, Ruby!
+TEXT
+
+pipeline = proc { |fname| File.read(fname) } >> WordScanner >> method(:p)
+pipeline.call('testfile') # => ["Hello", "World", "Hello", "Ruby"]
+```
+
+- **SEE** [m:Method#<<], [m:Method#>>]
+
+### def arity -> Integer
+
+Proc オブジェクトが受け付ける引数の数を返します。
+
+ただし、可変長引数を受け付ける場合、負の整数
+
+```text
+-(必要とされる引数の数 + 1)
+```
+
+を返します。
+
+```ruby title="例"
+p lambda{           }.arity # => 0
+p lambda{||         }.arity # =>  0
+p lambda{|x|        }.arity # =>  1
+p lambda{|*x|       }.arity # => -1
+p lambda{|x, y|     }.arity # =>  2
+p lambda{|x, *y|    }.arity # => -2
+p lambda{|(x, y)|   }.arity # =>  1
+p lambda{|(x, y), z|}.arity # =>  2
+```
+
+- **SEE** [ref:d:glossary#arity]
+
+### def binding -> Binding
+
+Proc オブジェクトが保持するコンテキストを
+[c:Binding] オブジェクトで返します。
+
+```ruby title="例"
+def fred(param)
+  proc {}
+end
+
+sample_proc = fred(99)
+p eval("param", sample_proc.binding) # => 99
+```
+
+### def to_proc -> self
+
+self を返します。
+
+```ruby title="例"
+pr = proc {}
+p pr == pr.to_proc # => true
+```
+
+### def to_s    -> String
+### def inspect -> String
+{: since=""}
+
+self の文字列表現を返します。
+
+可能なら self を生成したソースファイル名、行番号を含みます。
+
+```ruby title="例"
+p Proc.new {
+   true
+}.to_s
+
+# => "#<Proc:0x401a880c -:3>"
+```
+
+### def curry         -> Proc
+### def curry(arity)  -> Proc
+
+Procをカリー化します
+
+カリー化したProcはいくつかの引数をとります。十分な数の引数が与えられると、元のProcに引数を渡して実行し、結果を返します。引数の個数が足りないときは、部分適用したカリー化Procを返します。
+
+- **param** `arity` -- 引数の個数を指定します
+- **return** -- カリー化したProcオブジェクトを返します
+
+```ruby title="例"
+b = proc {|x, y, z| (x||0) + (y||0) + (z||0) }
+p b.curry[1][2][3]           # => 6
+p b.curry[1, 2][3, 4]        # => 6
+p b.curry(5)[1][2][3][4][5]  # => 6
+p b.curry(5)[1, 2][3, 4][5]  # => 6
+p b.curry(1)[1]              # => 1
+
+b = proc {|x, y, z, *w| (x||0) + (y||0) + (z||0) + w.sum }
+p b.curry[1][2][3]           # => 6
+p b.curry[1, 2][3, 4]        # => 10
+p b.curry(5)[1][2][3][4][5]  # => 15
+p b.curry(5)[1, 2][3, 4][5]  # => 15
+p b.curry(1)[1]              # => 1
+
+b = lambda {|x, y, z| (x||0) + (y||0) + (z||0) }
+p b.curry[1][2][3]           # => 6
+p b.curry[1, 2][3, 4]        # => wrong number of arguments (given 4, expected 3)
+p b.curry(5)                 # => wrong number of arguments (given 5, expected 3)
+p b.curry(1)                 # => wrong number of arguments (given 1, expected 3)
+
+b = lambda {|x, y, z, *w| (x||0) + (y||0) + (z||0) + w.sum }
+p b.curry[1][2][3]           # => 6
+p b.curry[1, 2][3, 4]        # => 10
+p b.curry(5)[1][2][3][4][5]  # => 15
+p b.curry(5)[1, 2][3, 4][5]  # => 15
+p b.curry(1)                 # => wrong number of arguments (given 1, expected 3+)
+
+b = proc { :foo }
+p b.curry[]                  # => :foo
+```
+
+### def lambda? -> bool
+
+手続きオブジェクトの引数の取扱が厳密であるならば true を返します。
+
+引数の取扱の厳密さの意味は以下の例を参考にしてください。
+
+```ruby title="例"
+# lambda で生成した Proc オブジェクトでは true 
+p lambda{}.lambda? # => true
+# proc で生成した Proc オブジェクトでは false
+proc{}.lambda?   # => false
+# Proc.new で生成した Proc オブジェクトでは false
+p Proc.new{}.lambda? # => false
+
+# 以下、lambda?が偽である場合
+# 余分な引数を無視する
+proc{|a,b| [a,b]}.call(1,2,3) # => [1,2]
+# 足りない引数には nil が渡される
+proc{|a,b| [a,b]}.call(1) # => [1, nil]
+# 配列1つだと展開される
+proc{|a,b| [a,b]}.call([1,2]) # => [1,2]
+# lambdaの場合これらはすべて ArgumentError となる
+ 
+# &が付いた仮引数で生成される Proc は lambda? が偽となる
+def n(&b) b.lambda? end
+p n {} # => false
+
+# &が付いた実引数によるものは、lambda?が元の Procオブジェクトから
+# 引き継がれる
+p lambda(&lambda {}).lambda? # => true
+proc(&lambda {}).lambda?     # => true
+p Proc.new(&lambda {}).lambda? # => true
+
+p lambda(&proc {}).lambda?   # => false
+proc(&proc {}).lambda?       # => false
+p Proc.new(&proc {}).lambda? # => false
+
+p n(&lambda {})              # => true
+p n(&proc {})                # => false
+p n(&Proc.new {})            # => false
+
+# Method#to_proc によるものは lambda?が真となる
+def m() end
+p method(:m).to_proc.lambda? # => true
+
+# Module#define_method は特別扱いで、
+# これで定義されたメソッドの引数は常に厳密に取り扱われる
+class C
+  define_method(:d) {}
+end
+C.new.d(1,2)       # ~> ArgumentError
+p C.new.method(:d).to_proc.lambda? # => true
+
+class C
+  define_method(:e, &proc {})
+end
+C.new.e(1,2)       # ~> ArgumentError
+p C.new.method(:e).to_proc.lambda? # => true
+```
+
+### def source_location -> [String, Integer] | nil
+
+ソースコードのファイル名と行番号を配列で返します。
+
+その手続オブジェクトが ruby で定義されていない(つまりネイティブである)場合は nil を返します。
+
+```ruby title="例"
+# /path/to/target.rb を実行
+proc {}.source_location            # => ["/path/to/target.rb", 1]
+proc {}.source_location            # => ["/path/to/target.rb", 2]
+p (eval "proc {}").source_location # => ["(eval)", 1]
+p method(:p).to_proc.source_location # => nil
+```
+
+- **SEE** [m:Method#source_location]
+
+### def hash -> Integer
+{: since=""}
+
+self のハッシュ値を返します。
+
+#%#noexample
+
+#%since 3.2
+### def parameters(lambda: nil) -> [object]
+#%else
+### def parameters -> [object]
+#%end
+Proc オブジェクトの引数の情報を返します。
+
+Proc オブジェクトが引数を取らなければ空の配列を返します。引数を取る場合は、配列の配列を返し、各配列の要素は引数の種類に対応した以下のような Symbol と、引数名を表す Symbol の 2 要素です。
+
+- **`:req`**:
+  必須の引数
+- **`:opt`**:
+  デフォルト値が指定されたオプショナルな引数
+- **`:rest`**:
+  * で指定された残りすべての引数
+- **`:keyreq`**:
+  必須のキーワード引数
+- **`:key`**:
+  デフォルト値が指定されたオプショナルなキーワード引数
+- **`:keyrest`**:
+  ** で指定された残りのキーワード引数
+- **`:block`**:
+  & で指定されたブロック引数
+
+#%since 3.2
+- **param** `lambda` -- true なら lambda として扱ったとき、false なら lambda ではない Proc として
+              扱ったときの引数の情報を返します。
+#%end
+
+分割代入を使った `|(a, b)|` のように引数名を持たない引数の場合は、引数の種類を表す
+Symbol だけの 1 要素の配列になります。
+#%since 4.0
+これは必須の引数でもオプショナルな引数でも同様です。
+#%else
+ただし、オプショナルな引数の場合は引数名が nil の 2 要素の配列になります。
+#%end
+
+```ruby title="引数名を持たない引数の例"
+p lambda { |(a, b)| }.parameters  # => [[:req]]
+#%since 4.0
+p proc { |(a, b)| }.parameters    # => [[:opt]]
+p proc { |x, (a, b)| }.parameters # => [[:opt, :x], [:opt]]
+#%else
+p proc { |(a, b)| }.parameters    # => [[:opt, nil]]
+p proc { |x, (a, b)| }.parameters # => [[:opt, :x], [:opt, nil]]
+#%end
+```
+
+  ```ruby title="例"
+  prc = lambda{|x, y=42, *other, k_x:, k_y: 42, **k_other, &b|}
+  prc.parameters # => [[:req, :x], [:opt, :y], [:rest, :other], [:keyreq, :k_x], [:key, :k_y], [:keyrest, :k_other], [:block, :b]]
+  ```
+
+#%since 3.2
+
+```ruby title="lambda: の例"
+prc = proc{|x, y=42, *other|}
+p prc.parameters  # => [[:opt, :x], [:opt, :y], [:rest, :other]]
+prc = lambda{|x, y=42, *other|}
+p prc.parameters  # => [[:req, :x], [:opt, :y], [:rest, :other]]
+prc = proc{|x, y=42, *other|}
+p prc.parameters(lambda: true)  # => [[:req, :x], [:opt, :y], [:rest, :other]]
+prc = lambda{|x, y=42, *other|}
+p prc.parameters(lambda: false) # => [[:opt, :x], [:opt, :y], [:rest, :other]]
+```
+
+#%end
+
+- **SEE** [m:Method#parameters], [m:UnboundMethod#parameters]
+
+### def ruby2_keywords -> proc
+
+self に、通常の引数スプラット(`*args`)を通してキーワード引数を透過させるためのフラグを設定し、self を返します。引数スプラットは受け取るものの、明示的なキーワード引数やキーワードスプラット(`**kwargs`)は受け取らない Proc に対してだけ使ってください。
+
+フラグを設定した Proc がキーワード引数付きで呼び出されると、末尾の Hash 引数に特別なフラグが設定されます。その Hash が別のメソッド呼び出しの引数スプラットの末尾要素として渡され、かつその呼び出しが明示的なキーワード引数やキーワードスプラットを含まない場合、末尾要素はキーワード引数として解釈されます。つまり、キーワード引数がこの Proc を経由してほかのメソッドへ渡されるようになります。
+
+キーワード引数をほかのメソッドに委譲する Proc に対して、Ruby 2.7 より前のバージョンとの後方互換性のためだけに使ってください。
+
+このメソッドは後方互換性のためだけに存在するので、いずれ削除される可能性があります。Ruby 2.7 より前のバージョンには存在しないため、例のように呼び出す前に [m:Object#respond_to?] で確認してください。また、このメソッドが削除されたときには、フラグを設定していた Proc はキーワード引数を透過しない挙動に変わることに注意してください。
+
+#%since 4.1
+Ruby 4.1 でこのメソッドは deprecated になり、Ruby 4.4 で削除される予定です。[feature:22205]
+#%end
+
+```ruby
+module Mod
+  foo = ->(meth, *args, &block) do
+    send(:"do_#{meth}", *args, &block)
+  end
+  foo.ruby2_keywords if foo.respond_to?(:ruby2_keywords)
+end
+```
+
+- **SEE** [m:Module#ruby2_keywords], [m:Hash.ruby2_keywords_hash]
+
+#%since 4.1
+### def source_range -> Ruby::SourceRange | nil
+
+`self` に対応する [c:Ruby::SourceRange] を返します。
+
+`self` が Ruby で定義されていない(C で実装されている)場合や、ソースパスを持たない場合は nil を返します。
+
+返される `Ruby::SourceRange` には、ソースパス、(可能なら)絶対パス、開始・終了の行番号とバイト単位の桁番号が含まれます。ブロックから作られた `Proc` の範囲は `{` または `do` から始まります。
+
+```ruby title="例"
+# /path/to/target.rb を実行
+pr = proc { 42 }
+range = pr.source_range
+p range.path         # => "/path/to/target.rb"
+p range.start_line   # => 2
+p range.start_column # => 10
+
+p method(:p).to_proc.source_range # => nil
+```
+
+- **SEE** [m:Proc#source_location], [m:Proc#syntax_tree]
+
+### def syntax_tree -> Ruby::Prism::Node | RubyVM::AbstractSyntaxTree::Node | nil
+
+`self` のコンパイル元になった抽象構文木(AST)のノードを、コンパイルに使ったのと同じパーサでソースを再度パースし直すことで返します。
+
+ブロックから作られた `Proc` では、ブロック自身のノードではなく、そのブロックを持つ外側のノード(ブロック付きのメソッド呼び出しなど)を返します。
+
+ノードを確実に取得できない場合に nil を返す条件については [m:RubyVM::InstructionSequence#syntax_tree] を参照してください。
+
+このメソッドは実験的なもので、予告なく変更される可能性があります。
+
+```ruby title="例"
+node = -> { 42 }.syntax_tree
+p node.is_a?(Ruby::Prism::LambdaNode) # => true
+
+node = proc { 42 }.syntax_tree
+p node.is_a?(Ruby::Prism::CallNode) # => true
+```
+
+- **SEE** [m:Proc#source_range], [m:RubyVM::InstructionSequence#syntax_tree]
+
+### def refined(*modules) -> Proc
+
+`self` と同じように振る舞いつつ、本体の中で `modules` の各モジュールによって有効化される refinement が効く新しい `Proc` を返します。
+
+`self` は変更されません。
+
+`modules` を 1 つも指定しなかった場合は `self` を返します。
+
+このメソッドの呼び出しを連鎖させた場合、指定したすべてのモジュールが指定した順序で有効になります。そのため、後の呼び出しで有効にした refinement が優先されます。
+
+refinement は本体全体で有効で、本体の中でネストしたブロックや、本体の中で `def` で定義したメソッドにも及びます。`using` の効く範囲の中で `def` したメソッドと同様に、そのようなメソッドは後で呼び出されたときも refinement を保持し続けます。
+
+返された `Proc` の refinement の集合は生成時に固定されます。その本体の中で `using` を呼び出すと [c:RuntimeError] が発生します。
+
+返された `Proc` を実行するには、`self` に影響を与えずに refinement を通してメソッドを解決できるように、そのブロックとネストしたすべてのブロックの命令シーケンスのコピーが必要です。コピーは返された `Proc` が初めて呼び出されたときに作られ、同じブロックと同じモジュールの組み合わせ(1 回の呼び出しでも連鎖した呼び出しでも)に対してキャッシュされて再利用されます。一度も呼び出されない `Proc` はコピーされません。そのため refinement を適用すると、`Proc` を実行した時点でブロックの大きさにおおむね比例してメモリ使用量が増えます。
+
+- **param** `modules` -- 有効にする refinement を定義した [c:Module] を任意個指定します。
+- **raise** `TypeError` -- `modules` に [c:Module] 以外を指定した場合に発生します。
+- **raise** `ArgumentError` -- `self` が Ruby のブロックから作られた `Proc` でない場合(C 関数・[c:Symbol]・[c:Method] から変換された `Proc` など)に発生します。
+
+```ruby title="例"
+module StringRefinement
+  refine String do
+    def shout = upcase + "!"
+  end
+end
+
+original = ->(s) { s.shout }
+refined_proc = original.refined(StringRefinement)
+p refined_proc.call("hi") # => "HI!"
+original.call("hi")       # ~> NoMethodError
+```
+
+- **SEE** [m:Module#refine], [m:main.using]
+
+#%end
+

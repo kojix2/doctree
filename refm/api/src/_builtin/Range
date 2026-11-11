@@ -1,5 +1,4 @@
 = class Range < Object
-
 include Enumerable
 
 範囲オブジェクトのクラス。
@@ -106,7 +105,7 @@ range.first     # => 1
 range.first = 1 # => NoMethodError
 #@end
 
-#@since 3.0.0
+#@since 3.0
 また、Ruby 3.0.0 からすべての Range オブジェクトは freeze されるようになりました。
 #@samplecode
 p (1..10).frozen?
@@ -234,7 +233,7 @@ end
 
 しかし、2.6 以降では、(文字列を除いて) [[m:Range#cover?]] と同様の処理をするように切り替わりました。
 
-ただし、=== は、[[m:Range#cover?]] のように Range オブジェクトを引数にはとる設計はありません。
+ただし、=== は、[[m:Range#cover?]] のように Range オブジェクトを引数にとる設計はありません。
 
 #@samplecode 例
 require 'date'
@@ -325,6 +324,59 @@ p ('aaaaa'..'zzzzy').cover?('aaaaa'...'zzzzz') # => true
 
 @see [[m:Range#include?]], [[m:Range#===]]
 
+#@since 3.3
+--- overlap?(range) -> bool
+
+self と range に重なりがある場合は true を、そうでない場合は false を返します。
+
+@param range self と重なりがあるかどうかを調べたい Range オブジェクトを指定します。
+
+@raise TypeError 引数に Range でないオブジェクトを指定した場合に発生します。
+
+@see [[m:Range#cover?]]
+
+#@samplecode 例
+(0..2).overlap?(1..3)  #=> true
+(0..2).overlap?(3..4)  #=> false
+(0..).overlap?(..0)    #=> true
+(0..).overlap?(...0)   #=> false
+#@end
+
+self の端点と range の端点が比較可能でない（<=> メソッドが nil を返す）場合、false を返します。
+
+#@samplecode 比較可能でない例
+(1..3).overlap?('a'..'d') #=> false
+#@end
+
+self または range が空である場合、false を返します。
+
+ここで、Range が空であるとは、
+
+ * 始端が終端より大きい
+ * [[m:Range#exclude_end?]] が true であり、始端と終端が等しい
+
+のいずれかを満たすことをいいます。
+
+#@samplecode Range が空である例
+(0..2).overlap?(1...1) #=> false
+(1...1).overlap?(0..2) #=> false
+(0..2).overlap?(2..0)  #=> false
+#@end
+
+なお、上記の意味において空であることと、その Range オブジェクトが表す範囲に含まれるオブジェクトが存在しないこととは、同値ではないことに注意してください。
+
+例えば、[[c:Float]] クラスにおいては -Float::INFINITY が最小値であり、-Float::INFINITY より小さい値は存在しません。
+従って、...-Float::INFINITY という Range オブジェクトが表す範囲に含まれるオブジェクトは存在しません。
+
+しかしながら、overlap? メソッドでは、...-Float::INFINITY は上記の「空である」条件を満たさないため、「空ではない」とみなされます。
+そのため、...-Float::INFINITY は ...-Float::INFINITY 自身と重なりがあると判定されます。
+
+#@samplecode 例
+(...-Float::INFINITY).overlap?(...-Float::INFINITY) #=> true
+#@end
+
+#@end
+
 --- begin -> object
 --- first -> object
 
@@ -387,6 +439,30 @@ Range#each は各要素の succ メソッドを使用してイテレーション
 # raises: TypeError: can't iterate from Float
 #@end
 
+#@since 3.3
+--- reverse_each -> Enumerator
+--- reverse_each {|element| ... } -> self
+
+逆順に各要素に対してブロックを評価します。
+
+内部で各要素を保持した配列を作ります。ただし、端点が [[c:Integer]] である場合は、配列を作らないように最適化が行われています。
+
+ブロックを省略した場合は、各要素を逆順に辿る
+[[c:Enumerator]] を返します。
+
+@raise TypeError 終端を持たない範囲オブジェクトに対してこのメソッドを呼んだ場合に発生します。
+
+#@samplecode 例
+(1..3).reverse_each # => #<Enumerator: ...>
+(1..3).reverse_each { |v| p v }
+# => 3
+#    2
+#    1
+(1..).reverse_each { |v| p v } # raises: TypeError: can't iterate from NilClass
+#@end
+
+#@end
+
 --- end -> object
 --- last -> object
 
@@ -446,23 +522,54 @@ Range#each は各要素の succ メソッドを使用してイテレーション
 
 範囲内の要素を s おきに繰り返します。
 
-#@since 2.6.0
+#@since 3.4
+@param s 次のステップへ遷移するたびに加算されるものを指定します。
+#@else
 @param s 各ステップの大きさを数値で指定します。負の数を指定することもできます。
+#@end
 @return ブロックを指定した時は self を返します。
 @return ブロックを指定しなかった時かつ数値の Range の時は [[c:Enumerator::ArithmeticSequence]] を返します。
 @return ブロックを指定しなかったその他の Range の時は [[c:Enumerator]] を返します。(例: String の Range)
-#@else
-@param s 正の整数を指定します。
-@return ブロックつきの時は self を返します。
-@return ブロックなしの時は [[c:Enumerator]] を返します。
-@raise ArgumentError s に 0 または負の数を指定した場合に発生します
-#@end
 
 #@samplecode 例
-("a" .. "f").step(2) {|v| p v}
+(1..10).step(3) {|v| p v}
+# => 1
+#    4
+#    7
+#    10
+
+("a".."f").step(2) {|v| p v}
 # => "a"
 #    "c"
 #    "e"
+
+(10..0).step(-3) {|v| p v}
+# => 10
+#     7
+#     4
+#     1
+#@end
+
+#@since 3.4
+
+非数値の Range では、イテレーションに「要素 + s」を使用します。
+（文字列またはシンボルの Range で s に数値を指定した場合を除きます）
+
+#@samplecode 数値以外の Range に対する例
+# Time の Range は each でイテレートできない
+(Time.utc(2024, 12, 25)...Time.utc(2024, 12, 26)).each { |t| p t }
+# => 'Range#each': can't iterate from Time (TypeError)
+
+# step は使用可能
+(Time.utc(2024, 12, 25)...Time.utc(2024, 12, 26)).step(60*60*6) { |t| p t }
+# => 2024-12-25 00:00:00 UTC
+#    2024-12-25 06:00:00 UTC
+#    2024-12-25 12:00:00 UTC
+#    2024-12-25 18:00:00 UTC
+
+("a"..).step("*").take(3) # => ["a", "a*", "a**"]
+#@end
+
 #@end
 
 --- ==(other)     -> bool
@@ -792,6 +899,22 @@ ary = [0, 100, 100, 100, 200]
 
 --- size -> Integer | Float::INFINITY | nil
 
+#@since 3.4
+範囲内の要素数を返します。
+
+始端が整数でない場合は、始端が succ メソッドを持つ場合は nil を返し、始端が succ メソッドを持たない場合は TypeError が発生します。
+
+@raise TypeError self がイテレート可能でない場合に発生します。
+
+#@samplecode 例
+(10..20).size    # => 11
+("a".."z").size  # => nil
+(1..).size       # => Infinity
+(-Float::INFINITY..Float::INFINITY).size # => can't iterate from Float (TypeError)
+#@end
+
+#@else
+
 範囲内の要素数を返します。始端、終端のいずれかのオブジェクトが
 [[c:Numeric]] のサブクラスのオブジェクトではない場合には nil を返します。
 
@@ -799,5 +922,6 @@ ary = [0, 100, 100, 100, 200]
 (10..20).size    # => 11
 ("a".."z").size  # => nil
 (-Float::INFINITY..Float::INFINITY).size # => Infinity
+#@end
 #@end
 #@end

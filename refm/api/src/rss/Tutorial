@@ -2,8 +2,8 @@
 
 === 注意
 
-RSS ParserはRSS 0.9x/1.0/2.0, Atom 1.0 をサポートしていますが，RSS 0.90
-はサポートしてません．ごめんなさい．
+RSS ParserはRSS 0.9x/1.0/2.0, Atom 1.0 をサポートしていますが、RSS 0.90
+はサポートしてません。ごめんなさい。
 
 RSS のモジュールはそれぞれ、
  * Dublin Core モジュール [[url:http://web.resource.org/rss/1.0/modules/dc/]] 
@@ -12,7 +12,7 @@ RSS のモジュールはそれぞれ、
  * Trackback モジュール [[url:http://madskills.com/public/xml/rss/module/trackback/]]
  * Image モジュール [[url:http://web.resource.org/rss/1.0/modules/image/]]
 をサポートしています。
-ただし，Content モジュールは content:encoded しかサポートしていません．
+ただし、Content モジュールは content:encoded しかサポートしていません。
 
 === パース
 
@@ -23,10 +23,10 @@ RSS::Parser.parse は String の RSSを パースします(使用するXMLパー
  * RSS 0.9x/2.0をパースした場合は [[c:RSS::Rss]] オブジェクト
  * Atom をパースした場合は [[c:RSS::Atom::Feed]] オブジェクト
 をそれぞれ返します。パースした
-String が well formed な XML で無い場合は，
+String が well formed な XML で無い場合は、
 例外 [[c:RSS::NotWellFormedError]] が発生します。well formed な
-XML だが，RSS 0.9x/1.0/2.0, Atom のいずれでもない場合は，nil が
-返ります．
+XML だが、RSS 0.9x/1.0/2.0, Atom のいずれでもない場合は、nil が
+返ります。
 
 例えば、RSS 1.0 をバリデーション付きでパースするには以下のよ
 うにします。ここで、変数 rss_source には RSS 1.0 形式の文
@@ -41,7 +41,7 @@ RSS::Parser.parse の第二引数は省略すると true が指定されたも�
   require 'rss'
   rss = RSS::Parser.parse(rss_source)
 
-最初はバリデーション付きでパースして，valid ではない RSS だった
+最初はバリデーション付きでパースして、valid ではない RSS だった
 場合はバリデーション無しでパースするには以下のように書きます。
 
   require 'rss'
@@ -61,12 +61,12 @@ RSS::Parser.parse の第二引数は省略すると true が指定されたも�
 
 パーサはデフォルトでは知らない要素(仕様書に規定されていない
 要素)を無視します。もし、知らない要素に遭遇した時に例外を発
-生させたければ，RSS::Parser.parse の第三引数に false を指定して
+生させたければ、RSS::Parser.parse の第三引数に false を指定して
 ください。こうすると、パース中に知らない要素に遭遇した時に
 [[c:RSS::UnknownTagError]] 例外が発生します。RSS::UnknownTagError
 クラスは [[c:RSS::InvalidError]] クラスのサブクラスです。
 
-以下のようにすると，より厳密にパースできます。
+以下のようにすると、より厳密にパースできます。
 
   RSS::Parser.parse(rss_source, true, false)
 
@@ -74,12 +74,12 @@ RSS::Parser.parse の第二引数は省略すると true が指定されたも�
 
 フィードをパースすると  [[c:RSS::RDF]], [[c:RSS::RDF::Channel]],
 [[c:RSS::Rss]], [[c:RSS::Atom::Feed]] 等のオブジェクトになります。
-各オブジェクトで子要素オブジェクトにアクセスするために，要素名と
+各オブジェクトで子要素オブジェクトにアクセスするために、要素名と
 同じ名前のアクセサがあります。
 
 ==== リーダ(reader)
 
-rdf:RDF 要素の子要素である channel 要素を参照するには，以下のよう
+rdf:RDF 要素の子要素である channel 要素を参照するには、以下のよう
 にします。
 
   rss = RSS::Parser.parse(rss_source)
@@ -133,9 +133,9 @@ rdf:RDF要素の子要素であるchannel要素を設定するには以下のよ
   rss = RSS::Parser.parse(rss_source)
   rss.channel.about = "http://cozmixng.www.cozmixng.org/"
 
-同名の複数の子要素が存在する場合は少し異なります．要素名の複
-数形でのメソッドで要素の配列を取得して，その配列に対して
-Array#<<やArray#[]=などを用いて要素を設定します．
+同名の複数の子要素が存在する場合は少し異なります。要素名の複
+数形でのメソッドで要素の配列を取得して、その配列に対して
+Array#<<やArray#[]=などを用いて要素を設定します。
 
   rss = RSS::Parser.parse(rss_source)
   item = RSS::RDF::Item.new(rdf_about_value)
@@ -143,18 +143,18 @@ Array#<<やArray#[]=などを用いて要素を設定します．
   rss.items.last == item # => true
 
 注意: item=/set_itemなどはRubyっぽくないので使わないでくださ
-い．
+い。
 
 === 出力
 
-RSS Parserといっているので誤解されがちですが，RSS/Atomを出力する
-こともできます．
+RSS Parserといっているので誤解されがちですが、RSS/Atomを出力する
+こともできます。
 
 ==== 基本
 
-to_sするとRSSまたはAtom形式の文字列を返します．
+to_sするとRSSまたはAtom形式の文字列を返します。
 
-RSS/Atomを出力する流れは以下のようになります．
+RSS/Atomを出力する流れは以下のようになります。
 
   * RSS/Atomオブジェクト（RSS::RDFとかRSS::Rssクラスとか
     RSS::Atom::Feedのオブジェクト）を作成する
@@ -165,20 +165,20 @@ RSS/Atomを出力する流れは以下のようになります．
 
 ==== xml-stylesheet
 
-xml-stylesheetも出力することができます．
+xml-stylesheetも出力できます。
 
 RSSのルート要素（RSS::RDFまたはRSS::Rss）オブジェ
 クトおよびAtomのルート要素（RSS::Atom::Feedまたは
 RSS::Atom::Entry）オブジェクトはxml_stylesheetsという
-名前の配列を持っています．この配列にRSS::XMLStyleSheet
+名前の配列を持っています。この配列にRSS::XMLStyleSheet
 オブジェクトを挿入することでRSS/Atomにxml-stylesheetを
-関連づけることができます．
+関連づけることができます。
 
   rss.xml_stylesheets << RSS::XMLStyleSheet.new(...)
 
 RSS::XMLStyleSheet.newには以下のようなHashまたは
-連想配列を渡します．作成されるRSS::XMLStyleSheetオブジェ
-クトは与えられた引数によって初期化されます．
+連想配列を渡します。作成されるRSS::XMLStyleSheetオブジェ
+クトは与えられた引数によって初期化されます。
 
 Hash:
 
@@ -202,24 +202,24 @@ Hash:
     [:alternate, "..."],
   ]
 
-全てのキーは省略可能です．
+全てのキーは省略可能です。
 
-例えば，xml-stylesheetとしてsample.xslを指定する場合は以下の
-ようにします．
+例えば、xml-stylesheetとしてsample.xslを指定する場合は以下の
+ようにします。
 
   rss.xml_stylesheets << RSS::XMLStyleSheet.new({:href => "sample.xsl"})
 
 本当は{:type => "text/xsl"}も指定しないといけないとこ
-ろですが，拡張子が.xslまたは，.cssの場合は適当に推測してくれ
-るので省略可能です．
+ろですが、拡張子が.xslまたは、.cssの場合は適当に推測してくれ
+るので省略可能です。
 
 ==== RSS/Atomオブジェクトを作る
 
-既存のRSS/Atomをパースせずに，一から新しくRSS/Atomを作成するには
-RSS Makerが便利です．
+既存のRSS/Atomをパースせずに、一から新しくRSS/Atomを作成するには
+RSS Makerが便利です。
 
 
-以下のように使います．
+以下のように使います。
 
   require "rss"
 
@@ -230,14 +230,14 @@ RSS Makerが便利です．
 
 ===== シンプルなRSS
 
-例えば，
+例えば、
 
   * http://example.com/にある
   * Example Siteという説明文を持つ
   * Exampleというサイトを
   * http://example.com/index.rdfという名前のRSS 1.0
 
-を生成するには以下のようにします．
+を生成するには以下のようにします。
 
   require "rss"
 
@@ -248,12 +248,12 @@ RSS Makerが便利です．
     maker.channel.link = "http://example.com/"
   end
 
-もし，
+もし、
 
   * http://example.com/article.htmlにある
   * Sample Articleというタイトルの
 
-エントリを含めたければ以下のようにします．
+エントリを含めたければ以下のようにします。
 
   require "rss"
 
@@ -270,11 +270,11 @@ RSS Makerが便利です．
 
 ===== 更新時刻を追加
 
-もし，先のエントリが
+もし、先のエントリが
 
   * 2004/11/1 10:10
 
-のものならこうします．
+のものならこうします。
 
   require "rss"
 
@@ -299,18 +299,18 @@ RSS Makerが便利です．
 
   item.dc_date = ...
 
-でも構いません．#dc_date=は#date=の単なる別名で
-す．
+でも構いません。#dc_date=は#date=の単なる別名で
+す。
 
 ===== さらにエントリを追加
 
-さらに，
+さらに、
 
   * http://example.com/article2.htmlにある
   * Sample Article2という
   * 2004/11/2 10:10に作成された
 
-エントリを持つなら以下のようにします．
+エントリを持つなら以下のようにします。
 
   require "rss"
 
@@ -335,11 +335,11 @@ RSS Makerが便利です．
 
 ===== エントリを並び替える
 
-もし，更新日が新しい順に並び替えたければ
+もし、更新日が新しい順に並び替えたければ
 
   maker.items.do_sort = true
 
-を追加し，以下のようにします．
+を追加し、以下のようにします。
 
   require "rss"
 
@@ -366,12 +366,12 @@ RSS Makerが便利です．
 
 ===== ロゴの指定
 
-もし，サイトに
+もし、サイトに
 
   * Example Siteという名前の
   * http://example.com/logo.pngというロゴ
 
-がある場合は以下のようにします．
+がある場合は以下のようにします。
 
   require "rss"
 
@@ -401,14 +401,14 @@ RSS Makerが便利です．
 
 ===== 検索ページの指定
 
-もし，
+もし、
 
   * http://example.com/search.cgiに
   * keywordというパラメタ名で検索できる
   * Search Example Siteという名前で
   * Search Example Site's all textという説明付きの
 
-検索用ページがあったら以下のようにします．
+検索用ページがあったら以下のようにします。
 
   require "rss"
 
@@ -443,11 +443,11 @@ RSS Makerが便利です．
 
 ===== XMLスタイルシートの指定
 
-もし，
+もし、
 
   * http://example.com/index.xslにある
 
-xml-stylesheetを追加したい場合は以下のようにします．
+xml-stylesheetを追加したい場合は以下のようにします。
 
   require "rss"
 
@@ -485,8 +485,8 @@ xml-stylesheetを追加したい場合は以下のようにします．
 
 ===== RSS 2.0の生成
 
-もし，RSS 2.0を生成したい場合は以下のように，
-RSS::Maker.makeの第一引数を変更します．
+もし、RSS 2.0を生成したい場合は以下のように、
+RSS::Maker.makeの第一引数を変更します。
 
   require "rss"
 
@@ -524,8 +524,8 @@ RSS::Maker.makeの第一引数を変更します．
 
 ===== RSS 0.91の生成
 
-もし，RSS 0.91を生成したい場合は，RSS 2.0の場合と同様に
-RSS::Maker.make の第一引数を"0.91"に変更します．
+もし、RSS 0.91を生成したい場合は、RSS 2.0の場合と同様に
+RSS::Maker.make の第一引数を"0.91"に変更します。
 
 ただし、RSS 0.91では言語指定が必須なので、言語を指定する必要
 があります。ここでは日本語であると指定します。
@@ -548,8 +548,8 @@ RSS 1.0など、/rdf:RDF/channel/language要素がないフィードの場
 
 ===== Atom 1.0の生成
 
-もし，Atom 1.0を生成したい場合は，RSS 0.91や2.0の場合と同様に
-RSS::Maker.makeの第一引数を"atom"に変更します．
+もし、Atom 1.0を生成したい場合は、RSS 0.91や2.0の場合と同様に
+RSS::Maker.makeの第一引数を"atom"に変更します。
 
   rss = RSS::Maker.make("atom") do |maker|
     ...
@@ -633,7 +633,7 @@ Atom 1.0用の情報を加えたこのスクリプトを最初のRSS 1.0を出
 
 RSS Parserが提供する解決方法はユーザに好みのフィードの種類を
 選んでもらうというものです。例えば、以下のようにしてRSS 1.0
-をRSS 2.0に変換することができます。
+をRSS 2.0に変換できます。
 
   require 'rss'
   rss10 = RSS::Parser.parse(rss10_xml)
@@ -700,7 +700,7 @@ to_feed().to_sではなく、to_xmlを使うことには一長一短がありま
 同じ場合は単にto_sを呼び出すだけです。これにより、同じ形式に
 変換する場合の速度があがります（RSS Makerを作って変換、という
 ことを省略するので当然です）。しかし、ブロックを指定して変換
-後の結果を調整することができません。例えば、以下のようにRSS
+後の結果を調整できません。例えば、以下のようにRSS
 1.0からRSS 2.0に変換する場合はブロックが呼ばれます。
 
   rss10.to_xml("rss2.0") do |maker|
@@ -719,8 +719,8 @@ to_feed().to_sではなく、to_xmlを使うことには一長一短がありま
 
 === サンプル
 
-RSS Parser のサンプルスクリプトをいくつか紹介します．これらの
-スクリプトは sample/ 以下に入っています．
+RSS Parser のサンプルスクリプトをいくつか紹介します。これらの
+スクリプトは sample/ 以下に入っています。
 
 ==== サンプル1 - 項目一覧
 
@@ -823,15 +823,15 @@ RSS::UnknownConversionMethodError例外が発生します。
 最初に現れたDublin Coreモジュールの要素にアクセスするには
 「dc_要素名」というアクセサが用意されています。全ての要素の
 配列にアクセスするには「dc_要素の複数形」（dc_rightsは
-dc_rights_listになります）とします．
+dc_rights_listになります）とします。
 
-複数形でアクセスした場合は「要素の内容を表す文字列」ではなく，
-「要素を表すオブジェクト」の配列が返ります．「要素を表すオブ
+複数形でアクセスした場合は「要素の内容を表す文字列」ではなく、
+「要素を表すオブジェクト」の配列が返ります。「要素を表すオブ
 ジェクト」から「要素の内容を表す文字列」を取得するには
 contentメソッドやその別名であるvalueメソッドを利
-用します．「要素の内容を表す文字列」を設定するには
+用します。「要素の内容を表す文字列」を設定するには
 content=メソッドやその別名であるvalue=メソッドを
-利用します．
+利用します。
 
   rss.channel.dc_title  # => 「要素の内容を表す文字列」
                         # （"My site"など）
@@ -852,7 +852,7 @@ content=メソッドやその別名であるvalue=メソッドを
                         # => true
 
 ちなみにSyndicationモジュールの要素にアクセスするには「sy_要
-素名」というアクセサが，Contentモジュールの要素にアクセスす
+素名」というアクセサが、Contentモジュールの要素にアクセスす
 るには「content_要素名」というアクセサが用意されています。
 
 サンプル1と同じようにパースするRSSはファイルに保存されていて
@@ -902,8 +902,8 @@ itemsにはdc_dateがnilではないものしか含まれていないは
 
 #@# ==== サンプル3 - 複数のRSSをブレンド
 #@#
-#@# TODO: sample/blend.rbを元にしたサンプルを書く．
+#@# TODO: sample/blend.rbを元にしたサンプルを書く。
 
 #@# ==== サンプル4 - フィードを変換する
 #@#
-#@# TODO: sample/convert.rbを元にしたサンプルを書く．
+#@# TODO: sample/convert.rbを元にしたサンプルを書く。

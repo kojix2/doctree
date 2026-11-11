@@ -1,0 +1,282 @@
+---
+library: rexml/document
+include:
+  - Comparable
+---
+# class REXML::Text < REXML::Child
+
+XML のテキストノードを表すクラスです。
+
+注意: Ruby 2.0 までは、バグのため entity_filter の機能は正しく動作しません。
+
+## Class Methods
+
+### def REXML::Text.new(arg, respect_whitespace = false, parent = nil, raw = nil, entity_filter = nil, illegal = REXML::Text::NEEDS_A_SECOND_CHECK)
+
+テキストノードオブジェクトを生成します。
+
+arg でノードの内容を指定します。
+文字列の場合はそれが内容として使われます。
+[c:REXML::Text] オブジェクトの場合はその内容が複製されます。
+
+respect_whitespace に真を指定すると、arg に含まれる空白文字は保存されます。
+偽の場合は空白はまとめられます。
+
+raw は true, false, nil のいずれかを指定し、生成されるテキストノードが
+raw モードであるかどうかを決めます。
+true の場合、そのノードは raw モードであると解釈され、テキストにはエスケープされていないXMLマークアップは含まれていないと仮定し、テキストの内容は変更されません。
+falseの場合、そのノードは raw モードであると解釈され、
+rexml はテキストに含まれているすべての(定義済み)実体をエスケープします
+nilの場合、親ノードが raw モードであるかどうかで
+self が raw モードになるかどうかが決まります。
+arg に REXML::Text オブジェクトを渡した場合は、この値は無視され
+arg が raw モードであるかどうかが使われます。
+
+entity_filter は置き換えたい実体のリストを文字列の配列で指定します。
+これは raw が false のときのみ意味を持ちます。
+entity_filter が nil の場合(デフォルトの場合)、テキストがどのようにエスケープされるかは、そのノードが属する文書([c:REXML::Document])の
+DTD([c:REXML::DocType], [m:REXML::Document#doctype])
+で定義されます。DTD が与えられていない場合は、XMLの規格上以下の実体参照/対応文字がデフォルトで使われます。
+  - &amp; &
+  - &lt; <
+  - &gt; >
+  - &quot; "
+  - &apos; '
+
+illegal は内部用なので使わないでください。
+
+- **param** `arg` -- テキストデータ(文字列)もしくは元データの [c:REXML::Text] オブジェクト
+- **param** `respect_whitespace` -- 空白を保存するかどうかを決める真偽値
+- **param** `parent` -- 親ノード
+- **param** `raw` -- テキストのエスケープの挙動を決める値
+- **param** `entity_filter` -- 置換したい実体の名前の配列
+- **param** `illegal` -- ライブラリ内部用
+- **raise** `RuntimeError` -- テキストがXMLのテキストとして不正な文字を含んでいる場合に発生します。
+
+```ruby title="doctype なしの場合"
+p REXML::Text.new("<&", false, nil, false).to_s  # => "&lt;&amp;"
+p REXML::Text.new("&lt;&amp;", false, nil, false).to_s # => "&amp;lt;&amp;amp;"
+p REXML::Text.new("&lt;&amp;", false, nil, true).to_s # => "&lt;&amp;"
+p REXML::Text.new("<&", false, nil, true).to_s # parse error
+```
+
+```ruby title="doctype があり、実体が宣言されている場合"
+require 'rexml/document'
+doc = REXML::Document.new(<<EOS)
+doctype = REXML::Document.new(<<EOS).doctype
+<!DOCTYPE root [
+<!ENTITY p "foobar publisher">
+<!ENTITY % q "quzz">
+]>
+<root />
+EOS
+p REXML::Text.new("&quzz", false, doc.root, false).to_s # => "&amp;&q;"
+p REXML::Text.new("quzz", false, doc.root, true).to_s # => "quzz"
+```
+
+#%# entity_filter を使う場合
+#%# todo
+
+#%# --- read_with_substitution(input, illegal = nil)
+#%# #@todo
+
+### def REXML::Text.normalize(input, doctype = nil, entity_filter = nil) -> String
+
+input を正規化(すべての entity をエスケープ)したものを返します。
+
+- **param** `input` -- 正規化する文字列
+- **param** `doctype` -- DTD([c:REXML::DocType] オブジェクト)
+- **param** `entity_filter` -- 置換したい実体の名前の配列
+
+#%since 3.4
+### def REXML::Text.unnormalize(string, doctype = nil, filter = nil, illegal = nil, entity_expansion_text_limit: nil) -> String
+#%else
+### def REXML::Text.unnormalize(string, doctype = nil, filter = nil, illegal = nil) -> String
+#%end
+
+string を非正規化(すべての entity をアンエスケープ)したものを返します。
+
+filter でアンエスケープしない実体の実体名を文字列配列で指定します。
+
+- **param** `string` -- 非正規化する文字列
+- **param** `doctype` -- DTD([c:REXML::DocType] オブジェクト)
+- **param** `filter` -- アンエスケープしない実体の実体名(文字列配列)
+- **param** `illegal` -- 内部用。使わないでください。
+#%since 3.4
+- **param** `entity_expansion_text_limit` -- 実体参照の展開による文字列の増分(バイト数)の上限。
+       nil を指定した場合(省略した場合)は [m:REXML::Security.entity_expansion_text_limit] の値を使います
+- **raise** `RuntimeError` -- 実体参照の展開による文字列の増分が `entity_expansion_text_limit` を越えた場合に発生します
+#%else
+- **raise** `RuntimeError` -- 実体参照の展開による文字列の増分が [m:REXML::Security.entity_expansion_text_limit] を越えた場合に発生します
+#%end
+
+```ruby
+require 'rexml/text'
+p REXML::Text.unnormalize("&amp; &foobar; &lt;") # => "& &foobar; <"
+p REXML::Text.unnormalize("&lt; &gt;", nil, ["lt"]) # => "&lt; >"
+```
+
+#%# used internally, 不正な文字が含まれていないかチェックして例外を出す
+#%# #@since 1.9.1
+#%# --- check(string, pattern, doctype)
+#%# #@end
+#%#
+#%# used internally by unnormalize
+#%# #@since 2.0.0
+#%# --- expand(ref, doctype, filter)
+#%# #@end
+#%#
+## Instance Methods
+
+### def raw -> bool
+
+"raw" モードであれば真を返します。
+
+raw モードについては [m:REXML::Text.new] を参考にしてください。
+
+- **SEE** [m:REXML::Text#raw=]
+
+### def raw=(value)
+
+"raw" モードの設定を変更します。
+
+raw モードについては [m:REXML::Text.new] を参考にしてください。
+
+- **param** `value` -- 設定する真偽値
+- **SEE** [m:REXML::Text#raw]
+
+### def node_type -> Symbol
+
+[c:Symbol] :text を返します。
+
+### def empty? -> bool
+
+テキストが空ならば真を返します。
+
+### def clone -> REXML::Text
+
+self を複製します。
+
+#%# buggy
+#%# --- <<(to_append)
+#%# #@todo
+
+### def <=>(other) -> -1 | 0 | 1
+
+テキストの内容を other と比較します。
+
+- **param** `other` -- 比較対象([c:REXML::Text] オブジェクトもしくは文字列)
+
+### def to_s -> String
+
+テキストの内容を正規化(すべての実体をエスケープ)された状態で返します。
+
+つまり返り値は XML のテキストとして妥当です。
+
+結果は [m:REXML::Text.new] で指定した entity_filter を反映しています。
+
+- **SEE** [m:REXML::Text#value]
+
+```ruby
+require 'rexml/document'
+t = REXML::Text.new("< & foobar", false, nil, false)
+p t.to_s # => "&lt; &amp; foobar"
+p t.value # => "< & foobar"
+```
+
+#%# #@since 1.8.3
+#%# --- inspect
+#%# #@todo
+#%# #@end
+
+### def value -> String
+
+テキストの内容を非正規化(すべての実体をアンエスケープ)された状態で返します。
+
+このメソッドの返り値では raw モードや entity_filter は無視されます。
+
+- **SEE** [m:REXML::Text#raw], [m:REXML::Text#to_s]
+
+```ruby
+require 'rexml/document'
+t = REXML::Text.new("< & foobar", false, nil, false)
+p t.to_s # => "&lt; &amp; foobar"
+p t.value # => "< & foobar"
+```
+
+#%# テキストの内容を指定した幅で折り返した文字列を返す。内部用。
+#%# --- wrap(string, width, addnewline = false)
+#%# #@todo
+
+### def value=(val)
+
+テキストの内容を val に変更します。
+
+val には非正規化された(エスケープされていない)文字列を渡さなければなりません。
+
+```ruby
+require 'rexml/document'
+e = REXML::Element.new("a")
+e.add_text("foo")
+e[0].value = "bar"
+p e.to_s # => "<a>bar</a>"
+e[0].value = "<a>"
+p e.to_s # => "<a>&lt;a&gt;</a>"
+```
+
+#%# テキストをインデントした文字列を返す。内部用。
+#%# #@since 1.8.2
+#%# --- indent_text(string, level = 1, style = "\t", indentfirstline = true)
+#%# #@todo
+#%# #@end
+
+#%# obsoleteだし使わない
+#%# --- write(writer, indent = -1, transitive = false, ie_hack = false)
+#%# #@todo
+
+#%# #@since 1.8.2
+#%# --- xpath
+#%# 正しく動かないので使わないでください。
+#%# #@todo
+#%# #@end
+
+#%# --- write_with_substitution(out, input)
+#%# #@todo
+
+### def doctype -> REXML::DocType | nil
+
+テキストノードが属する文書の DTD を返します。
+
+そのような文書([c:REXML::Document])が存在しない、すなわちテキストノードの親ノードを辿っても REXML::Document に到達しない、場合には nil を返します。
+
+- **SEE** [c:REXML::DocType]
+
+#%# 意味は REXML::Child と同じ
+#%# --- parent=
+#%#
+## Constants
+
+#%# Internally used regexps
+#%# --- SPECIALS
+#%# #@todo
+#%#
+#%# --- SUBSTITUTES
+#%# #@todo
+#%#
+#%# --- SLAICEPS
+#%# #@todo
+#%#
+#%# --- SETUTITSBUS
+#%# #@todo
+#%#
+#%# --- ILLEGAL
+#%# #@todo
+#%#
+#%# --- NUMERICENTITY
+#%# #@todo
+#%#
+#%# --- REFERENCE
+#%# #@todo
+#%#
+#%# --- EREFERENCE
+#%# #@todo

@@ -1,0 +1,175 @@
+---
+library: _builtin
+since: "2.6.0"
+---
+# module RubyVM::AbstractSyntaxTree
+
+Ruby のコードをパースして得られる抽象構文木を扱うモジュールです。
+
+抽象構文木は[c:RubyVM::AbstractSyntaxTree::Node]クラスのインスタンスとして表されます。
+
+このモジュールはMRIの抽象構文木の実装の詳細を表します。
+
+このモジュールは実験的であり、安定したAPIではないため、予告なしに変更される可能性があります。
+例えば、子要素の順序は保証されておらず、子要素の数は変更される可能性があります。
+また子要素に名前でアクセスする方法は提供されていません。
+
+もし安定したAPIやMRI以外の実装で抽象構文木を扱いたい場合、
+parser gem (<https://github.com/whitequark/parser>)や
+[c:Ripper]の使用を検討してください。
+もし RubyVM::AbstractSyntaxTree のAPIを安定にしたい場合、[feature:14844] での議論に参加してください。
+
+## Singleton Methods
+
+#%since 3.2
+### def RubyVM::AbstractSyntaxTree.node_id_for_backtrace_location(backtrace_location) -> Integer
+
+引数の [c:Thread::Backtrace::Location] が指すコードの位置に対応するノードの ID を返します。
+
+ID は [m:RubyVM::AbstractSyntaxTree::Node#node_id] と同じ体系の整数で、具体的な値は Ruby のバージョンやパーサによって異なります。
+
+- **param** `backtrace_location` -- [c:Thread::Backtrace::Location] を指定します。
+
+- **raise** `TypeError` -- backtrace_location が [c:Thread::Backtrace::Location] でない場合に発生します。
+
+```ruby title="例"
+loc = caller_locations(0, 1).first
+p RubyVM::AbstractSyntaxTree.node_id_for_backtrace_location(loc) # => 3
+```
+
+- **SEE** [m:RubyVM::AbstractSyntaxTree::Node#node_id]
+#%end
+
+### def RubyVM::AbstractSyntaxTree.of(proc) -> RubyVM::AbstractSyntaxTree::Node
+#%since 3.2
+### def RubyVM::AbstractSyntaxTree.of(proc, keep_script_lines: false, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node
+#%else
+#%since 3.1
+### def RubyVM::AbstractSyntaxTree.of(proc, keep_script_lines: false) -> RubyVM::AbstractSyntaxTree::Node
+#%end
+#%end
+
+引数 proc に渡したProcやメソッドオブジェクトの抽象構文木を返します。
+
+このメソッドはProcやメソッドが定義されたファイルを読み込む必要があるため、
+irbのようなファイルを介さない対話的環境では動作しません。
+
+#%since 3.4
+また、Ruby 3.4 以降でデフォルトになったパーサ(Prism)でコンパイルされたコードに対しては使えません。使う場合は `--parser=parse.y` を付けて Ruby を起動してください。
+#%end
+
+- **param** `proc` -- Procもしくはメソッドオブジェクトを指定します。
+#%since 3.1
+- **param** `keep_script_lines` -- true を指定すると、[m:RubyVM::AbstractSyntaxTree::Node#script_lines] でノードと関連づけられたソースコードのテキストを取得できます。
+#%end
+#%since 3.2
+- **param** `keep_tokens` -- true を指定すると、[m:RubyVM::AbstractSyntaxTree::Node#tokens] が利用できます。
+- **param** `error_tolerant` -- true を指定すると、構文エラーが発生した際にエラー箇所を type が :ERROR であるようなノードに置き換えてツリーを生成します。
+#%end
+#%since 3.4
+- **raise** `RuntimeError` -- Prism でコンパイルされたコードを指定した場合に発生します。
+#%end
+
+```ruby
+pp RubyVM::AbstractSyntaxTree.of(proc {1 + 2})
+# => (SCOPE@2:38-2:45
+#     tbl: []
+#     args: nil
+#     body:
+#       (OPCALL@2:39-2:44 (LIT@2:39-2:40 1) :+
+#          (LIST@2:43-2:44 (LIT@2:43-2:44 2) nil)))
+
+def hello
+  puts "hello, world"
+end
+
+pp RubyVM::AbstractSyntaxTree.of(method(:hello))
+# => (SCOPE@5:0-7:3
+#     tbl: []
+#     args:
+#       (ARGS@5:9-5:9
+#        pre_num: 0
+#        pre_init: nil
+#        opt: nil
+#        first_post: nil
+#        post_num: 0
+#        post_init: nil
+#        rest: nil
+#        kw: nil
+#        kwrest: nil
+#        block: nil)
+#     body:
+#       (FCALL@6:2-6:21 :puts (LIST@6:7-6:21 (STR@6:7-6:21 "hello, world") nil)))
+```
+
+### def RubyVM::AbstractSyntaxTree.parse(string) -> RubyVM::AbstractSyntaxTree::Node
+#%since 3.2
+### def RubyVM::AbstractSyntaxTree.parse(string, keep_script_lines: false, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node
+#%else
+#%since 3.1
+### def RubyVM::AbstractSyntaxTree.parse(string, keep_script_lines: false) -> RubyVM::AbstractSyntaxTree::Node
+#%end
+#%end
+
+文字列を抽象構文木にパースし、その木の根ノードを返します。
+
+- **param** `string` -- パースする対象の Ruby のコードを文字列で指定します。
+#%since 3.1
+- **param** `keep_script_lines` -- true を指定すると、[m:RubyVM::AbstractSyntaxTree::Node#script_lines] でノードと関連づけられたソースコードのテキストを取得できます。
+#%end
+#%since 3.2
+- **param** `keep_tokens` -- true を指定すると、[m:RubyVM::AbstractSyntaxTree::Node#tokens] が利用できます。
+- **param** `error_tolerant` -- true を指定すると、構文エラーが発生した際にエラー箇所を type が :ERROR であるようなノードに置き換えてツリーを生成します。
+#%end
+- **raise** `SyntaxError` -- string が Ruby のコードとして正しくない場合に発生します。
+
+```ruby
+pp RubyVM::AbstractSyntaxTree.parse("x = 1 + 2")
+# => (SCOPE@1:0-1:9
+#     tbl: [:x]
+#     args: nil
+#     body:
+#       (LASGN@1:0-1:9 :x
+#          (OPCALL@1:4-1:9 (LIT@1:4-1:5 1) :+ (LIST@1:8-1:9 (LIT@1:8-1:9 2) nil))))
+#%since 3.2
+pp RubyVM::AbstractSyntaxTree.parse("x = 1; p(x; y=2", error_tolerant: true)
+# =>  (SCOPE@1:0-1:15
+#      tbl: [:x, :y]
+#      args: nil
+#      body: (BLOCK@1:0-1:15 (LASGN@1:0-1:5 :x (LIT@1:4-1:5 1)) (ERROR@1:7-1:11) (LASGN@1:12-1:15 :y (LIT@1:14-1:15 2))))
+#%end
+```
+
+### def RubyVM::AbstractSyntaxTree.parse_file(pathname) -> RubyVM::AbstractSyntaxTree::Node
+#%since 3.2
+### def RubyVM::AbstractSyntaxTree.parse_file(pathname, keep_script_lines: false, error_tolerant: false, keep_tokens: false) -> RubyVM::AbstractSyntaxTree::Node
+#%else
+#%since 3.1
+### def RubyVM::AbstractSyntaxTree.parse_file(pathname, keep_script_lines: false) -> RubyVM::AbstractSyntaxTree::Node
+#%end
+#%end
+
+pathname のファイルを読み込み、その内容を抽象構文木にパースし、その木の根ノードを返します。
+
+- **param** `pathname` -- パースする対象のファイルパスを指定します
+#%since 3.1
+- **param** `keep_script_lines` -- true を指定すると、[m:RubyVM::AbstractSyntaxTree::Node#script_lines] でノードと関連づけられたソースコードのテキストを取得できます。
+#%end
+#%since 3.2
+- **param** `keep_tokens` -- true を指定すると、[m:RubyVM::AbstractSyntaxTree::Node#tokens] が利用できます。
+- **param** `error_tolerant` -- true を指定すると、構文エラーが発生した際にエラー箇所を type が :ERROR であるようなノードに置き換えてツリーを生成します。
+#%end
+- **raise** `SyntaxError` -- pathname から取得された文字列が Ruby のコードとして正しくない場合に発生します。
+
+```ruby
+pp RubyVM::AbstractSyntaxTree.parse_file(__FILE__)
+# => (SCOPE@1:0-1:50
+#     tbl: []
+#     args: nil
+#     body:
+#       (FCALL@1:0-1:50 :pp
+#          (LIST@1:3-1:50
+#             (CALL@1:3-1:50
+#                (COLON2@1:3-1:29 (CONST@1:3-1:9 :RubyVM) :AbstractSyntaxTree)
+#                :parse_file (LIST@1:41-1:49 (STR@1:41-1:49 "") nil)) nil)))
+```

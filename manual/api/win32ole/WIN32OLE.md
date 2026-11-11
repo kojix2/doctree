@@ -1,0 +1,913 @@
+---
+library: win32ole
+---
+# class WIN32OLE < Object
+
+OLEオートメーションサーバをRubyで操作するためのクラスです。
+
+Windowsの多くのアプリケーションやライブラリは、COMと呼ばれるAPI群を利用して他のプログラムから操作できます。WIN32OLEがサポートしているのは、
+COMのAPIのうち、特にインタープリタ用のインターフェイスであるOLEオートメーション（IDispatchインターフェイス）とそれに付随するリフレクション用のインターフェイスです。
+
+これらのインターフェイスをサポートしている代表的なWindowsアプリケーションに、Office、IE、iTunes、Illustratorがあります。また、WMI、WshShellなどのライブラリを利用してWindowsの情報を操作することも可能です。これらのプログラムをOLEオートメーションサーバと呼びます。
+
+WIN32OLEオブジェクトは、OLEオートメーションサーバが提供するメソッドやプロパティ（Rubyの属性に対応）をスクリプトから呼び出す手段を提供します。
+呼び出しには、Rubyのオブジェクトと同様にオブジェクトに続けて「.」とメソッド名、必要であれば引数のリストを記述します。最後の引数にHashを指定した場合は、名前付き引数としてキーにパラメータ名、値に引数を指定できます。
+
+### サンプルコード
+
+```ruby
+require 'win32ole'
+
+excel = WIN32OLE.new('Excel.Application')
+workbook = excel.Workbooks.Open('workbook.xls')
+workbook.PrintOut
+workbook.Close(:SaveChanges => false)
+excel.Quit
+```
+
+なお、OLEオートメーションの仕様ではメソッド名は大文字と小文字を区別しません。そのため、以下のようにOLEオートメーションサーバのメソッド名は小文字で記述しても構いません。
+
+```ruby
+require 'win32ole'
+
+excel = WIN32OLE.new('Excel.Application')
+workbook = excel.workbooks.open('workbook.xls')
+workbook.printout
+workbook.close(:SaveChanges => false)
+excel.quit
+```
+
+### マルチスレッドでの利用制限
+
+注）以下の記述はWIN32OLEの将来のバージョンの仕様を規定するものではありません。
+
+WIN32OLEはシングルスレッドモードでCOMとインターフェイスします。このため、
+Ruby 1.9 以降のRubyのThreadとネイティブスレッドが1対1で対応する実行環境ではスレッドをまたがる呼び出しはエラーとなります。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+Thread.start do
+  workbook = excel.Workbooks.Open('workbook.xls') # => HRESULT error code:0x800401f0
+  workbook.PrintOut
+  workbook.Close(:SaveChanges => false)
+end.join
+excel.Quit
+```
+
+発生するエラーはThreadの実行方法によって
+0x800401f0（CO_E_NOTINITIALIZED）または0x8001010e（RPC_E_WRONG_THREAD）です。
+
+## Class Methods
+
+### def WIN32OLE.create_guid -> String
+
+GUID(グローバル一意識別子：Global Unique Identifier)を生成します。
+
+GUIDは、COMのクラス識別子(CLSID)、インターフェイス識別子(IID)など多数の領域でWindows上のオブジェクトの識別に利用される128ビットの値です。
+
+WIN32OLEが生成するGUIDは以下の形式によるGUIDの文字列表現です。なお00〜
+FFはGUIDの先頭からのバイト位置を示します。これはレジストリのキーとして利用される形式です。
+
+```text
+{33221100-5544-7766-8899-AABBCCDDEEFF}
+```
+
+- **return** -- GUIDの文字列表現を返します。
+
+```ruby
+p WIN32OLE.create_guid # => "{????????-????-????-????-????????????}"
+```
+
+### def WIN32OLE.locale -> Integer
+
+WIN32OLEがオートメーション呼び出し時に設定するロケール識別子(LCID)を取得します。
+
+OLEオートメーションでは、UNIXで利用される"ja_JP"などの国名と言語名を「_」で接続した文字列ではなく、32ビット整数で示します。32ビットの内訳は上位
+16ビットが予約領域で0、下位16ビットが言語ID(LANGID)です。LANGIDは、0〜
+9ビットでプライマリ言語ID、10〜15ビットでサブ言語IDを示します。
+
+ロード時の既定値は[m:WIN32OLE::LOCALE_SYSTEM_DEFAULT]です。
+
+- **return** -- WIN32OLEがオートメーション呼び出し時に設定するロケール識別子
+        (LCID)を返します。
+
+```ruby
+lcid = WIN32OLE.locale
+```
+
+### def WIN32OLE.locale=(lcid)
+
+WIN32OLEがオートメーション呼び出し時に設定するロケール識別子(LCID)を設定します。
+
+OLEオートメーションでは、UNIXで利用される"ja_JP"などの国名と言語名を「_」で接続した文字列ではなく、32ビット整数で示します。32ビットの内訳は上位
+16ビットが予約領域で0、下位16ビットが言語ID(LANGID)です。LANGIDは、0〜
+9ビットでプライマリ言語ID、10〜15ビットでサブ言語IDを示します。
+
+- **param** `lcid` -- 新たに設定するロケール識別子を整数で指定します。
+
+- **raise** `WIN32OLERuntimeError` -- システムにインストールされていないロケールを指定すると発生します。
+
+```ruby
+WIN32OLE.locale = 1033 # set locale English(U.S)
+obj = WIN32OLE_VARIANT.new("$100,000", WIN32OLE::VARIANT::VT_CY)
+```
+
+オブジェクトがサポートしていないロケールを設定した場合、オブジェクトのメソッド呼び出し時にDISP_E_UNKNOWNLCID(HRESULT error code:0x8002000C)や、TYPE_E_INVDATAREAD(HRESULT error code:0x80028018)などを理由としたWIN32OLERuntimeError例外となります。ほとんどすべての場合において、既定値を変更する必要はありません。
+
+### def WIN32OLE.codepage -> Integer
+
+WIN32OLEがOLEオートメーションのインターフェイスに利用するコードページを取得します。
+
+OLEオートメーションに利用する文字列はUnicodeでエンコードします。
+WIN32OLEはここで示されたコードページを利用してRubyのStringとUnicodeの相互変換を行います。
+
+ロード時の既定値はEncoding.default_internal、または
+Encoding.default_internalがnilの場合はEncoding.default_externalによって求めたエンコーディングに対応するコードページです。もし、該当するコードページが見つからない場合は、[m:WIN32OLE::CP_ACP]を利用します。
+
+- **return** -- WIN32OLEがオートメーション呼び出しの文字列変換に利用するコードページを返します。
+
+```ruby
+p WIN32OLE.codepage # => 932 （日本語Windowsの既定値）
+```
+
+### def WIN32OLE.codepage=(cp)
+
+WIN32OLEがOLEオートメーションのインターフェイスに利用するコードページを設定します。
+
+WIN32OLEは、OLEオートメーション呼び出しに利用する文字列のUnicode変換にここで設定したコードページを利用します。通常、WIN32OLEはロード時の
+Encoding.default_internalまたはEncoding.default_externalから適切なコードページを判断し、それを利用します。したがって、当メソッドを呼び出す必要があるのは、WIN32OLEをrequireしたスクリプトと異なるエンコーディングを利用しているスクリプトや、異なるエンコーディングを利用しているファイルから読み込んだ文字列を利用してWIN32OLEを呼び出す場合です。
+
+- **param** `cp` -- コードページを指定します。
+
+```ruby
+WIN32OLE.codepage = WIN32OLE::CP_UTF8
+```
+
+### def WIN32OLE.connect(ole) -> WIN32OLE
+
+現在実行中のOLEオートメーションサーバに接続します。
+
+connectメソッドは、COMのモニカを利用して、現在実行中のOLEオートメーションサーバを検索し、接続します。接続に成功した場合、該当サーバを操作可能なWIN32OLEオブジェクトが返ります。
+
+- **param** `ole` -- 接続対象のサーバを示すPROGID、CLSIDまたはモニカ（別名）を指定します。
+
+- **return** -- ole引数で特定されるWIN32OLEオブジェクトを返します。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+```ruby
+p WIN32OLE.connect('Excel.Application') # => WIN32OLE object which represents running Excel.
+```
+
+- **`PROGID`**:
+  OLEオートメーションサーバを識別するための文字列。通常「ベンダー名.アプリケーション名.インターフェイス名」の形式を取ります。レジストリの
+  HKEY_CLASSES_ROOTの「.」で始まらないキーとして登録されます。
+- **`CLSID`**:
+  OLEオートメーションサーバを含むCOMのクラスを識別するための128ビット
+  GUID。文字列表現は、レジストリのHKEY_CLASSES_ROOT\CLSID下のキーとして登録されます。
+- **モニカ**:
+  モニカは、URIのようにWindows上のリソースを一意に識別するためのオブジェクトのインターフェイスで、文字表現を持ちます。詳細については
+  <http://msdn.microsoft.com/en-us/library/ms691261(v=VS.85).aspx>
+  を参照してください。
+
+### def WIN32OLE.const_load(ole, mod = WIN32OLE) -> ()
+
+OLEオートメーションサーバが保持する定数を読み込み、指定されたモジュールに組み込みます。
+
+OLEオートメーションサーバは、定数をクライアントへ提供できます。
+
+const_loadメソッドはこれらの定数を読み込み、指定したモジュールに組み込むことで参照可能とします。
+
+- **param** `ole` -- 定数を読み込む対象のWIN32OLEオブジェクトまたはタイプライブラリ名（文字列）を指定します。
+
+- **param** `mod` -- 定数を定義する対象のモジュールを指定します。省略時は
+           WIN32OLEに組み込まれます。
+
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+OLEオートメーションの定数は通常、VBのコード規約に準じて、vbConstantsのように小文字で始まります。しかし、Rubyの定数は大文字で開始する規則のため、WIN32OLEによってVbConstantsのように自動的に先頭が大文字化されます。
+
+また、先頭が英字で始まらない定数については、CONSTANTSハッシュに登録されます。この場合、元の定数名がキーとなります。
+
+```ruby
+module EXCEL_CONST
+end
+ 
+excel = WIN32OLE.new('Excel.Application')
+WIN32OLE.const_load(excel, EXCEL_CONST)
+puts EXCEL_CONST::XlTop # => -4160
+puts EXCEL_CONST::CONSTANTS['_xlDialogChartSourceData'] # => 541
+```
+
+```ruby title="モジュール名を省略した例"
+WIN32OLE.const_load(excel)
+puts WIN32OLE::XlTop # => -4160
+```
+
+```ruby title="タイプライブラリ名を指定した例"
+module MSO
+end
+ 
+WIN32OLE.const_load('Microsoft Office 9.0 Object Library', MSO) 
+puts MSO::MsoLineSingle # => 1
+```
+
+### def WIN32OLE.new(server, host=nil) -> WIN32OLE
+
+OLEオートメーションサーバを生成します。
+
+引数で指定したCLSIDまたはPROGIDを持つOLEオートメーションサーバを生成します。生成に成功した場合、該当サーバを操作可能なWIN32OLEオブジェクトが返ります。
+
+CLSIDおよびPROGIDについては[m:WIN32OLE.connect]を参照してください。
+
+- **param** `server` -- OLEオートメーションサーバを示すPROGIDまたはCLSIDを文字列で指定します。
+
+- **param** `host` -- サーバを生成するホストのホスト名またはIPアドレスを文字列で指定します。省略時は現在スクリプトを実行中のホストで生成します。
+
+- **return** -- hostで指定したホスト上のserver引数で指定したWIN32OLEオブジェクトを返します。
+
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+```ruby
+p WIN32OLE.new('Excel.Application') # => Excel OLE Automation WIN32OLE object.
+
+p WIN32OLE.new('{00024500-0000-0000-C000-000000000046}') # => Excel OLE Automation WIN32OLE object.
+```
+
+### def WIN32OLE.ole_free(aWIN32OLE) -> Integer
+
+引数で指定したオブジェクトを解放します。
+
+このメソッドは主にWIN32OLEのデバッグおよびWIN32OLEを利用するミドルウェアの実装のために用意されています。このため、メソッドの内部動作は不定です。COMの仕様とWIN32OLEの内部処理に熟知していない場合は使用しないでください。
+
+- **param** `aWIN32OLE` -- 解放するWIN32OLEオブジェクト。
+
+- **return** -- Releaseの戻り値。COMの仕様上は現在のオブジェクトの参照カウント値を示します。
+
+### def WIN32OLE.ole_reference_count(aWIN32OLE) -> Integer
+
+引数で指定したオブジェクトの現在の参照カウント値を返します。
+
+このメソッドは主にWIN32OLEのデバッグおよびWIN32OLEを利用するミドルウェアの実装のために用意されています。このため、メソッドの内部動作は不定です。COMの仕様とWIN32OLEの内部処理に熟知していない場合は使用しないでください。
+
+- **param** `aWIN32OLE` -- 参照カウント値を求めるWIN32OLEオブジェクト。
+
+- **return** -- AddRef呼び出し後のReleaseの戻り値。COMの仕様上は現在のオブジェクトの参照カウント値を示します。
+
+### def WIN32OLE.ole_show_help(obj, helpcontext = nil) -> ()
+
+WIN32OLEオブジェクトのヘルプファイルを表示します。
+
+Windows標準のヘルプ表示コンポーネントのHHCtrl.OCXを利用して、オブジェクトに関連付けられたヘルプファイル（chmファイル）を表示します。
+
+また、chmファイルのフルパス名を指定して表示させることも可能です。
+
+- **param** `obj` -- [c:WIN32OLE_TYPE]オブジェクトまたは[c:WIN32OLE_METHOD]オブジェクト。直接ヘルプファイルのフルパス名を指定することも可能です。
+
+- **param** `helpcontext` -- obj引数に[c:WIN32OLE_TYPE]オブジェクトまたは
+                  [c:WIN32OLE_METHOD]オブジェクトを指定した場合は、これらのオブジェクトの設定値を利用するため指定不要です。
+                  obj引数にヘルプファイルのフルパス名を設定した場合は
+                  0を指定してください。
+
+- **raise** `RuntimeError` -- オブジェクトが関連するヘルプファイルを持たない場合
+                    (no helpfile of `オブジェクト名`) や、ヘルプファイルがインストールされていない場合 (failed to open
+                    help file `ファイル名`) に通知します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+typeobj = excel.ole_obj_help
+WIN32OLE.ole_show_help(typeobj) if typeobj.helpfile
+```
+
+## Instance Methods
+
+### def [](key...) -> object
+
+オブジェクトのデフォルトプロパティを参照します。
+
+OLEオートメーションにはデフォルトプロパティというプロパティ名を指定せずにアクセスできるプロパティがあります。
+
+WIN32OLEからデフォルトプロパティにアクセスするには、[]内に必要なキーを「,」で区切って記述します。シンボルは文字列として扱います。
+
+なおデフォルトプロパティは記述が省略できるプロパティ名に意味がないため、
+OLEオートメーション規約ではItemと命名することが決められています。
+
+- **param** `key` -- プロパティでアクセスする情報を特定するキーを指定します。プロパティの特定に複数のキーが必要な場合は「,」で区切って列記します。
+
+- **return** -- プロパティ値を返します。
+
+```ruby
+fsys = WIN32OLE.new('Scripting.FileSystemObject')
+p fsys.Drives[:c].FreeSpace # => Cドライブの空き容量
+```
+
+### def []=(key..., value)
+
+オブジェクトのデフォルトプロパティを設定します。
+
+OLEオートメーションにはデフォルトプロパティというプロパティ名を指定せずにアクセスできるプロパティがあります。
+
+WIN32OLEからデフォルトプロパティにアクセスするには、[]内に必要なキーを記述します。
+
+なおデフォルトプロパティは記述が省略できるプロパティ名には意味がありません。このためOLEオートメーション規約では一律にItemと命名することが決められています。
+
+- **param** `key` -- プロパティでアクセスする情報を特定するキーを指定します。プロパティの特定に複数のキーが必要な場合は「,」で区切って列記します。
+
+- **param** `value` -- プロパティに設定する値を指定します。
+
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+```ruby
+dict = WIN32OLE.new('Scripting.Dictionary')
+dict[:a] = 0x41
+dict[:b] = 0x42
+p dict[:a] # => 65
+p dict[:b] # => 66
+```
+
+### def _getproperty(dispid, args, types) -> object
+
+DISPIDとパラメータの型を指定してオブジェクトのプロパティを参照します。
+
+アクセスするプロパティのインターフェイスを事前に知っている場合に、
+DISPIDとパラメータの型を指定してプロパティを参照します。
+
+- **param** `dispid` -- プロパティのDISPID（メソッドを一意に特定する数値）を指定します。
+
+- **param** `args` -- プロパティが引数を取る場合に配列で指定します。引数の順序は最左端の引数のインデックスを0とします。引数が不要な場合は空配列を指定します。
+
+- **param** `types` -- プロパティが引数を取る場合に配列で引数の型を指定します。引数の順序は最左端の引数のインデックスを0とします。型の指定には、[c:WIN32OLE::VARIANT]の定数を利用します。引数が不要な場合は空配列を指定します。
+
+このメソッドはCOMアーリーバインディングを利用することで外部プロセスサーバとのラウンドトリップを減らして処理速度を向上させることを目的としたものです。このため、DLLの形式で型情報（TypeLib）を提供しているサーバに対してはあまり意味を持ちません。
+
+- **return** -- プロパティ値を返します。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+```ruby
+DISPID_CELLS = 238
+include WIN32OLE::VARIANT
+excel = WIN32OLE.new('Excel.Application')
+puts excel._getproperty(558, [], []) # VisibleプロパティのDISPIDは558
+workbook = excel.Workbooks.Add
+sheet = workbook.Worksheets[1]
+sheet._setproperty(DISPID_CELLS, [1, 2, 'hello'], [VT_I2, VT_I2, VT_BSTR])
+puts sheet._getproperty(DISPID_CELLS, [1, 2], [VT_I2, VT_I2]).value  # => 'hello'
+workbook.Close(:SaveChanges => false)
+excel.Quit
+```
+
+DISPIDは[m:WIN32OLE_METHOD#dispid]から取得できます。
+
+- **SEE** [c:WIN32OLE::VARIANT]
+
+### def _invoke(dispid, args, types) -> object | nil
+
+DISPIDとパラメータの型を指定してオブジェクトのメソッドを呼び出します。
+
+呼び出すメソッドのインターフェイスを事前に知っている場合に、DISPIDとパラメータの型を指定してメソッドを呼び出します。
+
+このメソッドは引数の変換方法をプログラマが制御できるようにすることと、
+COMアーリーバインディングを利用して外部プロセスサーバとのラウンドトリップを減らして処理速度を向上させることを目的としたものです。後者の目的については、DLLの形式で型情報（TypeLib）を提供しているサーバに対してはあまり意味を持ちません。そのため、型の高精度な制御が不要な場合は、直接メソッド名を指定したメソッド呼び出しを行うことを、プログラムの可読性の点から推奨します。
+
+- **param** `dispid` -- メソッドのDISPID（メソッドを一意に特定する数値）を指定します。
+
+- **param** `args` -- メソッドの引数を配列で指定します。引数の順序は最左端の引数のインデックスを0とします。引数が不要な場合は空配列を指定します。
+
+- **param** `types` -- メソッドの引数の型を配列で指定します。引数の順序は最左端の引数のインデックスを0とします。型の指定には、
+             [c:WIN32OLE::VARIANT]の定数を利用します。引数が不要な場合は空配列を指定します。
+
+- **return** -- メソッドの返り値。ただし返り値を持たないメソッドの場合はnil。
+
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+excel._invoke(302, [], []) #  DISPID 302は、Quitメソッド
+```
+
+MFCの制約により、バイト配列の型情報は通常
+[m:WIN32OLE::VARIANT::VT_VARIANT]となります。このような場合に、バイト配列を与えるつもりで
+
+```ruby
+include WIN32OLE::VARIANT
+obj.method(DISPID, [[0, 1, 2, 3]], [VT_VARIANT])
+```
+
+のように記述すると、単に32ビット整数（VT_I4）の配列が送られることになり空間効率が低下します。
+
+引数の最終的な型がわかっている場合は、下記の例のように型指定パラメータには実際の型を指定してください。
+
+```ruby
+include WIN32OLE::VARIANT
+obj.method(DISPID, [[0, 1, 2, 3]], [VT_BYREF | VT_ARRAY | VT_UI1])
+```
+
+なお、VB6で作成したCOMコンポーネントのパラメータに配列を与える場合は、
+[m:WIN32OLE::VARIANT::VT_BYREF]の指定が必須です。
+
+DISPIDは[m:WIN32OLE_METHOD#dispid]から取得できます。
+
+- **SEE** [c:WIN32OLE::VARIANT]
+
+### def _setproperty(dispid, args, types) -> ()
+
+DISPIDとパラメータの型を指定してオブジェクトのプロパティを設定します。
+
+アクセスするプロパティのインターフェイスを事前に知っている場合に、
+DISPIDとパラメータの型を指定してプロパティを設定します。
+
+このメソッドはCOMアーリーバインディングを利用することで外部プロセスサーバとのラウンドトリップを減らして処理速度を向上させることを目的としたものです。このため、DLLの形式で型情報（TypeLib）を提供しているサーバに対してはあまり意味を持ちません。
+
+- **param** `dispid` -- プロパティのDISPID（メソッドを一意に特定する数値）を指定します。
+
+- **param** `args` -- 引数を配列で指定します。引数の順序は最左端の引数のインデックスを0とします。プロパティに対する設定値は最右端の要素です。
+
+- **param** `types` -- プロパティの引数の型を配列で指定します。引数の順序は最左端の引数のインデックスを0とします。型の指定には、
+             [c:WIN32OLE::VARIANT]の定数を利用します。
+
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+```ruby
+DISPID_CELLS = 238
+include WIN32OLE::VARIANT
+excel = WIN32OLE.new('Excel.Application')
+puts excel._setproperty(558,      # VisibleプロパティのDISPIDは558
+                       [true], [VT_BOOL])
+workbook = excel.Workbooks.Add
+sheet = workbook.Worksheets[1]
+sheet._setproperty(DISPID_CELLS, [1, 2, 'hello'], [VT_I2, VT_I2, VT_BSTR])
+puts sheet._getproperty(DISPID_CELLS, [1, 2], [VT_I2, VT_I2]).value  # => 'hello'
+workbook.Close(:SaveChanges => false)
+excel.Quit
+```
+
+DISPIDは[m:WIN32OLE_METHOD#dispid]から取得できます。
+
+- **SEE** [c:WIN32OLE::VARIANT]
+
+### def each {|i|...} -> ()
+
+オブジェクトの列挙インターフェイスを呼び出してアイテム単位にブロックを実行します。
+
+OLEオートメーションサーバの中には、コレクション用インターフェイスを持つものがあります。eachメソッドは、このようなオブジェクトの列挙メソッドを呼び出して、アイテム毎のイテレーションを行います。
+
+ブロックにはコレクション内のアイテムが渡されます。
+
+- **raise** `WIN32OLERuntimeError` -- selfが列挙インターフェイスをサポートしていない場合に通知します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+book = excel.workbooks.add
+sheets = book.worksheets(1)
+cells = sheets.cells("A1:A5")
+cells.each do |cell|
+  cell.value = 10
+end
+excel.Quit
+```
+
+### def invoke(name, *args) -> object | nil
+
+メソッド名を指定してオブジェクトのメソッドを呼び出します。
+
+OLEオートメーションサーバのメソッドを動的に呼び出したい場合に利用します。
+
+なお、OLEオートメーションの仕様により、メソッド名の大文字、小文字は区別されません。
+
+- **param** `name` -- メソッド名を文字列またはシンボルで指定します。
+- **param** `args` -- メソッドの引数を指定します。また、最後の引数に[c:Hash]を与えることで、名前付き引数を指定できます。この場合、キーに文字列またはシンボルでパラメータ名、値に引数を指定します。
+- **return** -- メソッドの返り値。ただし返り値を持たないメソッドの場合はnil。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+  excel = WIN32OLE.new('Excel.Application')
+  workbook = excel.workbooks.invoke(:Open, :FileName => 'c:\\users\\public\\test.xml',
+                                           :ReadOnly => true,
+                                           :Password => 'secret')
+  excel.invoke(:Quit)
+
+このリストは、以下の記述と同等です。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+workbook = excel.workbooks.Open(:FileName => 'c:\\users\\public\\test.xml',
+                                :ReadOnly => true,
+                                :Password => 'secret')
+excel.Quit
+```
+
+### def method_missing(id, *args) -> object | nil
+
+[m:WIN32OLE#invoke]メソッドを実行します。
+
+WIN32OLEのインスタンスに対して、このリファレンスに明記されていないメソッドを呼び出した場合、OLEオートメーションサーバのメソッド（プロパティ）呼び出しと解釈します。
+
+- **param** `id` -- メソッド名をシンボルで指定します。
+- **param** `args` -- メソッドの引数を指定します。
+- **return** -- メソッドの返り値。ただし返り値を持たないメソッドの場合はnil。
+- **raise** `RuntimeError` -- idが有効なシンボルではありません。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+WIN32OLEはOLEオートメーションオブジェクトのメソッド呼び出しを
+method_missingを利用して実行します。このためWIN32OLEを継承するクラスを作成してmethod_missingをオーバーライドする場合、superを呼び出してください。
+
+- **SEE** [m:WIN32OLE#invoke]
+
+### def ole_activex_initialize -> nil
+
+ActiveXコントロール用の初期化を行います。
+
+ole_activex_initializeメソッドは、スクリプト内でActiveXコントロールを利用できるように、オブジェクトが持つ永続化データを初期化します。
+
+ActiveXコントロール（OCX）は、主にUI用に利用されるOLEオートメーションサーバです。ActiveXコントロールは、IDEを利用した開発時と、プログラムの実行時の2種類の実行モードを持ちます。これは、開発時の設定を永続化するためです。
+
+幾つかのActiveXコントロールは、上記の動作を前提に組まれているため、実行に先だって永続化データの転送をデータの有無と関係なく要求します。この場合、もし永続化データを初期化しないと、実行時モード状態へ遷移せず、後続のメソッド呼び出しがすべてエラーとなります。
+
+- **raise** `WIN32OLERuntimeError` -- オブジェクトがActiveXコントロールの永続化インターフェイスを持たない場合に通知します。
+
+```text
+obj = WIN32OLE.new("ProgID_or_GUID_of_ActiveX_Control")
+obj.ole_activex_initialize
+obj.method(...)
+```
+
+なお、生成したOLEオートメーションサーバが永続化データの初期化を必要とするActiveXコントロールか、そうでないかを簡単に区別する方法はありません。
+そのため、とりあえず普通にメソッドを呼び出し、その結果
+WIN32OLERuntimeErrorが通知され、メッセージにHRESULT 0x8000ffffと示されている場合にのみ、オブジェクト生成直後に当メソッドを呼び出してみてください。
+
+また、オブジェクトによっては、当メソッドの呼び出しにより後続のデータを要求してハングアップする場合があります。その場合は、Ctrl-Cなどによって実行を中止してください。
+
+### def ole_free -> ()
+
+selfが参照するCOMオブジェクトを解放します。
+
+selfが参照するCOMオブジェクトのIUnknown::Releaseを呼び出すことで、COMオブジェクトを開放します。ole_freeを呼び出した後は、このオブジェクトに対する操作は行えません。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+excel.ole_free  # オブジェクトの解放
+excel.Quit      # => RuntimeError (failed to get Dispatch Interface)
+```
+
+通常は利用されなくなったWIN32OLEオブジェクトはGCのタイミングで自動的に解放されるため、当メソッドを呼び出す必要はありません。Officeのような外部プロセスサーバ呼び出し時に、スクリプト終了後もサーバが解放されない場合に強制的にサーバを終了するために当メソッドを利用できます。ただし、現実には途中で生成される子オブジェクトからの逆参照などがあるため、
+WIN32OLEがIUnknown::Releaseを呼び出してもオブジェクトが解放されるとは限りません。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+workbook = excel.Workbooks.Open('workbook.xls') 
+workbook.Close(:SaveChanges => false)
+workbook.ole_free
+excel.ole_free
+# この時点でExcel.EXEは終了しない
+```
+
+上の例では、excel.Workbooks.Openの行で、excel.Workbooksオブジェクトが生成されています。しかし、後続の処理で該当オブジェクトが解放されていないため、Workbooksオブジェクトによって参照されているexcelオブジェクトは解放されません。それに対して下の例では正しく解放されます。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+books = excel.Workbooks
+workbook = books.Open('workbook.xls')
+books.ole_free
+workbook.Close(:SaveChanges => false)
+workbook.ole_free
+excel.ole_free
+```
+
+### def ole_func_methods -> [WIN32OLE_METHOD]
+
+オブジェクトのファンクション情報を[c:WIN32OLE_METHOD]の配列として返します。
+
+ole_func_methodsメソッドは、OLEオートメーションサーバのメソッドのうちファンクション（何らかの機能的な操作）に属するものを[c:WIN32OLE_METHOD]の配列として返します。
+
+- **return** -- [c:WIN32OLE_METHOD]の配列。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            型情報ライブラリ(TypeLib)が提供されていない場合などに発生します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+excel.visible = true
+excel.ole_func_methods.each do |fun|
+  if fun.name.upcase == 'QUIT'
+    excel._invoke(fun.dispid, [], [])
+    break
+  end
+end
+```
+
+- **SEE** [m:WIN32OLE#ole_methods], [m:WIN32OLE#ole_get_methods],
+     [m:WIN32OLE#ole_put_methods]
+
+### def ole_get_methods -> [WIN32OLE_METHOD]
+
+オブジェクトの参照可能プロパティ情報を[c:WIN32OLE_METHOD]の配列として返します。
+
+ole_get_methodsメソッドは、OLEオートメーションサーバのメソッドのうち読み取り可能なプロパティを[c:WIN32OLE_METHOD]の配列として返します。
+
+- **return** -- [c:WIN32OLE_METHOD]の配列。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            型情報ライブラリ(TypeLib)が提供されていない場合などに発生します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+excel.ole_get_methods.each do |prop|
+  begin
+    puts "#{prop.name}=#{excel._getproperty(prop.dispid, [], [])}"
+  rescue WIN32OLERuntimeError
+    puts "can't read #{prop.name} property"
+  end
+end
+```
+
+- **SEE** [m:WIN32OLE#ole_methods], [m:WIN32OLE#ole_func_methods],
+     [m:WIN32OLE#ole_put_methods]
+
+### def ole_method(method) -> WIN32OLE_METHOD
+### def ole_method_help(method) -> WIN32OLE_METHOD
+
+メソッド名を指定して対応する[c:WIN32OLE_METHOD]オブジェクトを取得します。
+
+OLEオートメーションの仕様により、メソッド名の大文字、小文字は区別されません。
+
+- **param** `method` -- メソッド情報を取り出す対象のメソッド名を文字列で指定します。
+- **return** -- [c:WIN32OLE_METHOD]オブジェクト。
+- **raise** `WIN32OLERuntimeError` -- 指定したメソッド名が未定義あるいは型情報ライブラリ(TypeLib)が提供されていない場合などに発生します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+method = excel.ole_method_help('Quit')
+```
+
+### def ole_methods -> [WIN32OLE_METHOD]
+
+オブジェクトのメソッド情報を[c:WIN32OLE_METHOD]の配列として返します。
+
+ole_methodsメソッドは、OLEオートメーションサーバが提供するすべてのメソッドを[c:WIN32OLE_METHOD]の配列として返します。
+
+- **return** -- [c:WIN32OLE_METHOD]の配列。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            型情報ライブラリ(TypeLib)が提供されていない場合などに発生します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+methods = excel.ole_methods
+```
+
+- **SEE** [m:WIN32OLE#ole_func_methods], [m:WIN32OLE#ole_put_methods]
+
+### def ole_obj_help -> WIN32OLE_TYPE | nil
+### def ole_type -> WIN32OLE_TYPE | nil
+
+[c:WIN32OLE_TYPE]オブジェクトを返します。
+
+[c:WIN32OLE_TYPE]オブジェクトは、WIN32OLEオブジェクトの文書情報と型情報を保持するオブジェクトです。
+
+- **return** -- オブジェクトに関連する[c:WIN32OLE_TYPE]オブジェクトを返します。
+        オブジェクトがドキュメント情報を持たない場合はnilを返します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+tobj = excel.ole_obj_help
+```
+
+- **SEE** [c:WIN32OLE_TYPE]
+
+### def ole_put_methods -> [WIN32OLE_METHOD]
+
+オブジェクトの設定可能プロパティ情報を[c:WIN32OLE_METHOD]の配列として返します。
+
+ole_put_methodsメソッドは、OLEオートメーションサーバのメソッドのうちプロパティ設定メソッドに属するものを[c:WIN32OLE_METHOD]の配列として返します。
+
+- **return** -- [c:WIN32OLE_METHOD]の配列。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            型情報ライブラリ(TypeLib)が提供されていない場合などに発生します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+properties = excel.ole_put_methods
+```
+
+- **SEE** [m:WIN32OLE#ole_methods], [m:WIN32OLE#ole_func_methods],
+     [m:WIN32OLE#ole_get_methods]
+
+### def setproperty(name, val) -> ()
+### def setproperty(name, args..., val) -> ()
+
+オブジェクトのプロパティを設定します。
+
+プロパティ名を指定してOLEオートメーションオブジェクトのプロパティ（Rubyの属性に相当）を設定します。
+
+なお、OLEオートメーションの仕様により、プロパティ名の大文字、小文字は区別されません。
+
+- **param** `name` -- プロパティ名を文字列またはシンボルで指定します。
+- **param** `val` -- プロパティに設定する値を指定します。
+- **param** `args` -- 集合的なプロパティに対する設定項目を特定するための引数を指定します。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            理由はメッセージのHRESULTを調べてください。
+
+OLEオートメーションのプロパティはRubyの属性と異なり、パラメータを取ることができます。
+
+たとえばExcelのWorksheetオブジェクトのCellsプロパティは桁位置と行番号の
+2つのパラメータを取ります。
+
+これはVBでは次のように記述できます。
+
+```text
+sheet.Cells(1, 1) = sheet.Cells(1, 2) ' セルB1の内容をセルA1へ
+```
+
+Rubyでは上記のコードの右辺をVBと同じく「sheet.Cells(1, 2)」のように記述できますが、左辺の記述はできません。
+
+そのため、次の例のようにsetpropertyメソッドを利用して、パラメータ付きプロパティを設定します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+excel.visible = true
+sheet = excel.Workbooks.Add.Worksheets[1]
+sheet.setproperty(:Cells, 1, 2, 32)
+sheet.setproperty(:Cells, 1, 1, sheet.Cells(1, 2))
+```
+
+### def ole_query_interface(iid) -> WIN32OLE
+
+IID（インターフェイスID）を指定してオブジェクトの別のインターフェイスを持つオブジェクトを取得します。
+
+オブジェクトが複数のオートメーション用インターフェイスを持つ場合に、当メソッドを利用して既定のインターフェイスとは異なるインターフェイスを取得します。
+
+- **param** `iid` -- 取得するインターフェイスのIIDを文字列で指定します。
+- **return** -- iidパラメータで指定したインターフェイスを持つWIN32OLEオブジェクト
+- **raise** `WIN32OLERuntimeError` -- 指定したIIDをオブジェクトが持たない場合に通知されます。
+
+```ruby
+ie = WIN32OLE.new('InternetExplorer.Application')
+ie_web_app = ie.ole_query_interface('{0002DF05-0000-0000-C000-000000000046}')
+```
+
+上例のie_web_appは、ieと同じインスタンスとなります。
+
+COMの仕様では1つのインターフェイスについて同じIID問い合わせに対しては常に同一のインターフェイスを返すことが決められています。
+
+このため、正しく実装されたOLEオートメーションサーバでは本メソッドが意味を持つことはありません。というのは、2つ以上の異なるWIN32OLEで操作可能なインターフェイスを持つということは、IID_IDispatch（OLEオートメーションのインターフェイスID）を指定した問い合わせに対して異なるインターフェイスを返すということになるからです。これは、結果的に呼び出し側プログラムがいつでも間違えたインターフェイスを呼び出す可能性を持つということを意味します。当然、それはサーバ実装のバグです。
+
+問題は、C++のvtblアクセスや.NET FrameworkのCOM Interopのために静的型情報が必要となることです。このため、一度あるインターフェイスを返すことに決めた場合、実際に返すインターフェイスが元のインターフェイスを継承していたとしても、ドキュメント上は異なるインターフェイスとして定義しなければ追加のメソッドが呼び出せません。
+
+たとえば、当メソッドの存在理由である
+<http://www.ruby-forum.com/topic/109954>（なお、元のパッチと異なりGUIDの統一フォーマットを利用するように改造されているため、IIDの前後に
+{}が必要です）には、Solutionオブジェクトに対してSolution2オブジェクトの取得を依頼するために、必要ということになっています。実際、Solutionプロパティが返すのは、この場合はSolutionインターフェイスを継承した
+Solution2インターフェイスです。しかし、Solutionプロパティの型情報は
+Solutionインターフェイスを返すことになっているため、静的に型を解決している場合は、追加のメソッドの呼び出しを記述できません。
+
+しかし、WIN32OLEが利用するIDispatchインターフェイスは、メソッド名による動的なメソッド検索が行われます。このため、Solutionオブジェクト（しかしその実態はSolution2オブジェクト）に対してSolution2で追加されたメソッド（たとえばGetProjectTemplate）を指定したとしても正しく呼び出せます。つまり、<http://www.ruby-forum.com/topic/109954>で例示されているようなole_query_interfaceメソッドの呼び出しは不要です。
+
+もし、当メソッドの呼び出しが本当に必要なのであれば、まず、該当するOLEオートメーションサーバの修正を依頼してください。その実装は正しくありません。
+
+正しく実装されたオブジェクトに対して当メソッドを適用すると、結果として、同一オブジェクトの参照カウント値を無駄に増加させることになります。
+
+なお、サポートしているインターフェイスのバージョンを調べたい場合に、以下のような方法で、インターフェイスのバージョンを調べることができます。
+
+```ruby
+def check_solution_version(obj)
+  [['{CDA7305C-78B6-4D9D-90AD-93EBE71F9341}', 4],
+   ['{DF23915F-FDA3-4DD5-9CAA-2E1372C2BB16}', 3],
+   ['{FA238614-FBB1-4314-A7F7-49AE8BB6C6BA}', 2]].each do |iid, ver|
+    begin
+      intf = obj.ole_query_interface(iid)
+      intf.ole_free
+      return ver
+    rescue WIN32OLERuntimeError
+    end
+  end
+  1
+end
+```
+
+しかし、ole_query_interfaceのような特異なメソッドを利用するよりも、
+WIN32OLE.new('VisualStudio.DTE.8.0') のように生成時にバージョン番号（この例では8.0）を指定するほうが良いスタイルです。
+
+また、単に特定のメソッドをサポートしているかどうかを知りたいだけであれば、[m:WIN32OLE#ole_respond_to?]を利用したダックタイピングをしてください。
+
+### def ole_respond_to?(name) -> bool
+
+指定したメソッドをオブジェクトがサポートしているか調べます。
+
+OLEオートメーションサーバが引数で指定した名前のメソッド（プロパティ）をサポートしているかどうかを調べます。
+
+なお、OLEオートメーションの仕様により、メソッド名の大文字、小文字は区別されません。
+
+- **param** `name` -- 調べるメソッド名を文字列またはシンボルで指定します。
+
+- **return** -- nameで指定したメソッドをオブジェクトが提供していれば真を返します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+p excel.ole_respond_to?(:quit) # => true
+p excel.ole_respond_to?(:exit) # => false
+```
+
+### def ole_typelib -> WIN32OLE_TYPELIB
+
+オブジェクトに対応する型情報ライブラリ（TypeLib）を
+[c:WIN32OLE_TYPELIB]として返します。
+
+OLEオートメーションではクラス、インターフェイス、メソッド、引数などの型情報と文書情報を型情報ライブラリとして利用します。型情報ライブラリは独立したファイル（拡張子tlb）の場合もあれば、オブジェクトのバイナリへリソースとして埋め込まれている場合があります。
+
+OLEオートメーションでは型情報ライブラリの提供方法を問わずに統一したインターフェイスでアプリケーションが参照できるように、オブジェクトの形式（ITypeInfoインターフェイス）で提供します。WIN32OLEは、このオブジェクトをラップして[c:WIN32OLE_TYPELIB]として提供します。
+
+- **return** -- オブジェクトに対応する[c:WIN32OLE_TYPELIB]オブジェクト。
+- **raise** `WIN32OLERuntimeError` -- オートメーションサーバの呼び出しに失敗しました。
+                            型情報ライブラリ(TypeLib)が提供されていない場合などに発生します。
+
+```ruby
+excel = WIN32OLE.new('Excel.Application')
+tlib = excel.ole_typelib
+puts tlib.name  # => 'Microsoft Excel 9.0 Object Library'
+```
+
+## Constants
+### const VERSION  -> String
+
+Major.Minor.Patch形式のWIN32OLEのバージョン番号を示す文字列です。
+
+### const ARGV -> [object]
+
+直前のメソッド呼び出しの引数を格納した配列です。
+
+OLEオートメーションでは呼び出し先が引数に対して値を設定できます。しかし、
+Rubyのメソッド引数は値のみを取るため、そのままでは呼び出し先が設定した値を参照できません。このような場合、ARGVを参照することで呼び出し先の設定値を参照できます。
+
+以下のリストは、VBで開発したオブジェクトのメソッド呼び出しを例としています。このメソッド（Accm）は、第1引数で指定した演算を第2引数と第3引数に適用し、結果を第2引数に設定します。
+
+```text
+' VB (OLE Automation server)
+Public Sub Accm(ByVal Operator, ByRef Accumulator, ByVal Operand)
+    If Operator = "*" Then
+        Accmulator = Accmulator * Operand
+    Else If Operator = "+" Then
+        Accmulator = Accmulator + Operand
+    End If
+End Sub
+ 
+# Ruby
+x = 10
+obj.Accm '*', x, 11
+p x               # => 10 …… 呼び出しによって影響を受けない
+p WIN32OLE::ARGV  # => ['*', 110, 11] …… 結果はARGVの対応する引数に反映される
+obj.Accm '+', 10, 11
+p WIN32OLE::ARGV  # => ['+', 21, 11]
+```
+
+直前のメソッド呼び出しが例外となった場合、ARGVの設定内容は呼び出し前の状態が保たれます。つまり、WIN32OLE自身がARGVの内容を消去するのは、メソッド呼び出しに成功した場合のみです。このため最後のメソッド呼び出しが引数にオブジェクトを返すタイプのメソッドだった場合、GCにオブジェクトを回収させるために、呼び出し側でARGVを消去してください。
+
+```text
+' VB (OLE Automation server)
+Public Sub GetInterface(ByRef obj)
+    Set Obj = New OleObject
+End Sub
+
+# Ruby
+obj.GetInterface nil   # 引数の数を合わせるためダミー引数を指定
+WIN32OLE::ARGV.clear   # 通常は、後続のメソッド呼び出しによって消去される
+```
+
+### const CP_ACP -> Integer
+
+Windows既定のANSIコードページ（0）を示します。
+
+### const CP_MACCP -> Integer
+
+Macintoshコードページ（2）を示します。
+
+### const CP_OEMCP -> Integer
+
+OEMコードページ（1）を示します。
+
+### const CP_SYMBOL -> Integer
+
+文字コードの変換にシンボルを利用することを示します（42）。
+
+### const CP_THREAD_ACP -> Integer
+
+現在実行中のスレッドの既定のコードページ（3）を示します。
+
+Windowsのコードページはスレッド毎に異なる値を設定できます。
+
+### const CP_UTF7 -> Integer
+
+文字コードの変換にUTF-7を利用することを示します（65000）。
+
+### const CP_UTF8 -> Integer
+
+文字コードの変換にUTF-8を利用することを示します（65001）。
+
+### const LOCALE_SYSTEM_DEFAULT  -> Integer
+
+システム既定のロケールを示すLCID(0x0800)です。WIN32OLEがオートメーションを利用する場合の既定値です。
+
+### const LOCALE_USER_DEFAULT  -> Integer
+
+ユーザ既定のロケールを示すLCID(0x0400)です。

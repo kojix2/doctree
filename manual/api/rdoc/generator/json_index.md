@@ -1,0 +1,142 @@
+---
+type: library
+include:
+  - RDoc::Text
+require:
+  - json
+---
+他のジェネレータが生成する HTML で検索が行えるように、JSON の検索インデックスを生成するサブライブラリです。
+
+This generator is derived from sdoc by Vladimir Kolesnikov and
+contains verbatim code written by him.
+
+このジェネレータは HTML ジェネレータと一緒に使うために設計されています。:
+
+```ruby
+class RDoc::Generator::Darkfish
+  def initialize options
+    # ...
+    @base_dir = Pathname.pwd.expand_path
+
+    @json_index = RDoc::Generator::JsonIndex.new self, options
+  end
+
+  def generate
+    # ...
+    @json_index.generate
+  end
+end
+```
+
+### インデックスフォーマット
+
+検索用のインデックスは JSON ファイルに出力されます。search_data というグローバル変数に以下のような内容で出力されます。
+
+```javascript
+var search_data = {
+  "index": {
+    "searchIndex":
+      ["a", "b", ...],
+    "longSearchIndex":
+      ["a", "a::b", ...],
+    "info": [
+      ["A", "A", "A.html", "", ""],
+      ["B", "A::B", "A::B.html", "", ""],
+      ...
+    ]
+  }
+}
+```
+
+searchIndex、longSearchIndex、info 中の情報は同じ位置にあるものは同じ要素に関する情報が格納されています。searchIndex フィールドには省略した名前が格納されています。longSearchIndex フィールドには(適切に記載されていれば)完全な名前が格納されています。info フィールドには [名前、完全な名前、パス、パラメータ, 要素に記載されたコメントの断片] が格納されています。
+
+### ライセンス
+
+```text
+Copyright (c) 2009 Vladimir Kolesnikov
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+# class RDoc::Generator::JsonIndex
+
+他のジェネレータが生成する HTML で検索が行えるように、JSON の検索インデックスを生成するクラスです。
+
+## Class Methods
+
+### def RDoc::Generator::JsonIndex.new(parent_generator, options) -> RDoc::Generator::JsonIndex
+
+[c:RDoc::Generator::JsonIndex] オブジェクトを初期化します。
+
+- **param** `parent_generator` -- 親となるジェネレータオブジェクトを指定します。
+                        RDoc::Generator::JsonIndex#class_dir や
+                        #file_dir を決めるのに使用します。
+                        他のジェネレータとは異なり、`RDoc::Store`
+                        オブジェクトではない点に注意してください。
+
+- **param** `options` -- [c:RDoc::Options] オブジェクトを指定します。
+               parent_generator に渡されたものと同じものを指定します。
+
+## Instance Methods
+
+### def generate -> ()
+
+解析した情報を [m:RDoc::Generator::JsonIndex::SEARCH_INDEX_FILE] に出力します。
+
+#%# --- build_index
+#%#
+#%# Builds the JSON index as a Hash.
+#%#
+#%# --- debug_msg(*msg)
+#%#
+#%# Output progress information if debugging is enabled
+#%#
+#%# --- index_classes
+#%#
+#%# Adds classes and modules to the index
+#%#
+#%# --- index_methods
+#%#
+#%# Adds methods to the index
+#%#
+#%# --- index_pages
+#%#
+#%# Adds pages to the index
+#%#
+#%# --- search_string(string)
+#%#
+#%# Removes whitespace and downcases +string+
+
+#%until 4.0
+### def class_dir -> object
+{: since="2.0.0"}
+### def file_dir -> object
+{: since="2.0.0"}
+
+[m:RDoc::Generator::JsonIndex.new] に指定した親ジェネレータ(通常は
+[c:RDoc::Generator::Darkfish])の class_dir、file_dir をそれぞれそのまま返します。
+
+#%end
+
+## Constants
+
+### const SEARCH_INDEX_FILE -> String
+
+検索インデックスのパスを表す文字列です。

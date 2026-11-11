@@ -1,0 +1,1938 @@
+---
+library: _builtin
+include:
+  - Kernel
+---
+# class Object < BasicObject
+
+全てのクラスのスーパークラス。
+オブジェクトの一般的な振舞いを定義します。
+
+このクラスのメソッドは上書きしたり未定義にしない限り、すべてのオブジェクトで使用できます。
+
+## Class Methods
+### def Object.new -> Object
+
+Objectクラスのインスタンスを生成して返します。
+
+```ruby
+some = Object.new
+p some # => #<Object:0x2b696d8>
+```
+
+## Instance Methods
+
+### def ==(other) -> bool
+
+オブジェクトと other が等しければ真を返します。
+
+このメソッドは各クラスの性質に合わせて再定義すべきです。
+多くの場合、オブジェクトの内容が等しければ真を返すように（同値性を判定するように）再定義されることが期待されています。
+
+デフォルトでは equal? と同じオブジェクトの同一性判定になっています。
+
+- **param** `other` -- 比較するオブジェクトです。
+
+```ruby title="例"
+o = Object.new
+p(o.eql?(o)) # => true
+p(o.eql?(Object.new)) # => false
+```
+
+下記の例のように、各クラスの性質に合わせて再定義されることが期待されています。
+
+```ruby title="適切に再定義されている例"
+p("foo" == "bar") # => false
+p("foo" == "foo") # => true
+
+p(4 == 4) # => true
+p(4 == 4.0) # => true
+```
+
+- **SEE** [m:Object#equal?],[m:Object#eql?]
+
+### def <=>(other) -> 0 | nil
+
+self === other である場合に 0 を返します。そうでない場合には nil を返します。
+
+```ruby title="例"
+a = Object.new
+b = Object.new
+p a <=> a # => 0
+p a <=> b # => nil
+```
+
+- **SEE** [m:Object#===]
+
+### def eql?(other) -> bool
+
+オブジェクトと other が等しければ真を返します。[c:Hash] のキー比較をはじめ、[m:Array#uniq] や [c:Set] など、要素の同値性を判定するさまざまな場面で [m:Object#hash] とともに使われます。
+
+このメソッドは各クラスの性質に合わせて再定義すべきです。
+多くの場合、 == と同様に同値性の判定をするように再定義されていますが、適切にキー判定ができるようにより厳しくなっている場合もあります。
+
+デフォルトでは equal? と同じオブジェクトの同一性判定になっています。
+
+このメソッドを再定義した時には [m:Object#hash] メソッドも再定義しなければなりません。
+
+- **param** `other` -- 比較するオブジェクトです。
+
+```ruby
+p("foo".eql?("bar")) # => false
+p("foo".eql?("foo")) # => true
+
+p(4.eql?(4)) # => true
+p(4.eql?(4.0)) # => false
+```
+
+- **SEE** [m:Object#hash],[m:Object#equal?],[m:Object#==],[m:Array#uniq],[c:Set]
+
+### def equal?(other) -> bool
+
+other が self 自身の時、真を返します。
+
+二つのオブジェクトが同一のものかどうか調べる時に使用します。
+このメソッドを再定義してはいけません。
+
+お互いの[m:Object#object_id]が一致するかどうかを調べます。
+
+- **param** `other` -- 比較するオブジェクトです。
+
+```ruby
+p("foo".equal?("bar")) # => false
+p("foo".equal?("foo")) # => false
+
+p(4.equal?(4)) # => true
+p(4.equal?(4.0)) # => false
+
+p(:foo.equal? :foo) # => true
+```
+
+- **SEE** [m:Object#object_id],[m:Object#==],[m:Object#eql?],[c:Symbol]
+
+### def methods(include_inherited = true) -> [Symbol]
+
+そのオブジェクトに対して呼び出せるメソッド名の一覧を返します。
+このメソッドは public メソッドおよび protected メソッドの名前を返します。
+
+ただし特別に、引数が偽の時は [`Object#singleton_methods(false)`](m:Object#singleton_methods) と同じになっています。
+
+- **param** `include_inherited` -- 引数が偽の時は [`Object#singleton_methods(false)`](m:Object#singleton_methods) と同じになります。
+
+```ruby title="例1"
+class Parent
+  private;   def private_parent()   end
+  protected; def protected_parent() end
+  public;    def public_parent()    end
+end
+
+class Foo < Parent
+  private;   def private_foo()   end
+  protected; def protected_foo() end
+  public;    def public_foo()    end
+end
+
+obj = Foo.new
+class <<obj
+    private;   def private_singleton()   end
+    protected; def protected_singleton() end
+    public;    def public_singleton()    end
+end
+
+# あるオブジェクトの応答できるメソッドの一覧を得る。
+p obj.methods(false)
+p obj.public_methods(false)
+p obj.private_methods(false)
+p obj.protected_methods(false)
+
+# 実行結果
+[:protected_singleton, :public_singleton]
+[:public_singleton, :public_foo]
+[:private_singleton, :private_foo]
+[:protected_singleton, :protected_foo]
+```
+
+```ruby title="例2"
+# あるオブジェクトの応答できるメソッドの一覧を得る。
+# 自身のクラスの親クラスのインスタンスメソッドも含めるために true を指定して
+# いるが、Object のインスタンスメソッドは一覧から排除している。
+p obj.methods(true)           - Object.instance_methods(true)
+p obj.public_methods(true)    - Object.public_instance_methods(true)
+p obj.private_methods(true)   - Object.private_instance_methods(true)
+p obj.protected_methods(true) - Object.protected_instance_methods(true)
+
+# 実行結果
+[:protected_singleton, :public_singleton, :protected_foo, :public_foo, :protected_parent, :public_parent]
+[:public_singleton, :public_foo, :public_parent]
+[:private_singleton, :private_foo, :private_parent]
+[:protected_singleton, :protected_foo, :protected_parent]
+```
+
+メソッド名一覧を取得するメソッド同士の対比は次のとおりです。[m:Object#methods] 系はレシーバ自身が応答できるメソッド（特異メソッドを含む）を対象にするのに対し、[m:Module#instance_methods] 系はクラス・モジュールが持つインスタンスメソッド（特異メソッドは含まない）を対象にします。
+
+| メソッド | 対象 | 含まれる可視性 | 特異メソッド |
+| --- | --- | --- | --- |
+| [m:Object#methods] | レシーバ | public, protected | 含む |
+| [m:Object#public_methods] | レシーバ | public | 含む |
+| [m:Object#private_methods] | レシーバ | private | 含む |
+| [m:Object#protected_methods] | レシーバ | protected | 含む |
+| [m:Object#singleton_methods] | レシーバ | public, protected | 特異メソッドのみ |
+| [m:Module#instance_methods] | self のインスタンス | public, protected | 含まない |
+| [m:Module#public_instance_methods] | self のインスタンス | public | 含まない |
+| [m:Module#private_instance_methods] | self のインスタンス | private | 含まない |
+| [m:Module#protected_instance_methods] | self のインスタンス | protected | 含まない |
+
+継承したメソッドを含めるかどうかなどを引数で制御できますが、引数の意味はメソッドごとに異なります（[m:Object#methods] は引数が false のとき特異メソッドのみを返します）。
+詳細は各メソッドの説明を参照してください。
+
+- **SEE** [m:Module#instance_methods],[m:Object#singleton_methods]
+
+### def public_method(name) -> Method
+
+オブジェクトの public メソッド name をオブジェクト化した
+[c:Method] オブジェクトを返します。
+
+- **param** `name` -- メソッド名を [c:Symbol] または [c:String] で指定します。
+- **raise** `NameError` -- 定義されていないメソッド名や、
+       protected メソッド名、 private メソッド名を引数として与えると発生します。
+
+```ruby
+p 1.public_method(:to_int) #=> #<Method: Integer#to_int>
+#%since 3.4
+1.public_method(:p)      #   method 'p' for class 'Integer' is private (NameError)
+#%else
+1.public_method(:p)      #   method `p' for class `Integer' is private (NameError)
+#%end
+```
+
+- **SEE** [m:Object#method],[m:Object#public_send],[m:Module#public_instance_method]
+
+### def public_methods(include_inherited = true) -> [Symbol]
+
+そのオブジェクトが理解できる public メソッド名の一覧を返します。
+
+- **param** `include_inherited` -- 偽となる値を指定すると自身のクラスのスーパークラスで定義されたメソッドを除きます。
+
+#%#noexample 参照先の Object#methodsにサンプルが書かれているため
+
+- **SEE** [m:Module#public_instance_methods],[m:Object#methods],[m:Object#singleton_methods]
+
+### def private_methods(include_inherited = true) -> [Symbol]
+
+そのオブジェクトが理解できる private メソッド名の一覧を返します。
+
+- **param** `include_inherited` -- 偽となる値を指定すると自身のクラスのスーパークラスで定義されたメソッドを除きます。
+
+#%#noexample 参照先の Object#methodsにサンプルが書かれているため
+
+- **SEE** [m:Module#private_instance_methods],[m:Object#methods],[m:Object#singleton_methods]
+
+### def protected_methods(include_inherited = true) -> [Symbol]
+
+そのオブジェクトが理解できる protected メソッド名の一覧を返します。
+
+- **param** `include_inherited` -- 偽となる値を指定すると自身のクラスのスーパークラスで定義されたメソッドを除きます。
+
+#%#noexample 参照先の Object#methodsにサンプルが書かれているため
+
+- **SEE** [m:Module#protected_instance_methods],[m:Object#methods],[m:Object#singleton_methods]
+
+### def singleton_methods(inherited_too = true) -> [Symbol]
+
+そのオブジェクトに対して定義されている特異メソッド名
+(public あるいは protected メソッド) の一覧を返します。
+
+inherited_too が真のときは継承した特異メソッドを含みます。
+継承した特異メソッドとは [m:Object#extend] によって追加された特異メソッドや、
+self がクラスの場合はスーパークラスのクラスメソッド([c:Class]のインスタンスの特異メソッド)などです。
+
+singleton_methods(false) は、[`Object#methods(false)`](m:Object#methods) と同じです。
+
+- **param** `inherited_too` -- 継承した特異メソッドを含める場合は真を、そうでない場合は偽を指定します。
+
+```ruby title="例1"
+Parent = Class.new
+
+class <<Parent
+  private;   def private_class_parent() end
+  protected; def protected_class_parent() end
+  public;    def public_class_parent() end
+end
+
+Foo = Class.new(Parent)
+
+class <<Foo
+  private;   def private_class_foo() end
+  protected; def protected_class_foo() end
+  public;    def public_class_foo() end
+end
+
+module Bar
+  private;   def private_bar()   end
+  protected; def protected_bar() end
+  public;    def public_bar()    end
+end
+
+obj = Foo.new
+class <<obj
+  include Bar
+  private;   def private_self()   end
+  protected; def protected_self() end
+  public;    def public_self()    end
+end
+
+# あるオブジェクトの特異メソッドの一覧を得る。
+p obj.singleton_methods(false)
+p obj.methods(false)
+p Foo.singleton_methods(false)
+
+#実行結果
+
+[:protected_self, :public_self]
+[:protected_self, :public_self]
+[:protected_class_foo, :public_class_foo]
+```
+
+```ruby title="例2"
+# あるオブジェクトの特異メソッドの一覧を得る。
+# 親クラスのクラスメソッドも含まれるよう true を指定したが、
+# Object のクラスメソッドは一覧から排除している。
+
+p obj.singleton_methods(true)
+p Foo.singleton_methods(true) - Object.singleton_methods(true)
+
+#実行結果
+
+[:protected_self, :public_self, :protected_bar, :public_bar]
+[:protected_class_foo, :public_class_foo, :protected_class_parent, :public_class_parent]
+```
+
+- **SEE** [m:Object#methods],[m:Object#extend]
+
+### def to_a -> Array
+{: nomethod}
+
+オブジェクトを配列に変換した結果を返します。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+```ruby
+p( {'a'=>1}.to_a )  # [["a", 1]]
+p ['array'].to_a    # ["array"]
+p nil.to_a          # []
+```
+
+- **SEE** [m:Object#to_ary],[m:Kernel?.Array]
+
+### def to_s -> String
+
+オブジェクトの文字列表現を返します。
+
+[m:Kernel?.print] や [m:Kernel?.sprintf] は文字列以外のオブジェクトが引数に渡された場合このメソッドを使って文字列に変換します。
+
+```ruby
+class Foo
+  def initialize num
+    @num = num
+  end
+end
+it = Foo.new(40)
+
+puts it # => #<Foo:0x2b69110>
+
+class Foo
+  def to_s
+    "Class:Foo Number:#{@num}"
+  end
+end
+
+puts it # => Class:Foo Number:40
+```
+
+- **SEE** [m:Object#to_str],[m:Kernel?.String]
+
+### def to_str -> String
+{: nomethod}
+
+オブジェクトの [c:String] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+このメソッドを定義する条件は、
+- 文字列が使われるすべての場面で代置可能であるような、
+- 文字列そのものとみなせるようなもの
+という厳しいものになっています。
+
+```ruby
+class Foo
+  def to_str
+    'Edition'
+  end
+end
+
+it = Foo.new
+p('Second' + it) # => "SecondEdition"
+```
+
+- **SEE** [m:Object#to_s],[m:Kernel?.String]
+
+### def to_ary -> Array
+{: nomethod}
+
+オブジェクトの [c:Array] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+このメソッドを定義する条件は、
+- 配列が使われるすべての場面で代置可能であるような、
+- 配列そのものとみなせるようなもの
+という厳しいものになっています。
+
+```ruby
+class Foo
+  def to_ary
+    [3,4]
+  end
+end
+
+it = Foo.new
+p([1,2] + it) # => [1, 2, 3, 4]
+```
+
+- **SEE** [m:Object#to_a],[m:Kernel?.Array]
+
+### def to_hash -> Hash
+{: nomethod}
+
+オブジェクトの [c:Hash] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+このメソッドを定義する条件は、
+- ハッシュが使われるすべての場面で代置可能であるような、
+- ハッシュそのものとみなせるようなもの
+という厳しいものになっています。
+
+```ruby
+class Foo
+  def to_hash
+    {'as' => 24}
+  end
+end
+
+it = Foo.new
+#%since 3.4
+p({:as => 12}.merge(it)) # => {"as" => 24, as: 12}
+#%else
+p({:as => 12}.merge(it)) # => {"as"=>24, :as=>12}
+#%end
+```
+
+### def to_int -> Integer
+{: nomethod}
+
+オブジェクトの [c:Integer] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+このメソッドを定義する条件は、
+- 整数が使われるすべての場面で代置可能であるような、
+- 整数そのものとみなせるようなもの
+という厳しいものになっています。
+
+```ruby
+class Foo
+  def to_int
+    1
+  end
+end
+
+ary = [:a, :b, :c]
+p(ary[Foo.new]) # => :b
+```
+
+- **SEE** [m:Kernel?.Integer]
+
+### def to_proc -> Proc
+{: nomethod}
+
+オブジェクトの [c:Proc] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+```ruby
+def doing
+  yield
+end
+
+class Foo
+  def to_proc
+    Proc.new{p 'ok'}
+  end
+end
+
+it = Foo.new
+p doing(&it) # => "ok"
+```
+
+### def to_io -> IO
+{: nomethod}
+
+オブジェクトの [c:IO] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+このメソッドを定義する条件は、
+- IOオブジェクトが使われるすべての場面で代置可能であるような、
+- IOオブジェクトそのものとみなせるようなもの
+という厳しいものになっています。
+
+#%#例
+
+### def to_regexp -> Regexp
+{: nomethod}
+
+オブジェクトの [c:Regexp] への暗黙の変換が必要なときに内部で呼ばれます。
+デフォルトでは定義されていません。
+
+説明のためここに記載してありますが、このメソッドは実際には Object クラスには定義されていません。
+必要に応じてサブクラスで定義すべきものです。
+
+このメソッドを定義する条件は、
+- 正規表現が使われるすべての場面で代置可能であるような、
+- 正規表現そのものとみなせるようなもの
+という厳しいものになっています。
+
+```ruby
+class Foo
+  def to_regexp
+    /[\d]+/
+  end
+end
+
+it = Foo.new
+p Regexp.union(/^at/, it) # => /(?-mix:^at)|(?-mix:[\d]+)/
+```
+
+### def to_enum(method = :each, *args) -> Enumerator
+### def enum_for(method = :each, *args) -> Enumerator
+### def to_enum(method = :each, *args) {|*args| ... }  -> Enumerator
+### def enum_for(method = :each, *args) {|*args| ... } -> Enumerator
+
+[m:Enumerator.new](self, method, *args) を返します。
+
+ブロックを指定した場合は [m:Enumerator#size] がブロックの評価結果を返します。ブロックパラメータは引数 args です。
+
+- **param** `method` -- メソッド名の文字列かシンボルです。
+- **param** `args` -- 呼び出すメソッドに渡される引数です。
+
+```ruby
+str = "xyz"
+
+enum = str.enum_for(:each_byte)
+p(a = enum.map{|b| '%02x' % b }) # => ["78", "79", "7a"]
+
+# protects an array from being modified
+a = [1, 2, 3]
+p(a.to_enum) # => #<Enumerator: [1, 2, 3]:each>
+```
+
+```ruby title="例(ブロックを指定する場合)"
+module Enumerable
+  def repeat(n)
+    raise ArgumentError, "#{n} is negative!" if n < 0
+    unless block_given?
+      # __method__ はここでは :repeat
+      return to_enum(__method__, n) do
+        # size メソッドが nil でなければ size * n を返す。
+        sz = size
+        sz * n if sz
+      end
+    end
+    each do |*val|
+      n.times { yield *val }
+    end
+  end
+end
+
+%i[hello world].repeat(2) { |w| puts w }
+# => 'hello', 'hello', 'world', 'world'
+enum = (1..14).repeat(3)
+# => #<Enumerator: 1..14:repeat(3)>
+p enum.first(4) # => [1, 1, 1, 2]
+p enum.size # => 42
+```
+
+- **SEE** [c:Enumerator], [m:Enumerator#size]
+
+### def tap{|x| ... } -> self
+
+self を引数としてブロックを評価し、self を返します。
+
+メソッドチェインの途中で直ちに操作結果を表示するためにメソッドチェインに "入り込む" ことが、このメソッドの主目的です。
+
+```ruby
+(1..10)                  .tap {|x| puts "original: #{x}" }
+  .to_a                  .tap {|x| puts "array:    #{x}" }
+  .select {|x| x.even? } .tap {|x| puts "evens:    #{x}" }
+  .map {|x| x*x }        .tap {|x| puts "squares:  #{x}" }
+```
+
+- **SEE** [m:Object#yield_self]
+
+### def yield_self {|x| ... } -> object
+### def yield_self            -> Enumerator
+### def then {|x| ... } -> object
+### def then            -> Enumerator
+
+self を引数としてブロックを評価し、ブロックの結果を返します。
+
+```ruby title="例"
+p 3.next.then {|x| x**x }.to_s           # => "256"
+p "my string".yield_self {|s| s.upcase } # => "MY STRING"
+```
+
+値をメソッドチェインのパイプラインに次々と渡すのは良い使い方です。
+
+```ruby title="メソッドチェインのパイプライン"
+require 'open-uri'
+require 'json'
+
+construct_url(arguments).
+  yield_self {|url| URI(url).read }.
+  yield_self {|response| JSON.parse(response) }
+```
+
+ブロックなしで呼び出されたときは Enumerator を返します。
+例えば条件によって値を捨てるのに使えます。
+
+```ruby
+# 条件にあうので何もしない
+p 1.yield_self.detect(&:odd?)          # => 1
+# 条件に合わないので値を捨てる
+p 2.yield_self.detect(&:odd?)          # => nil
+```
+
+- **SEE** [m:Object#tap]
+
+### def object_id -> Integer
+
+各オブジェクトに対して一意な整数を返します。あるオブジェクトに対してどのような整数が割り当てられるかは不定です。
+
+Rubyでは、(Garbage Collectされていない)アクティブなオブジェクト間で重複しない整数(object_id)が各オブジェクトにひとつずつ割り当てられています。このメソッドはその値を返します。
+
+[c:TrueClass], [c:FalseClass], [c:NilClass], [c:Symbol], [c:Integer] クラスのインスタンスなど Immutable（変更不可）なオブジェクトの一部は同じ内容ならば必ず同じ object_id になります。
+
+これは、Immutable ならば複数の場所から参照されても`破壊的操作`による問題が発生しないので、同じ内容のインスタンスを複数生成しないという内部実装が理由です。
+
+```ruby
+p "ruby".object_id # => 60
+p "ruby".object_id # => 80
+
+p [].object_id # => 100
+p [].object_id # => 120
+
+p :ruby.object_id # => 710428
+p :ruby.object_id # => 710428
+
+p 11.object_id # => 23
+p 11.object_id # => 23
+
+p true.object_id # => 20
+p true.object_id # => 20
+```
+
+- **SEE** [m:Object#equal?],[m:BasicObject#__id__],[c:Symbol]
+
+### def hash -> Integer
+
+オブジェクトのハッシュ値を返します。このハッシュ値は、[m:Object#eql?] と合わせて [c:Hash] クラスで、2つのオブジェクトを同一のキーとするか判定するために用いられます。
+
+2つのオブジェクトのハッシュ値が異なるとき、直ちに異なるキーとして判定されます。
+逆に、2つのハッシュ値が同じとき、さらに [m:Object#eql?] での比較により判定されます。
+そのため、同じキーとして判定される状況は [m:Object#eql?] の比較で真となる場合のみであり、このとき前段階としてハッシュ値どうしが等しい必要があります。
+つまり、
+
+```text
+A.eql?(B) ならば A.hash == B.hash
+```
+
+の関係が満たされている必要があります。
+
+ただし、ハッシュのキーとして [c:Integer], [c:Symbol], [c:String] などの特定の組み込みクラスが使われるときは、組込みのハッシュ関数が使用され、hash メソッドは呼ばれません。
+
+hash メソッドを再定義する場合は、一様に分布する任意の整数を返すようにします。
+
+- **return** -- ハッシュ値を返します。Ruby 内部の固定長整数 fixnum に収まらない場合は切り捨てられます。
+
+```ruby
+p self.hash # => 2013505522753096494
+p 0.hash    # => 2647535320520409998
+p 0.0.hash  # => -2975129765814025835
+p nil.hash  # => 2401531420355998067
+
+p "ruby".hash # => 4460896024486900438
+p "ruby".hash # => 4460896024486900438
+p :ruby.hash  # => 3979895509189707770
+p :ruby.hash  # => 3979895509189707770
+```
+
+- **SEE** [m:Object#eql?], [m:Hash#\[\]]
+
+### def ===(other) -> bool
+
+case 式で使用されるメソッドです。[ref:d:spec/control#case] も参照してください。
+
+このメソッドは case 式での振る舞いを考慮して、各クラスの性質に合わせて再定義すべきです。
+
+デフォルトでは内部で [m:Object#==] を呼び出します。
+
+when 節の式をレシーバーとして === を呼び出すことに注意してください。
+
+また [m:Enumerable#grep] でも使用されます。
+
+- **param** `other` -- 比較するオブジェクトです。
+
+```ruby
+age = 12
+# (0..2).===(12), (3..6).===(12), ... が実行される
+result =
+  case age
+  when 0 .. 2
+    "baby"
+  when 3 .. 6
+    "little child"
+  when 7 .. 12
+    "child"
+  when 13 .. 18
+    "youth"
+  else
+    "adult"
+  end
+
+puts result # => "child"
+
+def check arg
+  case arg
+  when /ruby(?!\s*on\s*rails)/i
+    "hit! #{arg}"
+  when String
+    "Instance of String class. But don't hit."
+  else
+    "unknown"
+  end
+end
+
+puts check([]) # => unknown
+puts check("mash-up in Ruby on Rails") # => instance of String class. But not hit...
+puts check("<Ruby's world>") # => hit! <Ruby's world>
+```
+
+- **SEE** [m:Object#==], [m:Range#===], [m:Module#===], [m:Regexp#===], [m:Enumerable#grep]
+
+#%until 3.2
+### def =~(other) -> nil
+
+右辺に正規表現オブジェクトを置いた正規表現マッチ obj =~ /RE/
+をサポートするためのメソッドです。常に nil を返します。
+
+このメソッドは Ruby 2.6 から deprecated です。
+
+意図せずに Array などに対して呼ばれた時にバグの原因になっていたため、代わりに [m:NilClass#=~] が定義されています。
+
+- **param** `other` -- 任意のオブジェクトです。結果に影響しません。
+
+```ruby title="例"
+obj = 'regexp'
+p(obj =~ /re/) # => 0
+
+obj = nil
+p(obj =~ /re/) # => nil
+```
+
+- **SEE** [m:String#=~]
+#%end
+### def !~(other) -> bool
+
+自身が other とマッチしない事を判定します。
+
+self#=~(obj) を反転した結果と同じ結果を返します。
+
+- **param** `other` -- 判定するオブジェクトを指定します。
+
+```ruby title="例"
+obj = 'regexp'
+p (obj !~ /re/) # => false
+
+obj = nil
+p (obj !~ /re/) # => true
+```
+
+### def display(out = $stdout) -> nil
+
+オブジェクトを out に出力します。
+
+以下のように定義されています。
+
+```ruby
+class Object
+  def display(out = $stdout)
+    out.write self
+    nil
+  end
+end
+```
+
+- **param** `out` -- 出力先のIOオブジェクトです。指定しない場合は標準出力に出力されます。
+- **return** -- nil を返します。
+
+```ruby
+p Object.new.display # => #<Object:0xbb0210>
+```
+
+- **SEE** [m:$stdout]
+
+### def extend(*modules) -> self
+
+引数で指定したモジュールのインスタンスメソッドを self の特異メソッドとして追加します。
+
+[m:Module#include] は、クラス(のインスタンス)に機能を追加しますが、extend は、ある特定のオブジェクトだけにモジュールの機能を追加したいときに使用します。
+
+引数に複数のモジュールを指定した場合、最後の引数から逆順に extend を行います。
+
+- **param** `modules` -- モジュールを任意個指定します（クラスは不可）。
+- **return** -- self を返します。
+
+```ruby
+module Foo
+  def a
+    'ok Foo'
+  end
+end
+
+module Bar
+  def b
+    'ok Bar'
+  end
+end
+
+obj = Object.new
+obj.extend Foo, Bar
+p obj.a # => "ok Foo"
+p obj.b # => "ok Bar"
+
+class Klass
+  include Foo
+  extend Bar
+end
+
+p Klass.new.a # => "ok Foo"
+p Klass.b     # => "ok Bar"
+```
+
+extend の機能は、「特異クラスに対する [m:Module#include]」と言い替えることもできます。
+ただしその場合、フック用のメソッドが [m:Module#extended] ではなく [m:Module#included] になるという違いがあります。
+
+```ruby
+# obj.extend Foo, Bar とほぼ同じ
+class << obj
+  include Foo, Bar
+end
+```
+
+- **SEE** [m:Module#extend_object],[m:Module#include],[m:Module#extended]
+
+### def inspect -> String
+
+オブジェクトを人間が読める形式に変換した文字列を返します。
+
+組み込み関数 [m:Kernel?.p] は、このメソッドの結果を使用してオブジェクトを表示します。
+
+```ruby
+p [ 1, 2, 3..4, 'five' ].inspect # => "[1, 2, 3..4, \"five\"]"
+p Time.new.inspect               # => "2008-03-08 19:43:39 +0900"
+```
+
+inspect メソッドをオーバーライドしなかった場合、クラス名とインスタンス変数の名前、値の組を元にした文字列を返します。
+
+```ruby
+class Foo
+end
+p Foo.new.inspect                # => "#<Foo:0x0300c868>"
+
+class Bar
+  def initialize
+    @bar = 1
+  end
+end
+p Bar.new.inspect                # => "#<Bar:0x0300c868 @bar=1>"
+```
+
+#%since 4.0
+inspect をオーバーライドしていない場合、
+instance_variables_to_inspect を定義することで、inspect の出力に含めるインスタンス変数を制御できます。このメソッドは、表示したいインスタンス変数名を
+[c:Symbol] の配列で返すようにします（デフォルトの実装は nil を返し、その場合は全てのインスタンス変数が表示されます）。パスワードなどの機密情報を持つインスタンス変数を inspect の出力（ログなど）に含めたくない場合に利用できます。
+
+```ruby
+class Foo
+  def initialize
+    @a = 1
+    @password = "secret"
+    @b = 2
+  end
+  private def instance_variables_to_inspect = [:@a, :@b]
+end
+p Foo.new.inspect                # => "#<Foo:0x0300c868 @a=1, @b=2>"
+```
+
+#%end
+
+- **SEE** [m:Kernel?.p]
+
+### def instance_variable_get(var) -> object | nil
+
+オブジェクトのインスタンス変数の値を取得して返します。
+
+インスタンス変数が定義されていなければ nil を返します。
+
+- **param** `var` -- インスタンス変数名を文字列か [c:Symbol] で指定します。
+
+```ruby
+class Foo
+  def initialize
+    @foo = 1
+  end
+end
+
+obj = Foo.new
+p obj.instance_variable_get("@foo")     # => 1
+p obj.instance_variable_get(:@foo)      # => 1
+p obj.instance_variable_get(:@bar)      # => nil
+```
+
+- **SEE** [m:Object#instance_variable_set],[m:Object#instance_variables],[m:Object#instance_variable_defined?]
+
+### def instance_variable_set(var, value) -> object
+
+オブジェクトのインスタンス変数 var に値 value を設定します。
+
+インスタンス変数が定義されていなければ新たに定義されます。
+
+- **param** `var` -- インスタンス変数名を文字列か [c:Symbol] で指定します。
+- **param** `value` -- 設定する値です。
+- **return** -- value を返します。
+
+```ruby
+obj = Object.new
+p obj.instance_variable_set("@foo", 1)  # => 1
+p obj.instance_variable_set(:@foo, 2)   # => 2
+p obj.instance_variable_get(:@foo)      # => 2
+```
+
+- **SEE** [m:Object#instance_variable_get],[m:Object#instance_variables],[m:Object#instance_variable_defined?]
+
+### def instance_variables -> [Symbol]
+
+オブジェクトのインスタンス変数名をシンボルの配列として返します。
+
+```ruby
+obj = Object.new
+obj.instance_eval { @foo, @bar = nil }
+p obj.instance_variables
+
+# => [:@foo, :@bar]
+```
+
+- **SEE** [m:Object#instance_variable_get], [m:Kernel?.local_variables], [m:Kernel?.global_variables], [m:Module.constants], [m:Module#constants], [m:Module#class_variables]
+
+### def instance_variable_defined?(var) -> bool
+
+インスタンス変数 var が定義されていたら真を返します。
+
+- **param** `var` -- インスタンス変数名を文字列か [c:Symbol] で指定します。
+
+```ruby
+class Fred
+  def initialize(p1, p2)
+    @a, @b = p1, p2
+  end
+end
+fred = Fred.new('cat', 99)
+p fred.instance_variable_defined?(:@a)    # => true
+p fred.instance_variable_defined?("@b")   # => true
+p fred.instance_variable_defined?("@c")   # => false
+```
+
+- **SEE** [m:Object#instance_variable_get],[m:Object#instance_variable_set],[m:Object#instance_variables]
+
+### def send(name, *args) -> object
+### def send(name, *args) { .... } -> object
+
+オブジェクトのメソッド name を args を引数にして呼び出し、メソッドの実行結果を返します。
+
+ブロック付きで呼ばれたときはブロックもそのまま引き渡します。
+
+send が再定義された場合に備えて別名 `__send__` も用意されており、ライブラリではこちらを使うべきです。また
+`__send__` は再定義すべきではありません。
+
+send, `__send__` は、メソッドの呼び出し制限にかかわらず任意のメソッドを呼び出せます。
+[ref:d:spec/def#limit] も参照してください。
+
+public メソッドだけ呼び出せれば良い場合は
+[m:Object#public_send] を使う方が良いでしょう。
+
+- **param** `name` -- 文字列か[c:Symbol] で指定するメソッド名です。
+- **param** `args` -- 呼び出すメソッドに渡す引数です。
+
+```ruby
+p -365.send(:abs) # => 365
+p "ruby".send(:sub,/./,"R") # => "Ruby"
+
+
+class Foo
+  def foo() "foo" end
+  def bar() "bar" end
+  def baz() "baz" end
+end
+
+# 任意のキーとメソッド(の名前)の関係をハッシュに保持しておく
+# レシーバの情報がここにはないことに注意
+methods = {1 => :foo,
+  2 => :bar,
+  3 => :baz}
+
+# キーを使って関連するメソッドを呼び出す
+# レシーバは任意(Foo クラスのインスタンスである必要もない)
+p Foo.new.send(methods[1])      # => "foo"
+p Foo.new.send(methods[2])      # => "bar"
+p Foo.new.send(methods[3])      # => "baz"
+```
+
+- **SEE** [m:Object#public_send], [m:BasicObject#__send__], [m:Object#method], [m:Kernel?.eval], [c:Proc], [c:Method]
+
+### def public_send(name, *args) -> object
+### def public_send(name, *args) { .... } -> object
+
+オブジェクトの public メソッド name を args を引数にして呼び出し、メソッドの実行結果を返します。
+
+ブロック付きで呼ばれたときはブロックもそのまま引き渡します。
+
+```ruby
+p 1.public_send(:+, 2)  # => 3
+```
+
+- **param** `name` -- 文字列か[c:Symbol] で指定するメソッド名です。
+
+- **param** `args` -- 呼び出すメソッドに渡す引数です。
+
+- **raise** `ArgumentError` -- name を指定しなかった場合に発生します。
+
+- **raise** `NoMethodError` -- protected メソッドや private メソッドに対して実行した場合に発生します。
+
+```ruby
+1.public_send(:puts, "hello")  # ~> NoMethodError
+```
+
+- **SEE** [m:BasicObject#__send__], [m:Object#send]
+
+### def _dump(limit) -> String
+
+[m:Marshal?.dump] において出力するオブジェクトがメソッド _dump
+を定義している場合には、そのメソッドの結果が書き出されます。
+
+Ruby 1.8 以降では[m:Object#marshal_dump], [m:Object#marshal_load]の使用が推奨されます。 Marshal.dump するオブジェクトが _dump と marshal_dump の両方のメソッドを持つ場合は marshal_dump が優先されます。
+
+メソッド _dump は引数として再帰を制限するレベル limit を受け取り、オブジェクトを文字列化したものを返します。
+
+インスタンスがメソッド _dump を持つクラスは必ず同じフォーマットを読み戻すクラスメソッド _load を定義する必要があります。_load はオブジェクトを表現した文字列を受け取り、それをオブジェクトに戻したものを返す必要があります。
+
+- **param** `limit` -- 再帰の制限レベルを表す整数です。
+- **return** -- オブジェクトを文字列化したものを返すように定義すべきです。
+
+```ruby
+class Foo
+  def initialize(arg)
+    @foo = arg
+  end
+  def _dump(limit)
+    Marshal.dump(@foo, limit)
+  end
+  def self._load(obj)
+    p obj
+    Foo.new(Marshal.load(obj))
+  end
+end
+foo = Foo.new(['foo', 'bar'])
+p foo                      # => #<Foo:0xbaf234 @foo=["foo", "bar"]>
+dms = Marshal.dump(foo)
+p dms                      # => "\004\bu:\bFoo\023\004\b[\a\"\bfoo\"\bbar"
+result = Marshal.load(dms) # => "\004\b[\a\"\bfoo\"\bbar" # self._load の引数
+p result                   # => #<Foo:0xbaf07c @foo=["foo", "bar"]>
+```
+
+インスタンス変数の情報は普通マーシャルデータに含まれるので、上例のように _dump を定義する必要はありません(ただし _dump を定義するとインスタンス変数の情報は dump されなくなります)。
+_dump/_load はより高度な制御を行いたい場合や拡張ライブラリで定義したクラスのインスタンスがインスタンス変数以外に情報を保持する場合に利用します。(例えば、クラス [c:Time] は、_dump/_load を定義しています)
+
+- **SEE** [m:Object#marshal_dump], [m:Object#marshal_load], [m:Class#_load]
+
+### def marshal_dump -> object
+
+[m:Marshal?.dump] を制御するメソッドです。
+
+Marshal.dump(some) において、出力するオブジェクト some がメソッド marshal_dump を持つ場合には、その返り値がダンプされたものが Marshal.dump(some) の返り値となります。
+
+marshal_dump/marshal_load の仕組みは Ruby 1.8 から導入されました。
+これから書くプログラムでは _dump/_load ではなく
+marshal_dump/marshal_load を使うべきです。
+
+- **return** -- 任意のオブジェクトで marshal_load の引数に利用できます。
+
+```ruby
+class Foo
+  def initialize(arg)
+    @foo = arg
+  end
+  def marshal_dump
+    @foo
+  end
+  def marshal_load(obj)
+    p obj
+    @foo = obj
+  end
+end
+foo = Foo.new(['foo', 'bar'])
+p foo                      # => #<Foo:0xbaf3b0 @foo=["foo", "bar"]>
+dms = Marshal.dump(foo)
+p dms                      # => "\004\bU:\bFoo[\a\"\bfoo\"\bbar"
+result = Marshal.load(dms) # => ["foo", "bar"] # marshal_load の引数
+p result                   # => #<Foo:0xbaf2ac @foo=["foo", "bar"]>
+```
+
+インスタンス変数の情報は普通マーシャルデータに含まれるので、上例のように marshal_dump を定義する必要はありません
+(ただし marshal_dump を定義するとインスタンス変数の情報はダンプされなくなるので、marshal_dump/marshal_load で扱う必要があります)。
+marshal_dump/marshal_load はより高度な制御を行いたい場合や拡張ライブラリで定義したクラスのインスタンスがインスタンス変数以外に情報を保持する場合に利用します。
+
+特に、marshal_dump/marshal_load を定義したオブジェクトは特異メソッドが定義されていてもマーシャルできるようになります
+(特異メソッドの情報が自動的に dump されるようになるわけではなく、
+marshal_dump/marshal_load によりそれを実現する余地があるということです)。
+
+- **SEE** [m:Object#marshal_load], [c:Marshal]
+
+### def marshal_load(obj) -> object
+
+[m:Marshal?.load] を制御するメソッドです。
+
+some のダンプ結果（Marshal.dump(some)） をロードする（Marshal.load(Marshal.dump(some))）には some がメソッド marshal_load を持っていなければなりません。
+このとき、marshal_dump の返り値が marshal_load の引数に利用されます。
+marshal_load 時の self は、生成されたばかり（[m:Class#allocate] されたばかり） の状態です。
+
+marshal_dump/marshal_load の仕組みは Ruby 1.8 から導入されました。
+これから書くプログラムでは _dump/_load ではなく
+marshal_dump/marshal_load を使うべきです。
+
+- **param** `obj` -- marshal_dump の返り値のコピーです。
+
+- **return** --   返り値は無視されます。
+
+#%#noexample 参照先の Object#marshal_dump にサンプルが書かれているため
+
+- **SEE** [m:Object#marshal_dump], [c:Marshal]
+
+### def clone(freeze: nil) -> object
+
+オブジェクトの複製を作成して返します。
+
+#%since 3.2
+clone は、オブジェクトの内容に加えて freeze の状態や特異メソッドなどの情報も含めた完全な複製を作成します。
+#%else
+clone は、オブジェクトの内容や taint 情報に加えて freeze の状態や特異メソッドなどの情報も含めた完全な複製を作成します。
+#%end
+
+clone や dup は浅い(shallow)コピーであることに注意してください。後述。
+
+#%since 4.1
+[c:Class] や [c:Module] を複製した場合、複製されたメソッドの中の定数とクラス変数の参照は、Ruby 4.1 からは元のクラスやモジュールを通して解決されます(継承や mix-in と同じ扱いです)。[feature:21981]
+#%else
+[c:Class] や [c:Module] を複製した場合、複製されたメソッドの中の定数とクラス変数の参照は、複製先のクラスやモジュールを通して解決されます。
+#%end
+
+```ruby title="例"
+class Foo
+  X = 1
+  @@cv = :foo
+  def x = X
+  def cv = @@cv
+end
+
+Bar = Foo.clone
+Bar.send(:remove_const, :X)
+Bar.const_set(:X, 2)
+Bar.class_variable_set(:@@cv, :bar)
+
+p Bar::X     # => 2
+#%since 4.1
+p Bar.new.x  # => 1
+p Bar.new.cv # => :foo
+#%else
+p Bar.new.x  # => 2
+p Bar.new.cv # => :bar
+#%end
+p Foo.new.x  # => 1
+```
+
+[c:TrueClass], [c:FalseClass], [c:NilClass], [c:Symbol], そして [c:Numeric] クラスのインスタンスなど一部のオブジェクトは複製ではなくインスタンス自身を返します。
+
+- **param** `freeze` -- true を指定すると freeze されたコピーを返します。
+              false を指定すると freeze されていないコピーを返します。
+              nil を指定すると、レシーバが freeze されていれば freeze されたコピーを、freeze されていなければ freeze されていないコピーを返します。
+- **raise** `ArgumentError` -- [c:TrueClass] などの常に freeze されているオブジェクトの freeze されていないコピーを作成しようとしたときに発生します。
+
+```ruby
+obj = "string"
+#%until 3.2
+obj.taint
+#%end
+def obj.fuga
+end
+obj.freeze
+
+p(obj.equal?(obj))          #=> true
+p(obj == obj)               #=> true
+#%until 3.2
+p(obj.tainted?)             #=> false
+#%end
+p(obj.frozen?)              #=> true
+p(obj.respond_to?(:fuga))   #=> true
+
+obj_c = obj.clone
+
+p(obj.equal?(obj_c))        #=> false
+p(obj == obj_c)             #=> true
+#%until 3.2
+p(obj_c.tainted?)           #=> false
+#%end
+p(obj_c.frozen?)            #=> true
+p(obj_c.respond_to?(:fuga)) #=> true
+```
+
+- **SEE** [m:Object#initialize_copy], [m:Object#initialize_clone], [m:Object#dup]
+
+### 深いコピーと浅いコピー
+
+clone や dup はオブジェクト自身を複製するだけで、オブジェクトの指している先(たとえば配列の要素など)までは複製しません。これを浅いコピー(shallow copy)といいます。
+
+深い(deep)コピーが必要な場合には、
+[c:Marshal]モジュールを利用して
+
+```ruby
+Marshal.load(Marshal.dump(obj))
+```
+
+このように複製を作成する方法があります。ただしMarshal出来ないオブジェクトが含まれている場合には使えません。
+
+```ruby
+obj = ["a","b","c"]
+
+obj_d = obj.dup
+obj_d[0] << "PLUS"
+
+p obj   # => ["aPLUS", "b", "c"]
+p obj_d # => ["aPLUS", "b", "c"]
+
+obj_m = Marshal.load(Marshal.dump(obj))
+obj_m[1] << "PLUS"
+
+p obj   # => ["aPLUS", "b", "c"]
+p obj_m # => ["aPLUS", "bPLUS", "c"]
+```
+
+### def dup -> object
+
+オブジェクトの複製を作成して返します。
+
+#%since 3.2
+dup は、オブジェクトの内容をコピーします。
+#%else
+dup は、オブジェクトの内容と taint 情報をコピーします。
+#%end
+[m:Object#clone] と異なり、freeze の状態や特異メソッドはコピーされません。
+
+浅いコピー・複製の詳細は [m:Object#clone] を参照してください。
+
+[c:Class] や [c:Module] を複製したときの定数・クラス変数の扱いも [m:Object#clone] を参照してください。
+
+```ruby
+obj = "string"
+#%until 3.2
+obj.taint
+#%end
+def obj.fuga
+end
+obj.freeze
+
+p(obj.equal?(obj))          #=> true
+p(obj == obj)               #=> true
+#%until 3.2
+p(obj.tainted?)             #=> false
+#%end
+p(obj.frozen?)              #=> true
+p(obj.respond_to?(:fuga))   #=> true
+
+obj_d = obj.dup
+
+p(obj.equal?(obj_d))        #=> false
+p(obj == obj_d)             #=> true
+#%until 3.2
+p(obj_d.tainted?)           #=> false
+#%end
+p(obj_d.frozen?)            #=> false # clone と異なり freeze はコピーされない
+p(obj_d.respond_to?(:fuga)) #=> false # 特異メソッドもコピーされない
+```
+
+- **SEE** [m:Object#initialize_copy], [m:Object#initialize_dup], [m:Object#clone]
+
+### def freeze -> self
+
+オブジェクトを凍結（内容の変更を禁止）します。
+
+凍結されたオブジェクトの変更は例外 [c:FrozenError] を発生させます。
+いったん凍結されたオブジェクトを元に戻す方法はありません。
+
+凍結されるのはオブジェクトであり、変数ではありません。代入などで変数の指すオブジェクトが変化してしまうことは freeze では防げません。 freeze が防ぐのは、
+`破壊的な操作` と呼ばれるもの一般です。変数への参照自体を凍結したい場合は、グローバル変数なら [m:Kernel?.trace_var] が使えます。
+
+- **return** -- self を返します。
+
+```ruby
+a1 = "foo".freeze
+a1 = "bar"
+p a1 # => "bar"
+
+a2 = "foo".freeze
+a2.replace("bar") # can't modify frozen String (FrozenError)
+```
+
+凍結を解除することはできませんが、[m:Object#dup] を使えばほぼ同じ内容の凍結されていないオブジェクトを得ることはできます。
+
+```ruby
+a = [1].freeze
+p a.frozen?     # => true
+
+a[0] = "foo"
+p a             # can't modify frozen Array (FrozenError)
+
+b = a.dup
+p b             # => [1]
+p b.frozen?     # => false
+
+b[0] = "foo"
+p b             # => ["foo"]
+```
+
+- **SEE** [m:Object#frozen?],[m:Object#dup],[m:Kernel?.trace_var]
+
+### def frozen? -> bool
+
+オブジェクトが凍結（内容の変更を禁止）されているときに真を返します。
+
+```ruby
+obj = "someone"
+p obj.frozen? # => false
+obj.freeze
+p obj.frozen? # => true
+```
+
+- **SEE** [m:Object#freeze]
+
+### def method(name) -> Method
+
+オブジェクトのメソッド name をオブジェクト化した
+[c:Method] オブジェクトを返します。
+
+- **param** `name` -- メソッド名を[c:Symbol] または[c:String]で指定します。
+- **raise** `NameError` -- 定義されていないメソッド名を引数として与えると発生します。
+
+```ruby
+me = -365.method(:abs)
+p me # => #<Method: Integer#abs>
+p me.call # => 365
+```
+
+[c:Method]・[c:UnboundMethod] オブジェクトを取得するメソッドの対比は次のとおりです。
+
+| メソッド | 対象 | 可視性の制限 | 返り値 |
+| --- | --- | --- | --- |
+| [m:Object#method] | レシーバのメソッド（特異メソッドを含む） | なし | [c:Method] |
+| [m:Object#public_method] | レシーバのメソッド（特異メソッドを含む） | public のみ | [c:Method] |
+| [m:Object#singleton_method] | レシーバの特異メソッドのみ | なし | [c:Method] |
+| [m:Module#instance_method] | self のインスタンスメソッド | なし | [c:UnboundMethod] |
+| [m:Module#public_instance_method] | self のインスタンスメソッド | public のみ | [c:UnboundMethod] |
+
+[c:UnboundMethod] はレシーバに束縛されていない状態のメソッドオブジェクトです。[m:UnboundMethod#bind] でレシーバに束縛すると [c:Method] になり、逆に [m:Method#unbind] で [c:UnboundMethod] に戻せます。
+
+- **SEE** [m:Module#instance_method], [c:Method], [m:BasicObject#__send__], [m:Object#send], [m:Kernel?.eval], [m:Object#singleton_method]
+
+### def singleton_method(name) -> Method
+
+オブジェクトの特異メソッド name をオブジェクト化した [c:Method] オブジェクトを返します。
+
+#%since 3.4
+特異クラスに include / prepend されたモジュールのインスタンスメソッド（例えば [m:Object#extend] で追加したモジュールのメソッド）も対象になります。
+#%end
+
+- **param** `name` -- メソッド名を[c:Symbol] または[c:String]で指定します。
+- **raise** `NameError` -- 定義されていないメソッド名を引数として与えると発生します。
+
+```ruby
+class Demo
+  def initialize(n)
+    @iv = n
+  end
+  def hello()
+    "Hello, @iv = #{@iv}"
+  end
+end
+
+k = Demo.new(99)
+def k.hi
+  "Hi, @iv = #{@iv}"
+end
+m = k.singleton_method(:hi)    # => #<Method: #<Demo:0xf8b0c3c4 @iv=99>.hi>
+p m.call # => "Hi, @iv = 99"
+m = k.singleton_method(:hello) # ~> NameError
+```
+
+#%since 3.4
+
+```ruby title="例: extend で追加したモジュールのメソッド"
+o = Object.new
+o.extend(Module.new { def a = 1 })
+p o.singleton_method(:a).call # => 1
+```
+
+#%end
+
+- **SEE** [m:Module#instance_method], [c:Method], [m:BasicObject#__send__], [m:Object#send], [m:Kernel?.eval], [m:Object#method]
+
+### def define_singleton_method(symbol, method) -> Symbol
+### def define_singleton_method(symbol) { ... } -> Symbol
+
+self に特異メソッド name を定義します。
+
+- **param** `symbol` -- メソッド名を [c:String] または [c:Symbol] で指定します。
+
+- **param** `method` -- [c:Proc]、[c:Method] あるいは [c:UnboundMethod] のいずれかのインスタンスを指定します。
+
+- **return** -- メソッド名を表す [c:Symbol] を返します。
+
+```ruby
+class A
+  class << self
+    def class_name
+      to_s
+    end
+  end
+end
+A.define_singleton_method(:who_am_i) do
+  "I am: #{class_name}"
+end
+A.who_am_i   # => "I am: A"
+
+guy = "Bob"
+guy.define_singleton_method(:hello) { "#{self}: Hello there!" }
+p guy.hello  # =>  "Bob: Hello there!"
+```
+
+### def respond_to?(name, include_all = false) -> bool
+
+オブジェクトがメソッド name を持つとき真を返します。
+
+オブジェクトが メソッド name を持つというのは、オブジェクトが メソッド name に応答できることをいいます。
+
+Windows での [m:Process.fork] や GNU/Linux での [m:File.lchmod] のような [c:NotImplementedError] が発生する場合は false を返します。
+
+※ NotImplementedError が発生する場合に false を返すのは
+Rubyの組み込みライブラリや標準ライブラリなど、C言語で実装されているメソッドのみです。
+Rubyで実装されたメソッドで NotImplementedError が発生する場合は true を返します。
+
+メソッドが定義されていない場合は、[m:Object#respond_to_missing?] を呼び出してその結果を返します。
+
+- **param** `name` -- [c:Symbol] または文字列で指定するメソッド名です。
+
+- **param** `include_all` -- private メソッドと protected メソッドを確認の対象に含めるかを true か false で指定します。省略した場合は false(含めない) を指定した事になります。
+
+```ruby
+class F
+  def hello
+    "Bonjour"
+  end
+end
+
+class D
+  private
+  def hello
+    "Guten Tag"
+  end
+end
+list = [F.new,D.new]
+
+list.each{|it| puts it.hello if it.respond_to?(:hello)}
+# => Bonjour
+
+list.each{|it| it.instance_eval("puts hello if it.respond_to?(:hello, true)")}
+# => Bonjour
+#   Guten Tag
+
+module Template
+  def main
+    start
+    template_method
+    finish
+  end
+
+  def start
+    puts "start"
+  end
+
+  def template_method
+    raise NotImplementedError.new
+  end
+
+  def finish
+    puts "finish"
+  end
+end
+
+class ImplTemplateMethod
+  include Template
+  def template_method
+    "implement template_method"
+  end
+end
+
+class NotImplTemplateMethod
+  include Template
+
+  # not implement template_method
+end
+
+puts ImplTemplateMethod.new.respond_to?(:template_method) # => true
+# NotImplementedError が発生しているが、Rubyによる実装部のため true を返す
+puts NotImplTemplateMethod.new.respond_to?(:template_method) # => true
+# GNU/Linux で実行。C言語による実装部のため false を返す
+puts File.respond_to?(:lchmod)         # => false
+```
+
+- **SEE** [m:Module#method_defined?]
+
+### def remove_instance_variable(name) -> object
+
+オブジェクトからインスタンス変数 name を取り除き、そのインスタンス変数に設定されていた値を返します。
+
+- **param** `name` -- 削除するインスタンス変数の名前をシンボルか文字列で指定します。
+- **raise** `NameError` -- オブジェクトがインスタンス変数 name を持たない場合に発生します。
+
+```ruby
+class Foo
+  def foo
+    @foo = 1
+    p remove_instance_variable(:@foo) # => 1
+    p remove_instance_variable(:@foo) # instance variable @foo not defined (NameError)
+  end
+end
+Foo.new.foo
+```
+
+- **SEE** [m:Module#remove_class_variable],[m:Module#remove_const]
+
+### def instance_of?(klass) -> bool
+
+オブジェクトがクラス klass の直接のインスタンスである時真を返します。
+
+obj.instance_of?(c) が成立する時には、常に obj.kind_of?(c) も成立します。
+
+- **param** `klass` -- [c:Class]かそのサブクラスのインスタンスです。
+
+```ruby
+class C < Object
+end
+class S < C
+end
+
+obj = S.new
+p obj.instance_of?(S)       # true
+p obj.instance_of?(C)       # false
+```
+
+- **SEE** [m:Object#kind_of?],[m:Object#class]
+
+### def is_a?(mod) -> bool
+### def kind_of?(mod) -> bool
+
+オブジェクトが指定されたクラス mod かそのサブクラスのインスタンスであるとき真を返します。
+
+また、オブジェクトがモジュール mod をインクルードしたクラスかそのサブクラスのインスタンスである場合にも真を返します。
+[m:Module#include]だけではなく、[m:Object#extend]や[m:Module#prepend]によってサブクラスのインスタンスになる場合も含みます。
+上記のいずれでもない場合に false を返します。
+
+- **param** `mod` -- クラスやモジュールなど、[c:Module]かそのサブクラスのインスタンスです。
+
+```ruby
+module M
+end
+class C < Object
+  include M
+end
+class S < C
+end
+
+obj = S.new
+p obj.is_a?(S)       # true
+p obj.is_a?(C)       # true
+p obj.is_a?(Object)  # true
+p obj.is_a?(M)       # true
+p obj.is_a?(Hash)    # false
+```
+
+- **SEE** [m:Object#instance_of?],[m:Module#===],[m:Object#class]
+
+### def nil? -> bool
+
+レシーバが nil であれば真を返します。
+
+```ruby
+p false.nil? # => false
+p nil.nil? # => true
+```
+
+- **SEE** [c:NilClass]
+
+### def class -> Class
+
+レシーバのクラスを返します。
+
+```ruby
+p "ruby".class # => String
+p 100.class # => Integer
+p ARGV.class # => Array
+p self.class # => Object
+p Class.class # => Class
+p Kernel.class # => Module
+```
+
+- **SEE** [m:Class#superclass],[m:Object#kind_of?],[m:Object#instance_of?]
+
+#%until 3.2
+### def taint -> self
+
+何もせずに self を返します。
+このメソッドは Ruby 2.7 から deprecated で、Ruby 3.2 で削除予定です。
+
+- **SEE** [m:Object#tainted?],[m:Object#untaint],[m:Object#freeze]
+
+### def tainted? -> false
+
+常に false を返します。
+全てのオブジェクトは常に untainted 扱いになりました。
+
+このメソッドは Ruby 2.7から deprecated で、Ruby 3.2 で削除予定です。
+
+- **SEE** [m:Object#taint],[m:Object#untaint]
+
+### def untaint -> self
+
+何もせずに self を返します。
+
+このメソッドは Ruby 2.7 から deprecated で、Ruby 3.2 で削除予定です。
+
+- **SEE** [m:Object#taint],[m:Object#tainted?]
+
+### def trust -> self
+
+このメソッドは Ruby 2.1 から deprecated で、Ruby 3.2 で削除予定です。
+[m:Object#untaint] と同じ動作をします。
+
+#%#noexample deprecated
+
+- **SEE** [m:Object#untrusted?],[m:Object#untrust]
+
+### def untrusted? -> false
+
+このメソッドは Ruby 2.1 から deprecated で、Ruby 3.2 で削除予定です。
+[m:Object#tainted?] と同じ動作をします。
+
+#%#noexample deprecated
+
+- **SEE** [m:Object#trust],[m:Object#untrust]
+
+### def untrust -> self
+
+このメソッドは Ruby 2.1 から deprecated で、Ruby 3.2 で削除予定です。
+[m:Object#taint] と同じ動作をします。
+
+#%#noexample deprecated
+
+- **SEE** [m:Object#trust],[m:Object#untrusted?]
+#%end
+### def singleton_class -> Class
+
+レシーバの特異クラスを返します。
+まだ特異クラスがなければ、新しく作成します。
+
+レシーバが nil か true か false なら、それぞれ NilClass, TrueClass,
+FalseClass を返します。
+
+- **raise** `TypeError` -- レシーバが [c:Integer]、[c:Float]、[c:Symbol] の場合に発生します。
+
+```ruby
+p Object.new.singleton_class  # => #<Class:#<Object:0xb7ce1e24>>
+p String.singleton_class    # => #<Class:String>
+p nil.singleton_class       # => NilClass
+```
+
+- **SEE** [m:Object#class]
+
+#%# https://bugs.ruby-lang.org/issues/6373 を参照。
+### def itself -> object
+
+self を返します。
+
+```ruby
+string = 'my string' # => "my string"
+p string.itself.object_id == string.object_id # => true
+```
+
+## Private Instance Methods
+
+### def initialize(*args, &block) -> object
+
+ユーザ定義クラスのオブジェクト初期化メソッド。
+
+このメソッドは [m:Class#new] から新しく生成されたオブジェクトの初期化のために呼び出されます。他の言語のコンストラクタに相当します。
+デフォルトの動作ではなにもしません。
+
+initialize には
+[m:Class#new] に与えられた引数がそのまま渡されます。
+
+サブクラスではこのメソッドを必要に応じて再定義されることが期待されています。
+
+initialize という名前のメソッドは自動的に private に設定されます。
+
+- **param** `args` -- 初期化時の引数です。
+- **param** `block` -- 初期化時のブロック引数です。必須ではありません。
+
+```ruby
+class Foo
+  def initialize name
+    puts "initialize Foo"
+    @name = name
+  end
+end
+
+class Bar < Foo
+  def initialize name, pass
+    puts "initialize Bar"
+    super name
+    @pass = pass
+  end
+end
+
+it = Bar.new('myname','0500')
+p it
+# => initialize Bar
+#   initialize Foo
+#   #<Bar:0x2b68f08 @name="myname", @pass="0500">
+```
+
+- **SEE** [m:Class#new]
+
+### def initialize_copy(obj) -> object
+
+(拡張ライブラリによる) ユーザ定義クラスのオブジェクトコピーの初期化メソッド。
+
+このメソッドは self を obj の内容で置き換えます。
+ただし、self のインスタンス変数や特異メソッドは変化しません。
+
+デフォルトでは、[m:Object#clone] の内部で [m:Object#initialize_clone] から、また [m:Object#dup] の内部で [m:Object#initialize_dup] から呼ばれます。
+
+initialize_copy は、Ruby インタプリタが知り得ない情報をコピーするために使用(定義)されます。例えば C 言語でクラスを実装する場合、情報をインスタンス変数に保持させない場合がありますが、そういった内部情報を initialize_copy でコピーするよう定義しておくことで、dup や clone
+を再定義する必要がなくなります。
+
+デフォルトの Object#initialize_copy の実装は、 self が freeze されていないことと、 self と obj のクラスが一致していることをチェックして self を返します。
+
+initialize_copy という名前のメソッドは自動的に private に設定されます。
+
+- **raise** `TypeError` -- レシーバが freeze されているか、obj のクラスがレシーバのクラスと異なる場合に発生します。
+- **SEE** [m:Object#clone],[m:Object#dup]
+
+dup や clone は以下の手順でオブジェクトを複製します。
+
+obj.dup は、 obj.class のアロケータを呼び出して新しいオブジェクトを生成します。
+新たに生成したオブジェクトに対して
+#%since 3.2
+obj のインスタンス変数、ファイナライザを
+#%else
+obj の汚染状態、インスタンス変数、ファイナライザを
+#%end
+コピーします。
+obj.clone は、さらに特異メソッドもコピーします。
+
+その後、新しいオブジェクトに対して initialize_dup 経由で initialize_copy を呼びます。
+obj.clone は initialize_clone 経由で initialize_copy を呼びます。
+
+最後に obj.clone は、 obj が freeze されているか、引数に freeze: true を指定した場合、新しいオブジェクトを freeze します。
+
+```ruby title="例: ユーザ定義クラスに追加のコピー処理を定義する"
+class MyClass
+  attr_reader :data
+  def initialize(data)
+    @data = data
+  end
+
+  # 通常dupはインスタンス変数をそのまま引き継ぐが、
+  # initialize_copyを定義することでインスタンス変数の指すオブジェクトもコピーできる
+  def initialize_copy(source)
+    super
+    @data = data.dup
+  end
+end
+
+a = MyClass.new([1])
+b = a.dup
+a.data << 2
+
+p a.data  # => [1, 2]
+p b.data  # => [1]
+```
+
+```ruby
+obj = Object.new
+class <<obj
+  attr_accessor :foo
+  def bar
+    :bar
+  end
+end
+
+def check(obj)
+  puts "instance variables: #{obj.inspect}"
+#%until 3.2
+  puts "tainted?: #{obj.tainted?}"
+#%end
+  print "singleton methods: "
+  begin
+    p obj.bar
+  rescue NameError
+    p $!
+  end
+end
+
+obj.foo = 1
+#%until 3.2
+obj.taint
+#%end
+
+check Object.new.send(:initialize_copy, obj)
+        #=> instance variables: #<Object:0x4019c9d4>
+#%until 3.2
+        #   tainted?: false
+#%end
+        #   singleton methods: #<NoMethodError: ...>
+check obj.dup
+        #=> instance variables: #<Object:0x4019c9c0 @foo=1>
+#%until 3.2
+        #   tainted?: true
+#%end
+        #   singleton methods: #<NoMethodError: ...>
+check obj.clone
+        #=> instance variables: #<Object:0x4019c880 @foo=1>
+#%until 3.2
+        #   tainted?: true
+#%end
+        #   singleton methods: :bar
+```
+
+- **SEE** [m:Object#initialize_clone], [m:Object#initialize_dup]
+
+### def initialize_clone(obj, freeze: nil) -> object
+{: since="1.9.2"}
+
+[m:Object#clone] がオブジェクトを複製する際に呼び出すメソッドです。
+
+デフォルトの実装は freeze キーワード引数を無視して [m:Object#initialize_copy] を呼び出し、self を返します。複製したオブジェクトを freeze するかどうかは、このメソッドの呼び出し元である [m:Object#clone] が判断します。
+
+freeze キーワード引数には、[m:Object#clone] に渡された freeze の値がそのまま渡されます。
+clone と dup で挙動を変えたいなどの理由でこのメソッドを再定義する場合は、
+freeze キーワード引数を受け取り、super へそのまま渡すようにしてください。
+
+initialize_clone という名前のメソッドは自動的に private に設定されます。
+
+- **param** `obj` -- 複製元のオブジェクトが渡されます。
+- **param** `freeze` -- [m:Object#clone] に渡された freeze の値(true, false, nil のいずれか)が渡されます。
+- **SEE** [m:Object#clone], [m:Object#initialize_copy], [m:Object#initialize_dup]
+
+### def initialize_dup(obj) -> object
+{: since="1.9.2"}
+
+[m:Object#dup] がオブジェクトを複製する際に呼び出すメソッドです。
+
+デフォルトでは [m:Object#initialize_copy] を呼び出します。
+
+initialize_dup という名前のメソッドは自動的に private に設定されます。
+
+- **SEE** [m:Object#dup], [m:Object#initialize_copy], [m:Object#initialize_clone]
+
+### def respond_to_missing?(symbol, include_private) -> bool
+
+自身が symbol で表されるメソッドに対し
+[m:BasicObject#method_missing] で反応するつもりならば真を返します。
+
+[m:Object#respond_to?] はメソッドが定義されていない場合、デフォルトでこのメソッドを呼びだし問合せます。
+
+[m:BasicObject#method_missing] を override した場合にこのメソッドも
+override されるべきです。
+
+このメソッドの既定の実装(Object#respond_to_missing?)は常に false を返します。
+
+- **param** `symbol` -- メソッド名シンボル
+- **param** `include_private` -- private method も含めたい場合に true が渡されます
+
+```ruby title="例"
+class Sample
+  def method_missing(name, *args)
+    if name =~ /^to_*/
+      p [name, *args] # => [:to_sample, "sample args1", "sample args2"]
+      return
+    else
+      super
+    end
+  end
+
+  def respond_to_missing?(sym, include_private)
+    (sym =~ /^to_*/) ? true : super
+  end
+end
+
+s = Sample.new
+s.to_sample("sample args1", "sample args2")
+p s.respond_to?(:to_sample)  # => true
+p s.respond_to?(:sample)  # => false
+```
+
+- **SEE** [m:Object#respond_to?], [m:BasicObject#method_missing]
+
+#%include(constants)

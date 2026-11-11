@@ -11,7 +11,6 @@ GDBM は dbm および ndbm 互換機能を含んでいます。
 @see [[lib:dbm]], [[lib:sdbm]], [[man:gdbm(3)]]
 
 = class GDBM < Object
-
 include Enumerable
 
 GDBM ファイルをアクセスするクラス。
@@ -182,7 +181,7 @@ DBM ファイルが既に閉じられている場合は、真を返します。
 
 @param bool 新たにセットするモード。
 
-@see  [[m:GDBM::SYNC]], [[m:GDBM#fastmode=]]
+@see [[m:GDBM::SYNC]], [[m:GDBM#fastmode=]]
 
 --- fetch(key, ifnone = nil){|key| ... } -> object
 
@@ -455,7 +454,7 @@ libgdbm version 1.8.0 以前のデフォルトモードです。
 通常、他のプロセスが DB をオープンしている最中にオープンを行うと
 [[c:Errno::EWOULDBLOCK]](または [[c:Errno::EAGAIN]]) 例外が発生します。
 このフラグを指定していれば、他のプロセスがオープンしている最中でも同時
-オープンすることができます。
+オープンできます。
 
 この定数は libgdbm version 1.8.0 以降より有効です。
 

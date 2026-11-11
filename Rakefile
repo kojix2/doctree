@@ -1,7 +1,52 @@
 # coding: utf-8
-OLD_VERSIONS = %w[1.8.7 1.9.3 2.0.0 2.1.0 2.2.0 2.3.0 2.4.0 2.5.0 2.6.0]
-SUPPORTED_VERSIONS = %w[2.7.0 3.0 3.1 3.2]
-UNRELEASED_VERSIONS = %w[3.3]
+require "rake/testtask"
+
+OLD_VERSIONS = %w[
+  1.8.7 1.9.3
+  2.0.0 2.1.0 2.2.0 2.3.0 2.4.0 2.5.0 2.6.0 2.7.0
+]
+SUPPORTED_VERSIONS = %w[3.0 3.1 3.2 3.3 3.4 4.0]
+UNRELEASED_VERSIONS = %w[4.1]
+# メンテナンスが継続している最古のバージョン。これより古い版の静的 HTML には
+# bitclust statichtml --eol-warning で警告バナーを表示する。
+# EOL 状況は https://www.ruby-lang.org/ja/downloads/branches/ を参照して更新する
+MINIMUM_SUPPORTED_RUBY_VERSION = Gem::Version.new("3.3")
+# サンプルコードの RUN ボタン (bitclust statichtml --run-ruby-wasm) を
+# 有効にするバージョン。実行には rurema/run-ruby-wasm のリリース
+# (ruby.wasm に各バージョンの bundled gems を焼き込んだビルド)を使う。
+# リリースのアセットはサイトの wasm/<リリース名>/ 配下に同期されている
+# (docs.ruby-lang.org と同一オリジンなので CORS 設定も不要)。
+# リリース名は「<npm パッケージ版>-<ruby.wasm 版>-<通し番号>」形式
+RUBY_WASM_RELEASE = "2.9.3-2.9.4-1"
+RUBY_WASM_VERSIONS = %w[3.2 3.3 3.4 4.0]
+def ruby_wasm_url(version)
+  if RUBY_WASM_VERSIONS.include?(version)
+    return "https://docs.ruby-lang.org/wasm/#{RUBY_WASM_RELEASE}/ruby-#{version}.wasm"
+  end
+  return ruby_head_wasm_url(version) if UNRELEASED_VERSIONS.include?(version)
+  nil
+end
+
+# 未リリース版（/ja/master/ の実体）には head 用スナップショット
+# (@ruby/head-wasm-wasi) を使う。ただしスナップショットの元になる ruby/ruby
+# master のバージョンが version と一致するときだけ（リリース移行期に master
+# が次の開発版に進んでいる場合は自動で無効になる）。URL はその日の next
+# スナップショットに完全固定する。判定・取得に失敗してもビルドは止めず、
+# RUN ボタンなしにフォールバックする。
+def ruby_head_wasm_url(version)
+  require "net/http"
+  require "json"
+  version_h = Net::HTTP.get(URI("https://raw.githubusercontent.com/ruby/ruby/master/include/ruby/version.h"))
+  major = version_h[/RUBY_API_VERSION_MAJOR (\d+)/, 1]
+  minor = version_h[/RUBY_API_VERSION_MINOR (\d+)/, 1]
+  return nil unless version == "#{major}.#{minor}"
+  tags = JSON.parse(Net::HTTP.get(URI("https://data.jsdelivr.com/v1/packages/npm/@ruby/head-wasm-wasi")))["tags"]
+  snapshot = tags["next"] or return nil
+  "https://cdn.jsdelivr.net/npm/@ruby/head-wasm-wasi@#{snapshot}/dist/ruby+stdlib.wasm"
+rescue StandardError => e
+  warn "ruby_head_wasm_url: #{e.class}: #{e.message} (disabling the RUN button for #{version})"
+  nil
+end
 ALL_VERSIONS = [*OLD_VERSIONS, *SUPPORTED_VERSIONS, *UNRELEASED_VERSIONS]
 CI_VERSIONS = [*SUPPORTED_VERSIONS, *UNRELEASED_VERSIONS]
 HTML_DIRECTORY_BASE = ENV.fetch("HTML_DIRECTORY_BASE", "/tmp/html/")
@@ -11,23 +56,94 @@ def system(*commands)
   super(*commands)
 end
 
+# Gemfile は BITCLUST_PATH（既定値 ../bitclust）にディレクトリが存在すると
+# そちらの bitclust を優先する。古いチェックアウトが残っていると
+# `cannot load such file -- drb` や `invalid option: --markdowntree` のような
+# 分かりにくいエラーで失敗するので、ビルド前に検査して案内を出す
+# (https://github.com/rurema/bitclust/issues/230)
+REQUIRED_BITCLUST_VERSION = Gem::Version.new("1.8.0")
+def check_bitclust_version!
+  begin
+    require "bitclust/version"
+  rescue LoadError
+    abort "bitclust を読み込めませんでした。bundle install を実行してください。"
+  end
+  version = Gem::Version.new(BitClust::VERSION)
+  return if version >= REQUIRED_BITCLUST_VERSION
+  location = $LOADED_FEATURES.grep(%r{bitclust/version\.rb\z}).first
+  abort <<~MESSAGE
+    古い bitclust (#{version}) が使われています（#{REQUIRED_BITCLUST_VERSION} 以上が必要です）。
+    使用中の bitclust: #{location}
+    doctree の Gemfile は、環境変数 BITCLUST_PATH（既定値 ../bitclust）の
+    ディレクトリが存在するとそちらの bitclust を優先します。過去に clone した
+    古い bitclust が残っている場合は、次のいずれかで解決してから
+    bundle install をやり直してください:
+      * ../bitclust を最新にする (cd ../bitclust && git pull)
+      * ../bitclust を使わないなら、ディレクトリを削除・改名するか、
+        BITCLUST_PATH=/nonexistent のように存在しないパスを指定する
+  MESSAGE
+end
+
+# RBS 型シグネチャ（rurema/bitclust#321）を取り込む対象バージョン →
+# ruby/rbs のタグ（その版に同梱される rbs の系列）。表に無いバージョンには
+# 取り込まない（シグネチャ表示は 4.0 以降のみ）。4.1 は rbs 4.0 系を
+# 追随中なので、4.1 リリース時に同梱される rbs の確定タグへ更新する
+RBS_TAGS = {
+  "4.0" => "v3.10.0",
+  "4.1" => "v4.0.3",
+}
+RBS_CHECKOUT_BASE = ENV.fetch("RBS_CHECKOUT_BASE", "/tmp")
+RBS_CHECKOUT_MUTEX = Mutex.new
+
+def rbs_checkout(tag)
+  dir = File.join(RBS_CHECKOUT_BASE, "rbs-#{tag}")
+  # rake generate は multitask（スレッド並列）なので clone は排他する
+  RBS_CHECKOUT_MUTEX.synchronize do
+    unless File.directory?(dir)
+      succeeded = system("git", "clone", "--depth=1", "--branch=#{tag}",
+                         "https://github.com/ruby/rbs.git", dir)
+      raise "Failed to checkout ruby/rbs #{tag}" unless succeeded
+    end
+  end
+  dir
+end
+
+# ソースは manual/ の Markdown ツリー（manual/doc は manual/api から自動で取り込まれる）。
+# 旧 refm/ は移行ウィンドウ中の凍結ソース。旧経路でビルドしたい場合は
+# BITCLUST_SOURCE=refm を指定する。
 def generate_database(version)
+  check_bitclust_version!
   puts "generate database of #{version}"
   db = "/tmp/db-#{version}"
   succeeded = system("bundle", "exec",
                      "bitclust", "--database=#{db}",
                      "init", "version=#{version}", "encoding=UTF-8")
   raise "Failed to initialize BitClust database" unless succeeded
-  succeeded = system("bundle", "exec", "bitclust", "--database=#{db}",
-                     "update", "--stdlibtree=refm/api/src")
-  raise "Failed to update BitClust database" unless succeeded
-  capi_files = Dir.glob("refm/capi/src/*")
-  succeeded = system("bundle", "exec", "bitclust", "--database=#{db}", "--capi",
-                     "update", *capi_files)
-  raise "Failed to update BitClust C API database" unless succeeded
+  if ENV["BITCLUST_SOURCE"] == "refm"
+    succeeded = system("bundle", "exec", "bitclust", "--database=#{db}",
+                       "update", "--stdlibtree=refm/api/src")
+    raise "Failed to update BitClust database" unless succeeded
+    capi_files = Dir.glob("refm/capi/src/*")
+    succeeded = system("bundle", "exec", "bitclust", "--database=#{db}", "--capi",
+                       "update", *capi_files)
+    raise "Failed to update BitClust C API database" unless succeeded
+  else
+    succeeded = system("bundle", "exec", "bitclust", "--database=#{db}",
+                       "update", "--markdowntree=manual/api")
+    raise "Failed to update BitClust database" unless succeeded
+    succeeded = system("bundle", "exec", "bitclust", "--database=#{db}", "--capi",
+                       "update", "--markdowntree=manual/capi")
+    raise "Failed to update BitClust C API database" unless succeeded
+  end
+  if (tag = RBS_TAGS[version])
+    succeeded = system("bundle", "exec", "bitclust", "rbssig",
+                       "--sig-root=#{rbs_checkout(tag)}", db)
+    raise "Failed to fill RBS signatures" unless succeeded
+  end
 end
 
 def generate_statichtml(version)
+  check_bitclust_version!
   db = "/tmp/db-#{version}"
   generate_database(version) unless File.exist?(db)
   puts "generate static html of #{version}"
@@ -45,6 +161,10 @@ def generate_statichtml(version)
     "--fs-casesensitive",
     "--canonical-base-url=https://docs.ruby-lang.org/ja/latest/",
   ]
+  commands << "--eol-warning" if MINIMUM_SUPPORTED_RUBY_VERSION > version
+  if (wasm_url = ruby_wasm_url(version))
+    commands << "--run-ruby-wasm=#{wasm_url}"
+  end
   commands << "--edit-base-url=https://github.com/rurema/doctree/edit/master/" unless ENV['CI']
   # To suppress progress bar
   # because it exceeded Travis CI max log length
@@ -54,7 +174,13 @@ def generate_statichtml(version)
   raise "Failed to generate static html" unless succeeded
 end
 
-task :default => [:check_indent_in_samplecode, :generate, :check_format]
+Rake::TestTask.new(:test) do |t|
+  t.description = "Run unit tests of the Rakefile helpers"
+  t.libs << "test"
+  t.test_files = FileList["test/test_*.rb"]
+end
+
+task :default => [:check_filename_case_conflicts, :check_indent_in_samplecode, :check_single_space_indent, :check_blank_lines, :check_module_function_notation, :test, :generate, :check_links, :check_params, :check_format]
 
 namespace :generate do
   ALL_VERSIONS.each do |version|
@@ -104,6 +230,57 @@ end
 desc "Generate static html"
 multitask :statichtml => CI_VERSIONS.map {|version| "statichtml:#{version}" }
 
+# 参照リンク切れの検査(bitclust checklink)。[c:]/[m:]/[lib:]/[d:]/[f:]
+# 参照の指す先が同じ版の DB に存在するかを、実際の描画経路で検証する。
+# 棚卸し(#3324)で全 CI 版ゼロになったため default タスクに含めている
+def check_links(version)
+  check_bitclust_version!
+  db = "/tmp/db-#{version}"
+  generate_database(version) unless File.exist?(db)
+  puts "check links of #{version}"
+  # capi は generate_database で同じ prefix に構築されるので [f:] も検証する
+  succeeded = system("bundle", "exec", "bitclust", "--database=#{db}",
+                     "checklink", "--capi-database=#{db}")
+  raise "Broken links found in #{version} (see above)" unless succeeded
+end
+
+namespace :check_links do
+  ALL_VERSIONS.each do |version|
+    desc "Check broken cross references of #{version}"
+    task version do
+      check_links(version)
+    end
+  end
+end
+
+desc "Check broken cross references (CI versions)"
+task :check_links => CI_VERSIONS.map {|version| "check_links:#{version}" }
+
+# シグネチャの引数名と本文の `- **param**` 行の名前が一致するか検査する
+# param 行が無いエントリは件数を数えるだけでエラーにしない
+def check_params(version)
+  check_bitclust_version!
+  db = "/tmp/db-#{version}"
+  generate_database(version) unless File.exist?(db)
+  puts "check params of #{version}"
+  require "bitclust"
+  require_relative "lib/check_params"
+  mismatches = CheckParams.run(BitClust::MethodDatabase.new(db))
+  raise "Parameter name mismatches found in #{version} (see above)" unless mismatches.zero?
+end
+
+namespace :check_params do
+  ALL_VERSIONS.each do |version|
+    desc "Check parameter names of #{version}"
+    task version do
+      check_params(version)
+    end
+  end
+end
+
+desc "Check parameter names against signatures (CI versions)"
+task :check_params => CI_VERSIONS.map {|version| "check_params:#{version}" }
+
 desc "Create index"
 task :create_index do
   links = []
@@ -148,16 +325,213 @@ task check_format: [:statichtml] do
   end
 end
 
+desc 'Check file names that differ only in case'
+task :check_filename_case_conflicts do
+  # 大文字小文字のみが異なるファイル名は macOS/Windows の case-insensitive な
+  # ファイルシステムでチェックアウト不能になる（manual/api/rdoc/rdoc.lib.md の
+  # ような .lib 回避と front matter の name: については bitclust の
+  # doc/markdown-samples/MARKUP_SPEC.md §1.3 を参照）
+  errors = Dir.glob('{manual,refm}/**/*')
+              .group_by(&:downcase).values
+              .select { |paths| paths.size > 1 }
+              .map { |paths| "大文字小文字のみが異なるファイル名があります: #{paths.sort.join(' / ')}" }
+
+  unless errors.empty?
+    puts errors
+    fail
+  end
+end
+
 desc 'Check unnecessary indentation in samplecode'
 task :check_indent_in_samplecode do
   errors = []
-  `grep -rlF '\#@samplecode' refm`.lines(chomp: true).each do |path|
+  `grep -rlE '\#[@%]samplecode' manual refm`.lines(chomp: true).each do |path|
     lines = File.read(path).lines(chomp: true)
     lines.each.with_index(1) do |line, lineno|
-      next unless line.start_with?('#@samplecode')
+      next unless line.start_with?('#@samplecode', '#%samplecode')
       next unless lines[lineno].start_with?(' ')
 
-      errors << "#{path}:#{lineno}: \#@samplecode の中に不要なインデントがあります。削除してください"
+      errors << "#{path}:#{lineno}: samplecode の中に不要なインデントがあります。削除してください"
+    end
+  end
+
+  unless errors.empty?
+    puts errors
+    fail
+  end
+end
+
+# #3246/#3255 で dlist（`- **term**:` の説明文）の継続行インデントを
+# CommonMark 準拠の2スペースに統一し、#3257 でその時点の取りこぼしを
+# 修正した。当初のチェックは「直前行が2スペースの本文で、その次の行だけ
+# 半角スペース1個」という狭い形だけを検出する暫定版だったが、#3255 の
+# 続きとして RD→Markdown 変換由来の残り約970行（113ファイル）を全て
+# 2スペース化・0スペース化（リストマーカー）したことで、manual 以下から
+# 半角スペース1個インデントの行そのものが無くなった。以後の回帰を防ぐため、
+# フェンス外で半角スペース1個だけのインデントを持つ行を無条件に禁止する
+# （2スペース以上や0スペースは対象外。フェンスはインデント済みのものも
+# 含めて `check_indent_in_samplecode` 同様に追跡する）。
+desc 'Check for legacy single-space-indent lines outside fenced code'
+task :check_single_space_indent do
+  fence_re = /\A[ \t]*(`{3,}|~{3,})/
+  errors = []
+  Dir.glob('manual/**/*.md').sort.each do |path|
+    lines = File.read(path).lines(chomp: true)
+    in_fence = false
+    fence_char = nil
+    fence_len = 0
+    lines.each.with_index(1) do |line, lineno|
+      if (m = fence_re.match(line))
+        char, len = m[1][0], m[1].length
+        if !in_fence
+          in_fence = true
+          fence_char = char
+          fence_len = len
+        elsif char == fence_char && len >= fence_len
+          in_fence = false
+        end
+        next
+      end
+      next if in_fence
+
+      if line =~ /\A [^ ]/
+        errors << "#{path}:#{lineno}: 半角スペース1個だけのインデントです。0個(リストマーカー等)か2個以上(dlist/リスト項目の継続)にしてください"
+      end
+    end
+  end
+
+  unless errors.empty?
+    puts errors
+    fail
+  end
+end
+
+# #3261 対応（c-normalize-blank-lines）で manual/ 全体の空行を markdownlint
+# MD012/MD022/MD031 に合わせて機械的に正規化した。以後の回帰を防ぐため、
+# 同じ3規則を（doctree 固有の例外つきで）検査する:
+#
+#   MD012: 空行が2個以上連続してはいけない
+#   MD022: 見出しの前後に空行が必要。ただし次の場合は隣接を許容する
+#          （見出し同士が連続=ママ許容／`{: ...}` メソッド属性行との隣接=
+#          崩すと since/until/nomethod が見出しから切り離されて失われる／
+#          `#@...` プリプロセッサディレクティブ行との隣接=`#@since` 等は
+#          プリプロセッサで取り除かれるため、見出しと属性行を直接つなげる
+#          構造を保つ必要がある）
+#   MD031: フェンスコードブロックの前後に空行が必要。ただし列0でない
+#          （リスト項目・定義リストの継続行にネストした）フェンスは対象外。
+#          正規化時のレンダリング検証で、インデント済みフェンスの前後に
+#          空行を入れると MDCompiler の dd/dl 継続判定が変わり HTML が
+#          変化するケース（`- **return** -- ...` 等のメタデータリスト内で
+#          dl が早期に閉じる／後続段落が `<p>` で包まれる）が実測されたため、
+#          意図的にチェック対象から外している
+#
+# フェンス内・フロントマター（先頭の --- で挟まれた部分）は対象外。
+desc 'Check blank lines against markdownlint MD012/MD022/MD031 (with doctree-specific exceptions)'
+task :check_blank_lines do
+  fence_re = /\A[ \t]*(`{3,}|~{3,})/
+  heading_re = /\A\#{1,6}(\s|\z)/
+  attr_re = /\A\{:\s/
+  directive_re = /\A#[@%]/
+  skip_heading_neighbor = lambda do |line|
+    line.nil? || line.strip.empty? || heading_re.match?(line) || attr_re.match?(line) || directive_re.match?(line)
+  end
+
+  errors = []
+  Dir.glob('manual/**/*.md').sort.each do |path|
+    lines = File.read(path).lines(chomp: true)
+
+    fm_end = nil
+    if lines[0] == '---'
+      (1...lines.length).each do |i|
+        if lines[i] == '---'
+          fm_end = i
+          break
+        end
+      end
+    end
+    body_start = fm_end ? fm_end + 1 : 0
+
+    in_fence = false
+    fence_char = nil
+    fence_len = 0
+    blank_run = 0
+    blank_run_start = nil
+
+    flush_blank_run = lambda do
+      if blank_run > 1
+        errors << "#{path}:#{blank_run_start}: 空行が#{blank_run}個連続しています。1個にしてください(MD012)"
+      end
+      blank_run = 0
+      blank_run_start = nil
+    end
+
+    (body_start...lines.length).each do |i|
+      line = lines[i]
+      lineno = i + 1
+      indented = line.start_with?(' ') || line.start_with?("\t")
+
+      if (m = fence_re.match(line))
+        char, len = m[1][0], m[1].length
+        flush_blank_run.call
+        if !in_fence
+          if !indented && i > body_start && !lines[i - 1].strip.empty?
+            errors << "#{path}:#{lineno}: フェンスコードブロックの前に空行がありません(MD031)"
+          end
+          in_fence = true
+          fence_char = char
+          fence_len = len
+        elsif char == fence_char && len >= fence_len
+          in_fence = false
+          if !indented && (nxt = lines[i + 1]) && !nxt.strip.empty?
+            errors << "#{path}:#{lineno}: フェンスコードブロックの後に空行がありません(MD031)"
+          end
+        end
+        next
+      end
+      next if in_fence
+
+      if line.strip.empty?
+        blank_run += 1
+        blank_run_start ||= lineno
+        next
+      end
+      flush_blank_run.call
+
+      next unless heading_re.match?(line)
+
+      prev = i > body_start ? lines[i - 1] : nil
+      unless skip_heading_neighbor.call(prev)
+        errors << "#{path}:#{lineno}: 見出しの前に空行がありません(MD022)"
+      end
+      nxt = lines[i + 1]
+      unless skip_heading_neighbor.call(nxt)
+        errors << "#{path}:#{lineno}: 見出しの後に空行がありません(MD022)"
+      end
+    end
+    flush_blank_run.call
+  end
+
+  unless errors.empty?
+    puts errors
+    fail
+  end
+end
+
+# モジュール関数の参照は Markdown 記法の `?.` で書く
+# (docs/HowToWriteMethodEntry.md)。bitclust は旧記法の `.#` もそのまま
+# 受理するため、`[m:...]`・`[[m:...]]`・`[...](m:...)` の typemark に
+# `.#` があれば失敗させる。対象は参照記法だけで、コメントや地の文に
+# 書かれた `Kernel.#rand` のような語は対象外(doc ページの地の文は版ごとの
+# 表示に合わせて `#%since 4.0`/`#%else` で分岐している)。
+desc 'Check legacy module function notation (.#) in method references'
+task :check_module_function_notation do
+  ref_re = /(?:\[\[?m:[^\]]*|\]\(m:[^)]*)\.#/
+  errors = []
+  Dir.glob('manual/**/*.md').sort.each do |path|
+    File.read(path).lines(chomp: true).each.with_index(1) do |line, lineno|
+      next unless ref_re.match?(line)
+
+      errors << "#{path}:#{lineno}: モジュール関数の参照が旧記法の .# になっています。?. に書き換えてください(例: [m:Kernel?.puts])"
     end
   end
 

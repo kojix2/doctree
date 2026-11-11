@@ -1,0 +1,133 @@
+---
+require:
+  - rdoc
+  - rdoc/code_objects
+  - rdoc/stats
+  - rdoc/parser/simple
+  - rdoc/parser/c
+  - rdoc/parser/changelog
+  - rdoc/parser/markdown
+  - rdoc/parser/rd
+  - rdoc/parser/ruby
+---
+rdoc で解析できるファイルの種類を追加するためのサブライブラリです。
+
+以下のメソッドを定義したクラスを作成する事で、新しいパーサクラスを作成する事ができます。
+
+#%until 4.0
+- `#initialize(top_level, file_name, body, options, stats)`
+#%else
+- `#initialize(top_level, body, options, stats)`
+#%end
+- `#scan`
+
+initialize メソッドは以下の引数を受け取ります。
+
+- `top_level`: [c:RDoc::TopLevel] オブジェクトを指定します。
+#%until 4.0
+- `file_name`: ファイル名を文字列で指定します。
+#%end
+- `body`: ソースコードの内容を文字列で指定します。
+- `options`: [c:RDoc::Options] オブジェクトを指定します。
+- `stats`: [c:RDoc::Stats] オブジェクトを指定します。
+
+#%since 4.0
+ファイル名は `top_level` から取得します。
+
+#%end
+scan メソッドは引数を受け取りません。処理の後は必ず
+[c:RDoc::TopLevel] オブジェクトを返す必要があります。
+
+また、[c:RDoc::Parser] はファイル名からパーサクラスを取得するのにも使われます。このために、新しく作成するパーサクラスでは [c:RDoc::Parser]
+を継承し、parse_files_matching メソッドで自身が解析できるファイル名のパターンを登録しておく必要があります。
+
+```ruby title="例"
+require "rdoc"
+
+class RDoc::Parser::Xyz < RDoc::Parser
+  parse_files_matching /\.xyz$/
+
+#%until 4.0
+  def initialize(top_level, file_name, body, options, stats)
+#%else
+  def initialize(top_level, body, options, stats)
+#%end
+    super
+    # ...
+  end
+
+  def scan
+    # ...
+  end
+end
+```
+
+# class RDoc::Parser
+
+ソースコードを解析するパーサを生成するための基本クラスです。
+
+新しいパーサを作成する場合には継承して使用します。
+
+## class Methods
+
+### def RDoc::Parser.can_parse(file_name) -> RDoc::Parser | nil
+
+file_name を解析できるパーサクラスを返します。見つからなかった場合は
+nil を返します。
+
+- **param** `file_name` -- 解析するファイルの名前を指定します。
+
+### def RDoc::Parser.alias_extension(old_ext, new_ext) -> bool
+
+old_ext に登録されたパーサを new_ext でも解析できるようにエイリアスを登録します。
+
+- **param** `old_ext` -- 拡張子を文字列で指定します。
+
+- **param** `new_ext` -- 拡張子を文字列で指定します。
+
+- **return** -- エイリアスが登録された場合は true を返します。old_ext にパーサが登録されていない場合、エイリアスが登録されずに false を返します。
+
+#%until 3.4
+### def RDoc::Parser.for(top_level, file_name, body, options, stats) -> RDoc::Parser | nil
+#%else
+### def RDoc::Parser.for(top_level, body, options, stats) -> RDoc::Parser | nil
+#%end
+
+ファイルを解析できるパーサのインスタンスを返します。
+解析できるパーサが見つからなかった場合やバイナリファイルの場合は nil を返します。
+
+- **param** `top_level` -- [c:RDoc::TopLevel] オブジェクトを指定します。
+
+#%until 3.4
+- **param** `file_name` -- ファイル名を文字列で指定します。
+
+#%end
+- **param** `body` -- ソースコードの内容を文字列で指定します。
+
+- **param** `options` -- [c:RDoc::Options] オブジェクトを指定します。
+
+- **param** `stats` -- [c:RDoc::Stats] オブジェクトを指定します。
+
+#%since 3.4
+ファイル名は `top_level` から取得します。
+
+#%end
+### def RDoc::Parser.parsers -> [[Regexp, RDoc::Parser]]
+
+[m:RDoc::Parser.parse_files_matching] で登録した正規表現とパーサクラスの配列の配列を返します。
+
+### def RDoc::Parser.parse_files_matching(regexp) -> ()
+{: since="1.9.1"}
+
+regexp で指定した正規表現にマッチするファイルを解析できるパーサとして、自身を登録します。
+
+- **param** `regexp` -- 正規表現を指定します。
+
+新しいパーサを作成する時に使用します。
+
+```ruby title="例"
+class RDoc::Parser::Xyz < RDoc::Parser
+  parse_files_matching /\.xyz$/
+  # ...
+end
+```

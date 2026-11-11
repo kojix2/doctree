@@ -1,0 +1,216 @@
+---
+library: win32ole
+since: "1.9.1"
+---
+# class WIN32OLE_VARIANT < Object
+
+OLEオートメーションの標準型のVARIANTオブジェクトをRubyで利用するためのクラスです。
+
+VARIANT型とは、型情報と値のペアから構成されるデータ型で、元はVBの型無し変数のための構造体です。OLEオートメーションのメソッド呼び出しには汎用型として引数にはVARIANT型を利用します。
+
+- 型情報は、[m:WIN32OLE_VARIANT#vartype]で取得できます。
+- 値は、[m:WIN32OLE_VARIANT#value]で取得できます。
+
+OLEオートメーションのメソッド呼び出し規約では、引数はVARIANT型の配列として定義されています。
+
+この規約に対して、WIN32OLEでは、VARIANT型の値に対する参照を引数配列の各要素に設定します。この実装は、ほとんどのOLEオートメーションサーバで正しく処理されます。
+
+しかし、一部のOLEオートメーションサーバは、引数配列の要素にVARIANT型の値そのものを要求します。この場合、WIN32OLEの実装は正しく処理されません。
+
+WIN32OLE_VARIANTオブジェクトを利用すると、このようなOLEオートメーションサーバのメソッド呼び出しに対して、VARIANT型の値を引数配列に設定することをWIN32OLEへ指示できます。
+
+なお、WIN32OLE_VARIANTを利用する必要の有無は、呼び出し対象のOLEオートメーションサーバの仕様または実装に依存します。
+
+Ruby 3.2 から、このクラスは WIN32OLE の名前空間下に移動し、`WIN32OLE::Variant`
+として定義されるようになりました。トップレベル定数 `WIN32OLE_VARIANT` は後方互換のためのエイリアスとして残っていますが、Ruby 3.4 以降は非推奨
+(deprecated)です(`Warning[:deprecated]` が有効なら参照時に警告が表示されます)。
+
+### サンプルコード
+
+```ruby
+shell = WIN32OLE.new('Shell.Application')
+folder = shell.NameSpace('C:\\Users\\Public\\Documents')
+item = folder.ParseName('test.txt')
+v = WIN32OLE_VARIANT.new('Delete')
+p item.invokeVerb(v)   # => ゴミ箱への移動ダイアログを表示
+```
+
+上記サンプルの最後の行を
+
+```ruby
+item.invokeVerb('Delete')
+```
+
+とすると、FolderItemオブジェクトは引数を認識できず、既定の動作として
+Openを実行します。
+
+プログラムの見た目と異なり、後者のコードに対してWIN32OLEは、'Delete'という文字列を格納したVARIANT型への参照を引数として与えるためです。それに対して前者では、'Delete'という文字列を格納したVARIANT型を引数として与えます。
+
+## Class Methods
+
+### def WIN32OLE_VARIANT.array(dims, vt) -> WIN32OLE_VARIANT
+
+配列用のVARIANTオブジェクトを生成します。
+
+オートメーションメソッド呼び出し用の配列を生成します。なお、OLEオートメーションの配列の次元と添え字の関係はVB型だという点に注意してください。これはCと逆順の並びです。
+
+- **param** `dims` -- 各次元の要素数を示す配列を与えます。たとえば4要素のベクターであれば[4]、各3要素の2次元配列であれば[3, 3]とします。
+- **param** `vt` -- 配列要素の型を[c:WIN32OLE::VARIANT]の定数で指定します。
+- **return** -- 指定された次元/要素数を持つWIN32OLE_VARIANTオブジェクト。
+
+次の例は、最初の次元が3要素、次の次元が4要素の2次元配列を生成する例です。
+
+```ruby
+ole_ary = WIN32OLE_VARIANT.array([3,4], WIN32OLE::VARIANT::VT_I4)
+ruby_ary = ole_ary.value # => [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+```
+
+- **SEE** [m:WIN32OLE_VARIANT#value], [c:WIN32OLE::VARIANT]
+
+### def WIN32OLE_VARIANT.new(val, vartype = nil) -> WIN32OLE_VARIANT
+
+指定したオブジェクトを値とするWIN32OLE_VARIANTオブジェクトを生成します。
+
+- **param** `val` -- ラップするRubyオブジェクトを指定します。
+- **param** `vartype` -- 省略時はWIN32OLEが自動型変換を行います。指定する場合は
+               [c:WIN32OLE::VARIANT]の定数を指定してください。
+- **return** -- val引数を値として持つWIN32OLE_VARIANTオブジェクトを返します。
+
+- **raise** `TypeError` -- val引数の型がArray、String、Integer、Float、Time、
+                 WIN32OLE、WIN32OLE_VARIANT、TrueClass、FalseClass、
+                 NilClass のいずれでもありません。
+
+```ruby
+shell = WIN32OLE.new('Shell.Application')
+folder = shell.NameSpace('C:\\Users\\Public\\Documents')
+item = folder.ParseName('test.txt')
+v = WIN32OLE_VARIANT.new('Delete')
+p item.invokeVerb(v)   # => ゴミ箱への移動ダイアログを表示
+```
+
+バイト配列を生成するには、以下のようにvartype引数にVT_UI1 | VT_ARRAYを設定します。バイト配列の値のRuby表現はエンコーディングをASCII-8BITに設定した文字列となります。
+
+```ruby
+include WIN32OLE::VARIANT
+bytes = WIN32OLE_VARIANT.new([1,2,3,4,5], VT_UI1 | VT_ARRAY)
+p bytes.value        # => "\x01\x02\x03\x04\x05"
+p bytes.value.encoding # => #<Encoding:ASCII-8BIT>
+```
+
+- **SEE** [c:WIN32OLE::VARIANT]
+
+## Instance Methods
+
+### def [](i...) -> object
+
+配列型のWIN32OLE_VARIANTの要素を取得します。
+
+selfは、[m:WIN32OLE_VARIANT.array]または引数に配列を指定して
+[m:WIN32OLE_VARIANT.new]で作成したインスタンスの必要があります。
+
+- **param** `i` -- 各次元の0からのインデックスを「,」で区切って次元数分指定します。
+         インデックスは0から要素数-1までのIntegerで指定してください。
+- **return** -- 引数で指定したインデックスの要素を返します。
+- **raise** `ArgError` -- 引数の数が次元数と一致していません。
+
+- **raise** `WIN32OLERuntimeError` -- selfが配列型のWIN32OLE_VARIANTではありません。あるいはインデックスが0未満または要素数以上を指定しています。
+
+```ruby
+obj = WIN32OLE_VARIANT.new([[1,2,3],[4,5,6]])
+p obj[0,0] # => 1
+p obj[1,0] # => 4
+p obj[2,0] # => WIN32OLERuntimeError
+p obj[0, -1] # => WIN32OLERuntimeError
+```
+
+### def []=(i..., val)
+
+配列型のWIN32OLE_VARIANTの要素を設定します。
+
+selfは、[m:WIN32OLE_VARIANT.array]または引数に配列を指定して
+[m:WIN32OLE_VARIANT.new]で作成したインスタンスの必要があります。
+
+- **param** `i` -- 各次元の0からのインデックスを「,」で区切って次元数分指定します。
+         インデックスは0から要素数-1までのIntegerで指定してください。
+- **param** `val` -- 設定値を指定します。Array、String、Integer、Float、
+           TrueClass、FalseClass、NilClass以外のオブジェクトはオートメーションオブジェクト（WIN32OLEオブジェクト）に変換します。
+- **return** -- 引数で指定したインデックスの要素を返します。
+- **raise** `ArgError` -- 引数の数が次元数と一致していません。
+
+- **raise** `WIN32OLERuntimeError` -- selfが配列型のWIN32OLE_VARIANTではありません。あるいはインデックスが0未満または要素数以上を指定しています。
+
+```ruby
+obj = WIN32OLE_VARIANT.new([[1,2,3],[4,5,6]])
+obj[0,0] = 7
+obj[1,0] = 8
+p obj.value # => [[7,2,3], [8,5,6]]
+obj[2,0] = 9 # => WIN32OLERuntimeError
+obj[0, -1] = 9 # => WIN32OLERuntimeError
+```
+
+### def value -> object
+
+値に対応するRubyオブジェクトを取得します。
+
+- **return** -- 値に対応するRubyのオブジェクトを返します。
+
+```ruby
+obj = WIN32OLE_VARIANT.new(1, WIN32OLE::VARIANT::VT_BSTR)
+p obj.value # => "1" (VT_BSTRを指定して生成したので、Stringオブジェクトとなる)
+```
+
+### def value=(val)
+
+WIN32OLE_VARIANTの値を再設定します。
+
+指定した値でselfを再設定します。指定値が元のVARIANT型に合わない場合は元のVARIANT型に合うように引数を変換します。変換は、引数を一度VARIANT型に変換してからCOMのVARIANT型変換関数（VariantChangeTypeEx）を呼び出すことで実現します。
+
+- **param** `val` -- 設定値を指定します。
+- **raise** `WIN32OLERuntimeError` -- selfが配列型です。あるいは、型変換に失敗しました。
+
+```ruby
+obj = WIN32OLE_VARIANT.new(1) # VARIANT型にWIN32OLE::VARIANT::VT_I4を設定
+obj.value = 3.2      # 3.2から新たなVARIANT型を作成し、それをVT_I4に変換
+p obj.value # => 3   # VT_I4に変換した結果が設定される
+```
+
+selfが配列型のWIN32OLE_VARIANTの場合、バイト配列かつ引数が文字列の場合を除いて[c:WIN32OLERuntimeError]を通知します。配列型の場合は、
+[m:WIN32OLE_VARIANT#\[\]=]を利用してください。
+
+### def vartype -> Integer
+
+selfの型情報を取得します。
+
+型情報は、[c:WIN32OLE::VARIANT]の定数値の組み合わせです。
+
+```ruby
+obj = WIN32OLE_VARIANT.new("string")
+p obj.vartype # => 8 (WIN32OLE::VARIANT::VT_BSTR)
+bytes = WIN32OLE_VARIANT.new([1,2,3,4,5], VT_UI1 | VT_ARRAY)
+p bytes.vartype # => 8209 (WIN32OLE::VARIANT::VT_ARRAY | VT_UI1)
+```
+
+## Constants
+
+### const Empty -> WIN32OLE_VARIANT
+
+EMPTY型のWIN32OLE_VARIANTオブジェクトです。
+
+このオブジェクトは、VOID型の戻り値や、値が空なことを明示しなければならない特殊な引数に利用します。
+
+- **SEE** [m:WIN32OLE::VARIANT::VT_EMPTY]
+
+### const Null -> WIN32OLE_VARIANT
+
+NULL型のWIN32OLE_VARIANTオブジェクトです。
+
+このオブジェクトは、ADOなどのデータベースインターフェイスでNULLを指定するのに利用可能です。
+
+- **SEE** [m:WIN32OLE::VARIANT::VT_NULL]
+
+### const Nothing -> WIN32OLE_VARIANT
+
+DISPATCH型の空のオブジェクトです。
+
+- **SEE** [m:WIN32OLE::VARIANT::VT_DISPATCH]
+

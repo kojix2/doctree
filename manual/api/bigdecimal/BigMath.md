@@ -1,0 +1,53 @@
+---
+library: bigdecimal
+since: "1.9.3"
+---
+# module BigMath
+
+BigDecimalを使った数学的な機能を提供するモジュールです。
+
+## Module Functions
+
+### module_function def exp(x, prec) -> BigDecimal
+
+x の指数関数を prec で指定した精度で計算します。
+
+x に正の無限大を指定した場合は正の無限大を返します。負の無限大を指定した場合には 0 を返します。NaN を指定した場合には NaNを返します。
+
+- **param** `x` -- 計算対象の数値を [c:Integer]、[c:BigDecimal]、
+         [c:Float]、[c:Rational]オブジェクトのいずれかで指定します。
+
+- **param** `prec` -- 計算結果の精度を指定します。
+
+- **raise** `ArgumentError` -- x に [c:Integer]、[c:BigDecimal]、
+                     [c:Float]、[c:Rational]以外のオブジェクトを指定した場合に発生します。
+
+- **raise** `ArgumentError` -- prec に 0 以下の数値が指定された場合に発生します。
+
+```ruby
+require "bigdecimal/math"
+
+puts BigMath::exp(BigDecimal('1'), 10) # => 0.2718281828e1
+```
+
+### module_function def log(x, prec) -> BigDecimal
+
+x の自然対数を prec で指定した精度で計算します。
+
+x に無限大を指定した場合は無限大を返します。NaN を指定した場合には NaN
+を返します。
+
+- **param** `x` -- 計算対象の数値を [c:Integer]、[c:Float]、
+         [c:Rational]、[c:BigDecimal] オブジェクトのいずれかで指定します。
+
+- **param** `prec` -- 計算結果の精度を指定します。
+
+- **raise** `Math::DomainError` -- x に 0 以下の数値か [c:Complex] オブジェクトが指定された場合に発生します。
+
+- **raise** `ArgumentError` -- prec に 0 以下の数値が指定された場合に発生します。
+
+```ruby
+require "bigdecimal/math"
+
+puts BigMath::log(BigDecimal('2'), 10) # => 0.693147180559945309417232112588603776354688e0
+```

@@ -1,0 +1,251 @@
+---
+type: library
+---
+要素を動的に追加・削除できる手軽な構造体を提供するライブラリです。
+
+# class OpenStruct < Object
+
+要素を動的に追加・削除できる手軽な構造体を提供するクラスです。
+
+OpenStruct のインスタンスに対して未定義なメソッド x= を呼ぶと、
+OpenStruct クラスの [m:BasicObject#method_missing] で捕捉され、そのインスタンスにインスタンスメソッド x, x= が定義されます。
+この挙動によって要素を動的に変更できる構造体として働きます。
+
+```ruby
+require 'ostruct'
+ab = OpenStruct.new
+ab.foo = 25
+p ab.foo          # => 25
+ab.bar = 2
+p ab.bar          # => 2
+p ab              # => <OpenStruct foo=25, bar=2>
+ab.delete_field("foo")
+p ab.foo          # => nil
+p ab              # => <OpenStruct bar=2>
+```
+
+初期化にハッシュを使用することもできます。
+
+```ruby
+require 'ostruct'
+son = OpenStruct.new({ :name => "Thomas", :age => 3 })
+p son.name        # => "Thomas"
+p son.age         # => 3
+son.age += 1
+p son.age         # => 4
+son.items = ["candy","toy"]
+p son.items       # => ["candy","toy"]
+p son             # => #<OpenStruct name="Thomas", age=4, items=["candy", "toy"]>
+```
+
+### 注意事項 {#caveats}
+
+OpenStruct は Ruby のメソッド探索を利用して、プロパティに必要なメソッドを見つけて定義します。これは [m:BasicObject#method_missing] と [m:Object#define_singleton_method] によって実現されます。
+
+作成されるオブジェクトのパフォーマンスに懸念がある場合は、この点を考慮する必要があります。[c:Hash] や [c:Struct] を使用する場合と比較して、これらのプロパティの設定にははるかに多くのオーバーヘッドがあるためです。小規模な [c:Hash] から [c:OpenStruct] を作成し、いくつかの要素にアクセスした場合、直接ハッシュテーブルにアクセスするよりも 200 倍遅くなることがあります。
+
+これは潜在的なセキュリティ問題です。信頼されていないユーザーデータ（例：JSON を用いたリクエスト）から [c:OpenStruct] を構築した場合、キーがメソッドを作成し、そのメソッド名が永久に GC されることがないため、DoS 攻撃を受ける可能性があります。
+
+これは、Ruby バージョン間の非互換性の原因にもなります：
+
+```ruby
+require 'ostruct'
+o = OpenStruct.new
+p o.then          # => Ruby < 2.6 では nil、Ruby >= 2.6 では Enumerator
+```
+
+以下の方法では、組み込みライブラリのメソッドが上書きされる可能性があり、バグやセキュリティ上の問題が発生する可能性があります：
+
+```ruby
+require 'ostruct'
+o = OpenStruct.new
+p o.methods       # => [:to_h, :marshal_dump, :each_pair, ...] (内容と順序は Ruby のバージョンによって異なります)
+o.methods = [:foo, :bar]
+p o.methods       # => [:foo, :bar]
+```
+
+衝突を避けるために [c:OpenStruct] は ! で終わるメソッドは protected と private でのみ使用し、public な組み込みライブラリの ! で終わるメソッドはエイリアスを定義しています：
+
+```ruby
+require 'ostruct'
+o = OpenStruct.new(make: 'Bentley', class: :luxury)
+p o.class         # => :luxury
+p o.class!        # => OpenStruct
+```
+
+! で終わるフィールドは使用しないことが推奨されます（ただし、強制ではありません）。サブクラスのメソッドを上書きすることはできませんし、! で終わる OpenStruct 自身のメソッドを上書きすることもできません。
+
+以上の理由から OpenStruct を一切使用しないことを検討してください。
+
+## Class Methods
+### def OpenStruct.new(hash = nil) -> OpenStruct
+
+OpenStruct オブジェクトを生成します。
+
+ハッシュが与えられたとき、それぞれのキーを生成したオブジェクトの要素にし、値をセットします。
+
+- **param** `hash` -- 設定する要素とその値を指定します。
+       hash には [c:Hash] クラスのインスタンス、または each_pair メソッドを持つオブジェクトを用いる事ができます。
+- **raise** `NoMethodError` -- hash のキーが to_sym メソッドを持たないときに発生します。
+
+```ruby
+require 'ostruct'
+some1 = OpenStruct.new({:a =>"a",:b =>"b"}) # => #<OpenStruct b="b", a="a">
+```
+
+## Instance Methods
+
+### def ==(other) -> bool
+
+自身と比較対象のオブジェクトが等しい場合に真を返します。
+そうでない場合は、偽を返します。
+
+- **param** `other` -- 比較対象のオブジェクトを指定します。
+
+### def eql?(other) -> bool
+
+self と other が等しい場合に true を返します。そうでない場合は false を返します。
+
+具体的には other が [c:OpenStruct] オブジェクトかそのサブクラスでかつ、
+self の各要素を保持した内部の [c:Hash] が eql? で比較して等しい場合に
+true を返します。
+
+- **param** `other` -- 比較対象のオブジェクトを指定します。
+
+### def inspect -> String
+### def to_s -> String
+
+オブジェクトを人間が読める形式に変換した文字列を返します。
+
+- **SEE** [m:Object#inspect]
+
+### def delete_field(name) -> object
+#%since 3.1
+### def delete_field(name) { ... } -> object
+#%end
+
+nameで指定された要素を削除します。
+
+その後その要素を参照したら nil が返ります。
+
+#%since 3.1
+`name` で指定された要素が無い場合、ブロックを指定していればブロックを引数なしで呼び出し、その値を返します。要素がある場合はブロックを呼び出しません。
+
+```ruby title="例"
+require 'ostruct'
+
+p OpenStruct.new(x: 1).delete_field(:x) { :dflt } # => 1
+p OpenStruct.new.delete_field(:x) { :dflt }       # => :dflt
+```
+
+#%end
+- **param** `name` -- 削除する要素を文字列かシンボルで指定します。
+- **return** -- 削除前の要素の値を返します。
+- **raise** `NameError` -- `name` で指定された要素が無く、ブロックも指定しなかった場合に発生します。
+
+### def to_h -> { Symbol => object }
+### def to_h {|name, value| block } -> Hash
+
+self を各要素の名前をキー([c:Symbol])、要素が値のハッシュに変換して返します。
+
+ブロックを指定すると各ペアでブロックを呼び出し、その結果をペアとして使います。
+
+```ruby title="例"
+require 'ostruct'
+data = OpenStruct.new("country" => "Australia", :capital => "Canberra")
+#%since 3.4
+p data.to_h # => {country: "Australia", capital: "Canberra"}
+p data.to_h {|name, value| [name.to_s, value.upcase] }
+            # => {"country" => "AUSTRALIA", "capital" => "CANBERRA"}
+#%else
+p data.to_h # => {:country=>"Australia", :capital=>"Canberra"}
+p data.to_h {|name, value| [name.to_s, value.upcase] }
+            # => {"country"=>"AUSTRALIA", "capital"=>"CANBERRA"}
+#%end
+```
+
+### def each_pair                  -> Enumerator
+### def each_pair { |key, value| } -> self
+
+self の各要素の名前と要素を引数としてブロックを評価します。
+
+ブロックを指定した場合は self を返します。そうでない場合は
+[c:Enumerator] を返します。
+
+```ruby title="例"
+require 'ostruct'
+data = OpenStruct.new("country" => "Australia", :population => 20_000_000)
+p data.each_pair.to_a  # => [[:country, "Australia"], [:population, 20000000]]
+```
+
+### def [](name) -> object
+
+引数 name で指定した要素に対応する値を返します。
+
+- **param** `name` -- 要素の名前を文字列か [c:Symbol] オブジェクトで指定します。
+
+```ruby title="例"
+require 'ostruct'
+person = OpenStruct.new('name' => 'John Smith', 'age' => 70)
+person[:age] # => 70, person.age と同じ
+```
+
+### def []=(name, value)
+
+引数 name で指定した要素に対応する値に value をセットします。
+
+- **param** `name` -- 要素の名前を文字列か [c:Symbol] オブジェクトで指定します。
+
+- **param** `value` -- セットする値を指定します。
+
+```ruby title="例"
+require 'ostruct'
+person = OpenStruct.new('name' => 'John Smith', 'age' => 70)
+person[:age] = 42 # person.age = 42 と同じ
+person.age # => 42
+```
+
+### def dig(key, ...) -> object | nil
+
+self 以下のネストしたオブジェクトを dig メソッドで再帰的に参照して返します。途中のオブジェクトが nil であった場合は nil を返します。
+
+- **param** `key` -- キーを任意個指定します。
+
+```ruby
+require 'ostruct'
+address = OpenStruct.new('city' => "Anytown NC", 'zip' => 12345)
+person = OpenStruct.new('name' => 'John Smith', 'address' => address)
+person.dig(:address, 'zip')          # => 12345
+person.dig(:business_address, 'zip') # => nil
+```
+
+- **SEE** [m:Array#dig], [m:Hash#dig], [m:Struct#dig]
+
+### def hash -> Integer
+
+self のハッシュ値を返します。
+
+#%# Two hashes with the same content will have the same hash code
+#%# (and will be eql?).
+
+## Protected Instance Methods
+
+### def modifiable -> Hash
+
+このメソッドは内部的に使用されます。
+
+自身が [m:Object#freeze] されている場合にこのメソッドを呼び出すと例外が発生します。
+
+- **raise** `TypeError` -- 自身が [m:Object#freeze] されている場合に発生します。
+
+### def new_ostruct_member(name) -> Symbol
+
+与えられた名前のアクセサメソッドを自身に定義します。
+
+- **param** `name` -- 文字列かシンボルで定義するアクセサの名前を指定します。
+
+## Constants
+
+### const InspectKey -> :__inspect_key__
+
+内部的に使用する定数です。

@@ -1,0 +1,209 @@
+---
+type: library
+---
+ストリーム式の XML パーサ。
+
+rexml の XML パーサの中では高速ですが、機能は限定的です。
+もう少し高機能なストリーム式パーサが必要な場合は
+[c:REXML::Parsers::SAX2Parser] を用いてください。
+
+パーサからはコールバックによってパースした情報を受け取ります。
+[c:REXML::StreamListener] を include し、必要なメソッドをオーバーライドしたクラスのオブジェクトをコールバックオブジェクトとして [m:REXML::Parsers::StreamParser.new]
+に渡します。
+
+[m:REXML::Parsers::StreamParser#parse] を呼び出すとパースが開始しその結果によってコールバックが呼び出されます。
+
+コールバックされるメソッドは [c:REXML::StreamListener] になにもしないメソッドとして定義されています。どのようなコールバックがあるかはそちらを参照してください。
+
+パーサはXML文書の各構成要素を前から順に処理し、その順にコールバックメソッドを呼び出します。順が前後することはありません。
+
+### StreamParserの例 {#example}
+
+この例では tag_start と text をオーバーライドして開始タグとテキストの情報を受け取れるようにしています。
+空白や改行もテキストであることに注意してください。
+
+```ruby
+require 'rexml/parsers/baseparser'
+require 'rexml/parsers/streamparser'
+require 'rexml/streamlistener'
+class Listener
+  include REXML::StreamListener
+  def initialize
+    @events = []
+  end
+
+  def text(text)
+    @events << "text[#{text}]"
+  end
+
+  def tag_start(name, attrs)
+    @events << "tag_start[#{name}]"
+  end
+
+  attr_reader :events
+end
+
+xml = <<EOS
+<members>
+  <member name="apple" color="red">
+    <comment>comment here</comment>
+  </member>
+  <member name="banana" color="yellow"/>
+</members>
+EOS
+listener = Listener.new
+REXML::Parsers::StreamParser.new(xml, listener).parse
+p listener.events
+# => ["tag_start[members]",
+#     "text[\n  ]",
+#     "tag_start[member]",
+#     "text[\n    ]",
+#     "tag_start[comment]",
+#     "text[comment here]",
+#     "text[\n  ]",
+#     "text[\n  ]",
+#     "tag_start[member]",
+#     "text[\n]",
+#     "text[\n]"]
+```
+
+### コールバック仕様確認サンプル
+
+以下の例では様々なXMLの構成要素を含むXML文書を
+StreamParser で処理したときに、どのコールバックメソッドがどのような引数で呼び出されるかを示すためのサンプルです。
+実体参照は定義済みのものを除いては変換処理されていないことなどがわかります。
+
+```ruby
+require 'rexml/parsers/baseparser'
+require 'rexml/parsers/streamparser'
+require 'rexml/streamlistener'
+
+xml = <<EOS
+<?xml version="1.0" encoding="UTF-8" ?>
+<?xml-stylesheet type="text/css" href="style.css"?>
+<!DOCTYPE root SYSTEM "foo" [
+  <!ELEMENT root (a+)>
+  <!ELEMENT a>
+  <!ENTITY bar "barbarbarbar">
+  <!ATTLIST a att CDATA #REQUIRED xyz CDATA "foobar">
+  <!NOTATION foobar SYSTEM "http://example.org/foobar.dtd">
+  <!ENTITY % HTMLsymbol PUBLIC
+      "-//W3C//ENTITIES Symbols for XHTML//EN"
+      "xhtml-symbol.ent">
+  %HTMLsymbol;
+]>
+<root xmlns:foo="http://example.org/foo"
+      xmlns:bar="http://example.org/bar"><![CDATA[cdata is here]]>
+  <a foo:att='1' bar:att='2' att='&lt;'/>
+  &amp;&amp; <!-- comment here--> &bar;
+</root>
+EOS
+
+class Listener
+  def method_missing(name, *args)
+    p [name, *args]
+  end
+  def respond_to_missing?(sym, include_private)
+    true
+  end
+end
+
+REXML::Parsers::StreamParser.new(xml, Listener.new).parse
+# >> [:xmldecl, "1.0", "UTF-8", nil]
+# >> [:text, "\n"]
+# >> [:instruction, "xml-stylesheet", " type=\"text/css\" href=\"style.css\""]
+# >> [:text, "\n"]
+# >> [:doctype, "root", "SYSTEM", "foo", nil]
+# >> [:elementdecl, "<!ELEMENT root (a+)"]
+# >> [:elementdecl, "<!ELEMENT a"]
+# >> [:entitydecl, ["bar", "barbarbarbar"]]
+#%since 3.4
+# >> [:attlistdecl, "a", {"att" => nil, "xyz" => "foobar"}, " \n  <!ATTLIST a att CDATA #REQUIRED xyz CDATA \"foobar\">"]
+#%else
+# >> [:attlistdecl, "a", {"att"=>nil, "xyz"=>"foobar"}, " \n  <!ATTLIST a att CDATA #REQUIRED xyz CDATA \"foobar\">"]
+#%end
+# >> [:notationdecl, ["foobar", "SYSTEM", nil, "http://example.org/foobar.dtd"]]
+# >> [:entitydecl, ["HTMLsymbol", "PUBLIC", "-//W3C//ENTITIES Symbols for XHTML//EN", "xhtml-symbol.ent", "%"]]
+# >> [:doctype_end]
+# >> [:text, "\n"]
+#%since 3.4
+# >> [:tag_start, "root", {"xmlns:foo" => "http://example.org/foo", "xmlns:bar" => "http://example.org/bar"}]
+# >> [:cdata, "cdata is here"]
+# >> [:text, "\n  "]
+# >> [:tag_start, "a", {"foo:att" => "1", "bar:att" => "2", "att" => "<"}]
+#%else
+# >> [:tag_start, "root", {"xmlns:foo"=>"http://example.org/foo", "xmlns:bar"=>"http://example.org/bar"}]
+# >> [:cdata, "cdata is here"]
+# >> [:text, "\n  "]
+# >> [:tag_start, "a", {"foo:att"=>"1", "bar:att"=>"2", "att"=>"<"}]
+#%end
+# >> [:tag_end, "a"]
+# >> [:text, "\n  && "]
+# >> [:comment, " comment here"]
+# >> [:text, " &bar;\n"]
+# >> [:tag_end, "root"]
+# >> [:text, "\n"]
+```
+
+# class REXML::Parsers::StreamParser < Object
+
+ストリーム式の XML パーサクラス。
+
+## Class Methods
+
+### def REXML::Parsers::StreamParser.new(source, listener) -> REXML::Parsers::StreamParser
+
+ストリームパーサオブジェクトを生成します。
+
+- **param** `source` -- 入力(文字列、IO、IO互換オブジェクト(StringIOなど))
+- **param** `listener` -- コールバックオブジェクト
+
+## Instance Methods
+
+### def add_listener(listener) -> ()
+{: since=""}
+
+パーサのイベントを受け取るオブジェクト `listener` を登録します。
+
+[m:REXML::Parsers::StreamParser.new] に渡すコールバックオブジェクトとは別のものです。[m:REXML::Parsers::StreamParser#parse] でパースしている間、パーサが XML を読み進めてイベントが発生するたびに `listener.receive(event)` が呼び出されます。
+
+`event` は、先頭がイベントの種類を表すシンボルで、その後にパラメータが続く配列です。イベントの種類は [ref:lib:rexml/parsers/pullparser#event_type] に挙げたものと同じですが、text のパラメータは正規化文字列だけです。また、文書の終わりで `[:end_document]` が通知されます。
+
+複数の `listener` を登録できます。
+
+- **param** `listener` -- `receive` メソッドを持つオブジェクト
+- **SEE** [lib:rexml/validation/relaxng]
+
+```ruby title="例"
+require 'rexml/parsers/streamparser'
+require 'rexml/streamlistener'
+
+class EventPrinter
+  def receive(event)
+    p event
+  end
+end
+
+class MyListener
+  include REXML::StreamListener
+end
+
+parser = REXML::Parsers::StreamParser.new("<a><b>text</b></a>", MyListener.new)
+parser.add_listener(EventPrinter.new)
+parser.parse
+# >> [:start_element, "a", {}]
+# >> [:start_element, "b", {}]
+# >> [:text, "text"]
+# >> [:end_element, "b"]
+# >> [:end_element, "a"]
+# >> [:end_document]
+```
+
+### def parse -> ()
+
+入力をパースします。
+
+このメソッドの中からコールバックが呼び出されます。
+
+- **raise** `REXML::ParseException` -- XML文書のパースに失敗した場合に発生します
+- **raise** `REXML::UndefinedNamespaceException` -- XML文書のパース中に、定義されていない名前空間が現れた場合に発生します
